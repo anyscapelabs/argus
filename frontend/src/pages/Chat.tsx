@@ -4,6 +4,7 @@ import { FiChevronRight } from 'react-icons/fi'
 import Toolbar from '../components/layout/Toolbar'
 import ChatInput from '../components/chat/ChatInput'
 import AgentBubble from '../components/chat/AgentBubble'
+import UserBubble from '../components/chat/UserBubble'
 import RightPanel from '../components/layout/RightPanel'
 
 function timeTag() {
@@ -29,7 +30,7 @@ Feel free to *ask* anything.
 
 export default function Chat() {
   const [rightOpen, setRightOpen] = useState(false)
-  const [_messages, setMessages] = useState<{ role: string; content: string; model?: string | null }[]>([])
+  const [messages, setMessages] = useState<{ role: string; content: string; model?: string | null }[]>([])
   const tag = useMemo(() => timeTag(), [])
 
   const handleSend = (text: string, modelRef: string | null) => {
@@ -37,10 +38,10 @@ export default function Chat() {
   }
 
   return (
-    <div className="relative flex flex-1 min-h-0">
+    <div className="relative flex h-dvh flex-1 min-h-0 overflow-hidden">
       <div className="flex flex-1 flex-col min-h-0">
         <Toolbar />
-        <div className="relative flex-1 min-h-0">
+        <div className="relative flex flex-1 min-h-0 flex-col">
           <div className="absolute left-1/2 -top-10 z-10 -translate-x-1/2">
             <motion.button
               type="button"
@@ -53,16 +54,25 @@ export default function Chat() {
               <FiChevronRight size={14} className="w-0 overflow-hidden opacity-0 transition-all duration-300 ease-out group-hover:w-4 group-hover:translate-x-1 group-hover:opacity-100" />
             </motion.button>
           </div>
-          <div className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
             <div className="mx-auto flex max-w-3xl flex-col gap-3">
               <div className="mx-auto w-fit rounded-md px-2 py-0.5 text-center text-xs text-secondary transition-colors hover:bg-secondary hover:text-primary">
                 {tag}
               </div>
               <AgentBubble content={EXAMPLE_MESSAGE} />
+              {messages.map((m, i) =>
+                m.role === 'user' ? (
+                  <UserBubble key={i} content={m.content} />
+                ) : (
+                  <AgentBubble key={i} content={m.content} />
+                )
+              )}
             </div>
           </div>
         </div>
-        <ChatInput onSend={handleSend} />
+        <div className="shrink-0">
+          <ChatInput onSend={handleSend} />
+        </div>
       </div>
       <AnimatePresence>
         {rightOpen && <RightPanel key="right-panel" onClose={() => setRightOpen(false)} />}
