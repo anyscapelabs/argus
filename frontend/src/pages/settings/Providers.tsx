@@ -244,7 +244,7 @@ export default function Providers() {
                 {selectedModels.length > 0 ? `${selectedModels.length} model${selectedModels.length > 1 ? 's' : ''} selected` : 'Select a model'}
               </button>
               {modelOpen && (
-                <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-xl border border-secondary bg-secondary shadow-lg">
+                <div className="absolute left-0 bottom-full z-50 mb-1 w-64 rounded-xl border border-secondary bg-secondary shadow-lg">
                   <div className="flex items-center gap-2 border-b border-secondary px-2 py-1">
                     <IoSearch size={14} className="shrink-0 text-secondary" />
                     <input
