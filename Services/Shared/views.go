@@ -2,6 +2,7 @@ package Shared
 
 import (
 	"github.com/anyscapelabs/argus/Models"
+	"github.com/anyscapelabs/argus/Protocol"
 )
 
 type PickerOptions struct {
@@ -12,20 +13,20 @@ type PickerOptions struct {
 }
 
 type ProviderView struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Logo        string `json:"logo"`
-	Monogram    string `json:"monogram"`
-	NoAuth      bool   `json:"no_auth"`
-	KeyHint     string `json:"key_hint"`
-	KeyHelpURL  string `json:"key_help_url"`
-	DocURL      string `json:"doc_url"`
-	Configured  bool   `json:"configured"`
-	KeyLast4    string `json:"key_last4,omitempty"`
-	ValidatedAt string `json:"validated_at,omitempty"`
-	ModelCount          int `json:"model_count"`
-	SelectedModelCount   int `json:"selected_model_count"`
-	Order               int `json:"order"`
+	ID                 string `json:"id"`
+	Name               string `json:"name"`
+	Logo               string `json:"logo"`
+	Monogram           string `json:"monogram"`
+	NoAuth             bool   `json:"no_auth"`
+	KeyHint            string `json:"key_hint"`
+	KeyHelpURL         string `json:"key_help_url"`
+	DocURL             string `json:"doc_url"`
+	Configured         bool   `json:"configured"`
+	KeyLast4           string `json:"key_last4,omitempty"`
+	ValidatedAt        string `json:"validated_at,omitempty"`
+	ModelCount         int    `json:"model_count"`
+	SelectedModelCount int    `json:"selected_model_count"`
+	Order              int    `json:"order"`
 }
 
 type ModelView struct {
@@ -151,4 +152,25 @@ type RefreshResult struct {
 type SelectionsResult struct {
 	Refs  []string     `json:"refs"`
 	Error *ActionError `json:"error,omitempty"`
+}
+
+type StreamRequest struct {
+	Ref             string             `json:"ref"`
+	System          string             `json:"system,omitempty"`
+	Messages        []Protocol.Message `json:"messages"`
+	MaxOutputTokens int64              `json:"max_output_tokens,omitempty"`
+	Temperature     *float64           `json:"temperature,omitempty"`
+	StopSequences   []string           `json:"stop_sequences,omitempty"`
+	Reasoning       string             `json:"reasoning,omitempty"`
+}
+
+type StreamStart struct {
+	Ok    bool         `json:"ok"`
+	RunID string       `json:"run_id,omitempty"`
+	Error *ActionError `json:"error,omitempty"`
+}
+
+type StreamEvent struct {
+	RunID string         `json:"run_id"`
+	Event Protocol.Event `json:"event"`
 }

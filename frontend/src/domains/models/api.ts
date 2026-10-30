@@ -20,7 +20,7 @@ export async function getPicker(providerID: string, options: PickerOptions = def
 }
 
 export async function setProviderSelection(providerID: string, refs: string[] | null): Promise<ActionResult> {
-  const res = await ModelsService.SetProviderSelection(providerID, refs)
+  const res = await ModelsService.SetProviderSelection(providerID, refs ?? [])
   if (res?.error) throw new Error(res.error.message)
   return res
 }

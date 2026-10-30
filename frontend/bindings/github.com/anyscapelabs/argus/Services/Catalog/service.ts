@@ -3,16 +3,24 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wailsio/runtime";
+import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as Shared$0 from "../Shared/models.js";
 
 export function CatalogStatus(): $CancellablePromise<Shared$0.StatusView> {
-    return $Call.ByID(741194768);
+    return $Call.ByID(741194768).then(($result: any) => {
+        return $$createType0($result);
+    });
 }
 
 export function RefreshCatalog(): $CancellablePromise<Shared$0.RefreshResult> {
-    return $Call.ByID(1946300141);
+    return $Call.ByID(1946300141).then(($result: any) => {
+        return $$createType1($result);
+    });
 }
+
+// Private type creation functions
+const $$createType0 = Shared$0.StatusView.createFrom;
+const $$createType1 = Shared$0.RefreshResult.createFrom;
