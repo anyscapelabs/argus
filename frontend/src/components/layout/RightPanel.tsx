@@ -79,11 +79,7 @@ export default function RightPanel({ onClose }: RightPanelProps) {
             value={agentName}
             size={Math.max(1, agentName.length)}
             onChange={(e) => setAgentName(e.target.value)}
-            className="bg-transparent text-center text-sm font-medium text-primary outline-none"
-          />
-          <button
-            type="button"
-            onClick={() => {
+            onBlur={() => {
               saveProfile.mutate({
                 id: 'default',
                 avatar: profile?.avatar ?? '',
@@ -92,10 +88,13 @@ export default function RightPanel({ onClose }: RightPanelProps) {
                 updated_at: profile?.updated_at ?? '',
               })
             }}
-            className="mt-2 rounded-md bg-secondary px-3 py-1 text-xs font-medium text-primary transition-colors hover:bg-hover-secondary"
-          >
-            Save
-          </button>
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur()
+              }
+            }}
+            className="bg-transparent text-center text-sm font-medium text-primary outline-none"
+          />
         </div>
       </div>
 
