@@ -6,8 +6,12 @@ export default function Providers() {
         <p className="text-sm text-secondary">Manage your AI providers and API keys</p>
         <div className="mt-4 border-t border-primary" />
         <h2 className="mt-6 text-base font-medium text-primary">Connected Providers</h2>
-        <p className="text-sm text-secondary">Providers you have connected to Argus</p>
         <div className="mt-4 border-t border-primary" />
+        <div className="flex items-center justify-between py-3">
+          <span className="text-sm text-primary">OpenRouter</span>
+          <span className="text-sm text-secondary">Connected</span>
+        </div>
+        <div className="border-t border-primary" />
       </div>
     </div>
   )
