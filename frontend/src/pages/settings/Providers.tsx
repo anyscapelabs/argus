@@ -16,9 +16,9 @@ export default function Providers() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button className="rounded-lg px-2 py-1 text-xs text-secondary hover:text-primary">Remove</button>
-            <button className="rounded-lg px-2 py-1 text-xs text-secondary hover:text-primary">Edit</button>
-            <button className="rounded-lg px-2 py-1 text-xs text-secondary hover:text-primary">Clear Keys</button>
+            <button className="rounded-lg bg-red-500/10 px-2 py-1 text-xs font-medium text-red-400 hover:bg-red-500/20">Remove</button>
+            <button className="rounded-lg bg-hover-primary px-2 py-1 text-xs font-medium text-secondary hover:text-primary">Edit</button>
+            <button className="rounded-lg bg-hover-primary px-2 py-1 text-xs font-medium text-secondary hover:text-primary">Clear Keys</button>
           </div>
         </div>
         <div className="border-t border-primary" />
