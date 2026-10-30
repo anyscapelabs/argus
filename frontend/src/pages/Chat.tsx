@@ -25,7 +25,7 @@ export default function Chat() {
   const [rightOpen, setRightOpen] = useState(false)
   const { data: agentProfile } = useAgentProfile('default')
   const qc = useQueryClient()
-  const { data: messages = [] } = useChatMessages('default')
+  const { data: messages = [], error: messagesError, isLoading } = useChatMessages('default')
   const send = useSendMessage('default')
   const tag = useMemo(() => timeTag(), [])
 
@@ -70,6 +70,9 @@ export default function Chat() {
               <div className="mx-auto w-fit rounded-md px-2 py-0.5 text-center text-xs text-secondary transition-colors hover:bg-secondary hover:text-primary">
                 {tag}
               </div>
+              {isLoading && <div className="text-xs text-secondary">Loading…</div>}
+              {messagesError && <div className="text-xs text-red-400">{String(messagesError)}</div>}
+              {send.isError && <div className="text-xs text-red-400">{String(send.error)}</div>}
               {messages.map((m: any) => (
                 m.role === 'user' ? (
                   <UserBubble key={m.id} content={m.text} />

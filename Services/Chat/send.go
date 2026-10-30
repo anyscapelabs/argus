@@ -3,6 +3,7 @@ package Chat
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 )
 
 func (s *Service) Send(agentID, text string) Shared.SendResult {
+	log.Printf("Send called agent=%s", agentID)
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.SendResult{Error: aerr}
 	}
