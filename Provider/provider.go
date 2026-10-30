@@ -15,6 +15,23 @@ type Recommended struct {
 	Cheap []string `json:"cheap,omitempty"`
 }
 
+type Quirks struct {
+	ChatPath       string `json:"chat_path,omitempty"`
+	MaxTokensField string `json:"max_tokens_field,omitempty"`
+	SystemRole     string `json:"system_role,omitempty"`
+	StreamUsage    *bool  `json:"stream_usage,omitempty"`
+	ReasoningField string `json:"reasoning_field,omitempty"`
+	ParallelTools  *bool  `json:"parallel_tools,omitempty"`
+}
+
+func (q *Quirks) HasStreamUsage() bool {
+	return q != nil && q.StreamUsage != nil && *q.StreamUsage
+}
+
+func (q *Quirks) AllowsParallelTools() bool {
+	return q != nil && q.ParallelTools != nil && *q.ParallelTools
+}
+
 type OverlayProvider struct {
 	ID             string            `json:"id"`
 	DisplayName    string            `json:"display_name"`
@@ -33,6 +50,7 @@ type OverlayProvider struct {
 	NameOverrides  map[string]string `json:"name_overrides,omitempty"`
 	LiveExclude    []string          `json:"live_exclude_patterns,omitempty"`
 	DefaultExclude []string          `json:"default_exclude_patterns,omitempty"`
+	Quirks         *Quirks           `json:"quirks,omitempty"`
 }
 
 type Overlay struct {
@@ -71,6 +89,7 @@ type Provider struct {
 	Adapter    AdapterFamily `json:"adapter"`
 	BaseURL    string        `json:"base_url"`
 	ModelsPath string        `json:"models_path"`
+	Quirks     *Quirks       `json:"quirks,omitempty"`
 
 	NoAuth     bool   `json:"no_auth"`
 	KeyHint    string `json:"key_hint,omitempty"`
