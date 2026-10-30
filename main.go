@@ -7,6 +7,11 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+
+	servicecatalog "github.com/anyscapelabs/argus/Services/Catalog"
+	servicemodels "github.com/anyscapelabs/argus/Services/Models"
+	serviceprovider "github.com/anyscapelabs/argus/Services/Provider"
+	"github.com/anyscapelabs/argus/Services/Shared"
 )
 
 // Wails uses Go's `embed` package to embed the frontend files into the binary.
@@ -32,17 +37,19 @@ func init() {
 // logs any error that might occur.
 func main() {
 
-	// Create a new Wails application by providing the necessary options.
-	// Variables 'Name' and 'Description' are for application metadata.
-	// 'Assets' configures the asset server with the 'FS' variable pointing to the frontend files.
-	// 'Bind' is a list of Go struct instances. The frontend has access to the methods of these instances.
-	// 'Mac' options tailor the application when running an macOS.
+	core := Shared.NewCore()
+	providers := &serviceprovider.Service{Core: core}
+	models := &servicemodels.Service{Core: core}
+	catalog := &servicecatalog.Service{Core: core}
+
 	app := application.New(application.Options{
 		Name:        "argus",
 		Description: "A demo of using raw HTML & CSS",
 		Icon:        appIcon,
 		Services: []application.Service{
-			application.NewService(&GreetService{}),
+			application.NewService(providers),
+			application.NewService(models),
+			application.NewService(catalog),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -51,6 +58,11 @@ func main() {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
+
+	core.Notifier(func(name string, data any) {
+		application.Get().Event.Emit(name, data)
+	})
+	core.PickerHook = models.Picker
 
 	// Create a new window with the necessary options.
 	// 'Title' is the title of the window.

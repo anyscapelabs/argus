@@ -2,41 +2,62 @@ import { useState, useEffect, useRef } from 'react'
 import { BsOpenai, BsGoogle } from 'react-icons/bs'
 import { SiAnthropic, SiMistralai, SiPerplexity, SiReplicate, SiOpenrouter, SiOllama, SiDeepseek, SiX, SiVercel } from 'react-icons/si'
 import { IoSearch } from 'react-icons/io5'
+import { FiCpu } from 'react-icons/fi'
+import { useProviders, useValidateAndSaveKey, useRemoveKey } from '../../domains/providers/hooks'
+import { useProviderPicker, useSetProviderSelection, useProviderSelection } from '../../domains/models/hooks'
 
 type Provider = {
+  id: string
   name: string
   icon?: React.ComponentType<{ size?: number; className?: string }>
   letter?: string
 }
 
 const PROVIDERS: Provider[] = [
-  { name: 'OpenRouter', icon: SiOpenrouter },
-  { name: 'Ollama', icon: SiOllama },
-  { name: 'Baseten', letter: 'B' },
-  { name: 'OpenAI', icon: BsOpenai },
-  { name: 'Anthropic', icon: SiAnthropic },
-  { name: 'Google Gemini', icon: BsGoogle },
-  { name: 'Groq', letter: 'G' },
-  { name: 'Mistral', icon: SiMistralai },
-  { name: 'Cohere', letter: 'C' },
-  { name: 'Perplexity', icon: SiPerplexity },
-  { name: 'Together AI', letter: 'T' },
-  { name: 'Replicate', icon: SiReplicate },
-  { name: 'Deepseek', icon: SiDeepseek },
-  { name: 'Cerebras', letter: 'C' },
-  { name: 'DeepInfra', letter: 'D' },
-  { name: 'xAI', icon: SiX },
-  { name: 'Vercel AI Gateway', icon: SiVercel },
+  { id: 'openrouter', name: 'OpenRouter', icon: SiOpenrouter },
+  { id: 'ollama', name: 'Ollama', icon: SiOllama },
+  { id: 'baseten', name: 'Baseten', letter: 'B' },
+  { id: 'openai', name: 'OpenAI', icon: BsOpenai },
+  { id: 'anthropic', name: 'Anthropic', icon: SiAnthropic },
+  { id: 'google', name: 'Google Gemini', icon: BsGoogle },
+  { id: 'groq', name: 'Groq', letter: 'G' },
+  { id: 'mistral', name: 'Mistral', icon: SiMistralai },
+  { id: 'cohere', name: 'Cohere', letter: 'C' },
+  { id: 'perplexity', name: 'Perplexity', icon: SiPerplexity },
+  { id: 'togetherai', name: 'Together AI', letter: 'T' },
+  { id: 'replicate', name: 'Replicate', icon: SiReplicate },
+  { id: 'deepseek', name: 'DeepSeek', icon: SiDeepseek },
+  { id: 'cerebras', name: 'Cerebras', letter: 'C' },
+  { id: 'deepinfra', name: 'Deep Infra', letter: 'D' },
+  { id: 'xai', name: 'xAI', icon: SiX },
+  { id: 'vercel', name: 'Vercel AI Gateway', icon: SiVercel },
 ]
 
 export default function Providers() {
   const [active, setActive] = useState<string | null>(null)
   const [noAuth, setNoAuth] = useState(false)
-  const [catalog, setCatalog] = useState<Record<string, any> | null>(null)
+  const [apiKey, setApiKey] = useState('')
   const [modelOpen, setModelOpen] = useState(false)
   const [selectedModels, setSelectedModels] = useState<string[]>([])
   const [modelSearch, setModelSearch] = useState('')
   const modelRef = useRef<HTMLDivElement>(null)
+
+  const { data: providerList } = useProviders()
+  const saveKey = useValidateAndSaveKey()
+  const removeKey = useRemoveKey()
+  const setSelection = useSetProviderSelection()
+  const { data: selectionResult } = useProviderSelection(active)
+  const { data: pickerResult } = useProviderPicker(active, {
+    search: modelSearch,
+    include_beta: false,
+    tools_only: false,
+    refresh_live: false,
+  })
+
+  const picker = pickerResult?.picker ?? null
+  const models = picker?.sections?.flatMap((s) => s.models ?? []) ?? []
+  const activeProvider = (providerList ?? []).find((p) => p.id === active)
+  const keyHint = activeProvider?.key_hint || picker?.provider?.key_hint || 'sk-...'
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -49,30 +70,48 @@ export default function Providers() {
   }, [])
 
   useEffect(() => {
-    let cancelled = false
-    fetch('https://models.dev/api.json')
-      .then((r) => r.json())
-      .then((data) => {
-        if (!cancelled) setCatalog(data)
-      })
-      .catch(() => {
-        if (!cancelled) setCatalog(null)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
+    if (picker?.provider?.key_last4 === undefined) return
+  }, [picker])
 
-  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
-  const providerEntry = catalog && active
-    ? Object.entries(catalog).find(([key, p]) => {
-        const name = normalize(String(p?.name ?? ''))
-        const target = normalize(active)
-        const keyNorm = normalize(key)
-        return name === target || keyNorm === target || name.includes(target) || target.includes(name)
-      })
-    : null
-  const models = providerEntry ? Object.values(providerEntry[1]?.models ?? {}) : []
+  const initializedFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (!active) {
+      initializedFor.current = null
+      return
+    }
+    if (selectionResult && initializedFor.current !== active) {
+      initializedFor.current = active
+      setSelectedModels(selectionResult.refs ?? [])
+    }
+  }, [active, selectionResult])
+
+  const handleAddProvider = () => {
+    if (!active) return
+    saveKey.mutate(
+      { providerID: active, key: noAuth ? '' : apiKey },
+      {
+        onSuccess: (res) => {
+          if (res?.error) {
+            return
+          }
+          setApiKey('')
+          setNoAuth(false)
+          setSelectedModels([])
+          setActive(null)
+        },
+      },
+    )
+  }
+
+  const toggleModel = (id: string) => {
+    const next = selectedModels.includes(id)
+      ? selectedModels.filter((x) => x !== id)
+      : [...selectedModels, id]
+    setSelectedModels(next)
+    if (active) {
+      setSelection.mutate({ providerID: active, refs: next })
+    }
+  }
 
   return (
     <div className="flex flex-1 min-h-0 flex-col bg-primary">
@@ -82,32 +121,56 @@ export default function Providers() {
         <div className="mt-4 border-t border-primary" />
         <h2 className="mt-6 text-sm font-medium text-primary">Connected Providers</h2>
         <div className="mt-4 border-t border-primary" />
-        <div className="flex items-center justify-between py-3">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-hover-primary" />
-            <div className="flex flex-col">
-              <span className="text-sm text-primary">OpenRouter</span>
-              <span className="text-xs text-secondary">2 models • API Key</span>
+        {(providerList ?? []).filter((p) => p.configured).map((p) => (
+          <div key={p.id} className="flex items-center justify-between py-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-hover-primary">
+                {(() => {
+                  const Icon = PROVIDERS.find((x) => x.id === p.id)?.icon
+                  const Letter = PROVIDERS.find((x) => x.id === p.id)?.letter
+                  if (Letter) return <span className="text-[10px] font-medium text-primary">{Letter}</span>
+                  if (Icon) return <Icon size={14} />
+                  return <span className="text-[10px] font-medium text-primary">{p.name.charAt(0).toUpperCase()}</span>
+                })()}
+              </div>
+              <div className="flex flex-col">
+                <span className="text-sm text-primary">{p.name}</span>
+                <span className="text-xs text-secondary">{p.selected_model_count} models selected • API Key{p.key_last4 ? ` • ••••${p.key_last4}` : ''}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActive(p.id)}
+                className="rounded-lg bg-hover-primary px-2 py-1 text-xs font-medium text-secondary hover:text-primary"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => removeKey.mutate(p.id)}
+                className="rounded-lg bg-red-500/10 px-2 py-1 text-xs font-medium text-red-400 hover:bg-red-500/20"
+              >
+                Remove
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="rounded-lg bg-red-500/10 px-2 py-1 text-xs font-medium text-red-400 hover:bg-red-500/20">Remove</button>
-            <button className="rounded-lg bg-hover-primary px-2 py-1 text-xs font-medium text-secondary hover:text-primary">Edit</button>
-            <button className="rounded-lg bg-hover-primary px-2 py-1 text-xs font-medium text-secondary hover:text-primary">Clear Keys</button>
-          </div>
-        </div>
+        ))}
+        {(providerList ?? []).filter((p) => p.configured).length === 0 && (
+          <p className="py-3 text-xs text-secondary">No providers connected yet.</p>
+        )}
         <div className="border-t border-primary" />
         <h2 className="mt-8 text-sm font-medium text-primary">Add Custom Provider</h2>
         <p className="text-xs text-secondary">Add a custom provider</p>
         <div className="mt-4 border-t border-primary" />
         <div className="mt-4 flex flex-wrap gap-2">
-          {PROVIDERS.map(({ name, icon: Icon, letter }) => {
-            const isActive = active === name
+          {PROVIDERS.map(({ id, name, icon: Icon, letter }) => {
+            const isActive = active === id
             return (
               <button
-                key={name}
+                key={id}
                 type="button"
-                onClick={() => setActive((cur) => (cur === name ? null : name))}
+                onClick={() => setActive((cur) => (cur === id ? null : id))}
                 className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors ${
                   isActive
                     ? 'border-primary bg-secondary text-primary'
@@ -133,7 +196,9 @@ export default function Providers() {
             <label className="text-xs font-medium text-secondary">API Key</label>
             <input
               type="password"
-              placeholder="sk-..."
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder={keyHint}
               className="rounded-md border border-primary bg-primary px-2 py-1 text-sm text-primary placeholder:text-secondary focus:outline-none"
             />
             <div className="flex flex-col gap-0.5">
@@ -180,52 +245,63 @@ export default function Providers() {
                     {models.length === 0 && (
                       <span className="px-2 py-1 text-xs text-secondary">No models available</span>
                     )}
-                    {models
-                      .filter((m: any) =>
-                        (m.name ?? m.id ?? '').toLowerCase().includes(modelSearch.toLowerCase())
-                      )
-                      .map((m: any) => {
-                        const isSel = selectedModels.includes(m.id)
-                        return (
-                          <div
-                            key={m.id}
-                            className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-xs text-primary transition-colors hover:bg-hover-secondary"
-                          >
-                            <div className="flex items-center gap-2">
-                              <FiCpu size={12} className="text-secondary" />
-                              {m.name ?? m.id}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setSelectedModels((prev) =>
-                                  isSel ? prev.filter((id) => id !== m.id) : [...prev, m.id]
-                                )
-                              }
-                              className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-                                isSel ? 'bg-accent-secondary' : 'bg-tertiary'
-                              }`}
-                            >
-                              <span
-                                className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${
-                                  isSel ? 'left-4' : 'left-0.5'
-                                }`}
-                              />
-                            </button>
+                    {models.map((m: any) => {
+                      const isSel = selectedModels.includes(m.ref)
+                      return (
+                        <div
+                          key={m.ref}
+                          className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-xs text-primary transition-colors hover:bg-hover-secondary"
+                        >
+                          <div className="flex items-center gap-2">
+                            <FiCpu size={12} className="text-secondary" />
+                            {m.name ?? m.id}
                           </div>
-                        )
-                      })}
+                          <button
+                            type="button"
+                            onClick={() => toggleModel(m.ref)}
+                            className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                              isSel ? 'bg-accent-secondary' : 'bg-tertiary'
+                            }`}
+                          >
+                            <span
+                              className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${
+                                isSel ? 'left-4' : 'left-0.5'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}
             </div>
+            {saveKey.isPending && <span className="text-xs text-secondary">Saving…</span>}
+            {saveKey.isError && <span className="text-xs text-red-400">Failed to save key</span>}
             <div className="flex justify-end">
-              <button
-                type="button"
-                className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-black hover:bg-hover-accent"
-              >
-                Add Provider
-              </button>
+              {activeProvider?.configured ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setApiKey('')
+                    setNoAuth(false)
+                    setSelectedModels([])
+                    setActive(null)
+                  }}
+                  className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-black hover:bg-hover-accent"
+                >
+                  Done
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleAddProvider}
+                  disabled={saveKey.isPending}
+                  className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-black hover:bg-hover-accent disabled:opacity-50"
+                >
+                  Add Provider
+                </button>
+              )}
             </div>
           </div>
         )}
