@@ -8,8 +8,18 @@ export default function Providers() {
         <h2 className="mt-6 text-sm font-medium text-primary">Connected Providers</h2>
         <div className="mt-4 border-t border-primary" />
         <div className="flex items-center justify-between py-3">
-          <span className="text-sm text-primary">OpenRouter</span>
-          <span className="text-sm text-secondary">Connected</span>
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-full bg-hover-primary" />
+            <div className="flex flex-col">
+              <span className="text-sm text-primary">OpenRouter</span>
+              <span className="text-xs text-secondary">2 models • API Key</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button className="rounded-lg px-2 py-1 text-xs text-secondary hover:text-primary">Remove</button>
+            <button className="rounded-lg px-2 py-1 text-xs text-secondary hover:text-primary">Edit</button>
+            <button className="rounded-lg px-2 py-1 text-xs text-secondary hover:text-primary">Clear Keys</button>
+          </div>
         </div>
         <div className="border-t border-primary" />
       </div>
