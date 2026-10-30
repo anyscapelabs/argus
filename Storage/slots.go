@@ -1,8 +1,8 @@
 package Storage
 
 import (
-	"database/sql"
 	"fmt"
+	"strings"
 )
 
 type Slot struct {
@@ -47,19 +47,27 @@ func (db *DB) ListModelSlots() ([]Slot, error) {
 }
 
 func (db *DB) RemoveSlotForRef(ref string) (string, error) {
-	row := db.conn.QueryRow(`SELECT slot FROM model_slots WHERE model_ref = ?`, ref)
-	var slot string
-	err := row.Scan(&slot)
-	if err == sql.ErrNoRows {
-		return "", nil
-	}
+	rows, err := db.conn.Query(`SELECT slot FROM model_slots WHERE model_ref = ?`, ref)
 	if err != nil {
 		return "", fmt.Errorf("storage: slot lookup failed: %w", err)
 	}
-	if _, err := db.conn.Exec(`DELETE FROM model_slots WHERE slot = ?`, slot); err != nil {
+	var slots []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			rows.Close()
+			return "", err
+		}
+		slots = append(slots, s)
+	}
+	rows.Close()
+	if len(slots) == 0 {
+		return "", nil
+	}
+	if _, err := db.conn.Exec(`DELETE FROM model_slots WHERE model_ref = ?`, ref); err != nil {
 		return "", fmt.Errorf("storage: slot delete failed: %w", err)
 	}
-	return slot, nil
+	return strings.Join(slots, ","), nil
 }
 
 func (db *DB) RemoveProviderSlots(providerID string) ([]string, error) {

@@ -4,7 +4,6 @@ import (
 	"embed"
 
 	"log"
-	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -44,7 +43,7 @@ func main() {
 
 	app := application.New(application.Options{
 		Name:        "argus",
-		Description: "A demo of using raw HTML & CSS",
+		Description: "Argus desktop app",
 		Icon:        appIcon,
 		Services: []application.Service{
 			application.NewService(providers),
@@ -70,7 +69,7 @@ func main() {
 	// 'BackgroundColour' is the background colour of the window.
 	// 'URL' is the URL that will be loaded into the webview.
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title: "Window 1",
+		Title: "Argus",
 		// Frameless drops the native title bar and window decorations on every
 		// platform. On Linux this is `gtk_window_set_decorated(FALSE)`; the
 		// runtime then takes over edge resizing itself (a 5px band at each edge,
@@ -91,16 +90,6 @@ func main() {
 		BackgroundColour: application.NewRGB(0, 0, 0),
 		URL:              "/",
 	})
-
-	// Create a goroutine that emits an event containing the current time every second.
-	// The frontend can listen to this event and update the UI accordingly.
-	go func() {
-		for {
-			now := time.Now().Format(time.RFC1123)
-			app.Event.Emit("time", now)
-			time.Sleep(time.Second)
-		}
-	}()
 
 	// Run the application. This blocks until the application has been exited.
 	err := app.Run()

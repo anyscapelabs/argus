@@ -46,4 +46,4 @@ Embedded `snapshot.json` + `meta.json` ship a baseline catalog for offline start
 
 ## Events
 
-- `catalog:updated` on manual refresh completion.
+- `catalog:updated` on every successful refresh (including background).

@@ -61,7 +61,7 @@ func (s *Service) ProviderView(cat *Catalog.Catalog, p Provider.Provider) Shared
 	return view
 }
 
-func (s *Service) ValidateAndSaveKey(providerID, key string) Shared.SaveKeyResult {
+func (s *Service) ValidateAndSaveKey(providerID, key string, refs []string, baseURLOverride string) Shared.SaveKeyResult {
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.SaveKeyResult{Error: aerr}
 	}
@@ -82,16 +82,41 @@ func (s *Service) ValidateAndSaveKey(providerID, key string) Shared.SaveKeyResul
 		normalized = valid
 	}
 
+	existing, _, _ := s.Core.DB.GetProviderConfig(providerID)
+	override := existing.BaseURLOverride
+	if baseURLOverride != "" {
+		override = baseURLOverride
+	}
+	cfgForLive := Storage.ProviderConfig{BaseURLOverride: override}
+
+	// preserve original key for rollback
+	var originalKey string
+	hasOriginal := false
+	if !provider.NoAuth {
+		if k, err := Keyring.Get(providerID); err == nil {
+			originalKey = k
+			hasOriginal = true
+		}
+	}
+
+	// clear cache so stale results can't mask a bad key
+	s.Core.DropLive(providerID)
+
 	if !provider.NoAuth {
 		if err := Keyring.Set(providerID, normalized); err != nil {
 			return Shared.SaveKeyResult{Error: Shared.NewError(Shared.CodeStorage, "The secrets store refused the key. Nothing was changed")}
 		}
 	}
 
-	live := s.Core.FetchLive(context.Background(), provider, overlayProvider.ExtraHeaders, Storage.ProviderConfig{}, true)
-	if live == nil {
+	live := s.Core.FetchLive(context.Background(), provider, overlayProvider.ExtraHeaders, cfgForLive, true)
+	if live == nil || live.Stale {
+		// rollback key
 		if !provider.NoAuth {
-			_ = Keyring.Delete(providerID)
+			if hasOriginal {
+				_ = Keyring.Set(providerID, originalKey)
+			} else {
+				_ = Keyring.Delete(providerID)
+			}
 		}
 		if err := s.Core.LiveError(providerID); err != nil {
 			return Shared.SaveKeyResult{Error: err}
@@ -105,26 +130,38 @@ func (s *Service) ValidateAndSaveKey(providerID, key string) Shared.SaveKeyResul
 		secretRef = Keyring.Ref(providerID)
 		last4 = LastFour(normalized)
 	}
-	existing, _, _ := s.Core.DB.GetProviderConfig(providerID)
 	saved := Storage.ProviderConfig{
 		ProviderID:      providerID,
 		SecretRef:       secretRef,
 		KeyLast4:        last4,
 		ValidatedAt:     time.Now().UTC().Format(time.RFC3339),
-		BaseURLOverride: existing.BaseURLOverride,
+		BaseURLOverride: override,
 	}
 	if err := s.Core.DB.SaveProviderConfig(saved); err != nil {
+		// rollback key
+		if !provider.NoAuth {
+			if hasOriginal {
+				_ = Keyring.Set(providerID, originalKey)
+			} else {
+				_ = Keyring.Delete(providerID)
+			}
+		}
 		return Shared.SaveKeyResult{Error: Shared.NewError(Shared.CodeStorage, "The key could not be saved. Nothing was changed")}
 	}
+	// save selection in same logical step
+	if err := s.Core.DB.SetProviderSelection(providerID, refs); err != nil {
+		return Shared.SaveKeyResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+	}
+
 	s.Core.DropLive(providerID)
+	s.Core.EmitEvent(Shared.EventProvidersChanged, nil)
 	if s.Core.PickerHook == nil {
 		return Shared.SaveKeyResult{Ok: true}
 	}
 	picker := s.Core.PickerHook(providerID, Shared.PickerOptions{})
 	if picker.Error != nil {
-		return Shared.SaveKeyResult{Error: picker.Error}
+		return Shared.SaveKeyResult{Ok: true, Picker: nil}
 	}
-	s.Core.EmitEvent(Shared.EventProvidersChanged, nil)
 	return Shared.SaveKeyResult{Ok: true, Picker: picker.Picker}
 }
 
@@ -143,11 +180,6 @@ func (s *Service) RemoveKey(providerID string) Shared.ActionResult {
 	if !found {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeNotConfigured, "This provider has no saved key")}
 	}
-	if !overlayProvider.NoAuth {
-		if err := Keyring.Delete(providerID); err != nil {
-			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, "The secrets store refused to remove the key")}
-		}
-	}
 	cleared, err := s.Core.DB.RemoveProviderSlots(providerID)
 	if err != nil {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
@@ -157,6 +189,11 @@ func (s *Service) RemoveKey(providerID string) Shared.ActionResult {
 	}
 	if err := s.Core.DB.RemoveProviderConfig(providerID); err != nil {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+	}
+	if !overlayProvider.NoAuth {
+		if err := Keyring.Delete(providerID); err != nil {
+			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, "The secrets store refused to remove the key")}
+		}
 	}
 	s.Core.DropLive(providerID)
 	s.Core.EmitEvent(Shared.EventProvidersChanged, nil)

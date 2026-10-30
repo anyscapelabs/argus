@@ -160,7 +160,7 @@ func ingestProvider(op *Provider.OverlayProvider, data []byte, report *BuildRepo
 		if status == "" {
 			continue
 		}
-		if len(rm.Modalities.Output) > 0 && !hasText(rm.Modalities.Output) {
+		if rm.Modalities != nil && len(rm.Modalities.Output) > 0 && !hasText(rm.Modalities.Output) {
 			continue
 		}
 		if t := strings.ToLower(rm.Type); t != "" && dropTypes[t] {
@@ -177,10 +177,14 @@ func ingestProvider(op *Provider.OverlayProvider, data []byte, report *BuildRepo
 		name = capString(name)
 		family := capString(rm.Family)
 
+		vision := false
+		if rm.Modalities != nil {
+			vision = hasImage(rm.Modalities.Input)
+		}
 		caps := &Models.Capabilities{
 			Tools:            rm.ToolCall,
 			Reasoning:        rm.Reasoning,
-			Vision:           hasImage(rm.Modalities.Input),
+			Vision:           vision,
 			Files:            rm.Attachment,
 			StructuredOutput: rm.Structured,
 			Temperature:      rm.Temperature,

@@ -24,7 +24,7 @@ func Get(providerID string) (string, error) {
 	v, err := keyring.Get(service, Ref(providerID))
 	if err != nil {
 		if errors.Is(err, keyring.ErrNotFound) {
-			return "", nil
+			return "", fmt.Errorf("no api key stored for this provider")
 		}
 		return "", fmt.Errorf("secrets store is unreachable: %w", err)
 	}

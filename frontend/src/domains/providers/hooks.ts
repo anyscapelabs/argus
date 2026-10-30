@@ -11,8 +11,8 @@ export function useProviders() {
 export function useValidateAndSaveKey() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ providerID, key }: { providerID: string; key: string }) =>
-      validateAndSaveKey(providerID, key),
+    mutationFn: ({ providerID, key, refs, baseURLOverride }: { providerID: string; key: string; refs?: string[]; baseURLOverride?: string }) =>
+      validateAndSaveKey(providerID, key, refs ?? [], baseURLOverride ?? ''),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['providers'] })
       await qc.refetchQueries({ queryKey: ['providers'] })
@@ -27,7 +27,9 @@ export function useRemoveKey() {
     onSuccess: async (_data, providerID) => {
       await qc.invalidateQueries({ queryKey: ['providers'] })
       await qc.refetchQueries({ queryKey: ['providers'] })
-      await qc.invalidateQueries({ queryKey: ['models', providerID] })
+      await qc.invalidateQueries({ queryKey: ['models', 'picker', providerID] })
+      await qc.invalidateQueries({ queryKey: ['models', 'selection', providerID] })
+      await qc.invalidateQueries({ queryKey: ['models', 'chat'] })
     },
   })
 }

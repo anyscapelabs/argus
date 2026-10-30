@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Events } from '@wailsio/runtime'
+import { useQueryClient } from '@tanstack/react-query'
 import { Time } from '../bindings/events'
 import Toolbar from './components/layout/Toolbar'
 import Sidebar from './components/layout/Sidebar'
@@ -23,8 +24,22 @@ import Providers from './pages/settings/Providers'
 
 export default function App() {
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const qc = useQueryClient()
   const [page, setPage] = useState<'onboarding' | 'home' | 'chat' | 'settings'>('onboarding');
   const [sidebarMode, setSidebarMode] = useState<'main' | 'settings'>('main');
+
+  useEffect(() => {
+    const invalidateAll = () => {
+      qc.invalidateQueries()
+    }
+    const unsubs = [
+      Events.On('providers:changed', invalidateAll),
+      Events.On('selections:changed', invalidateAll),
+      Events.On('slots:changed', invalidateAll),
+      Events.On('catalog:updated', invalidateAll),
+    ]
+    return () => unsubs.forEach((u) => u())
+  }, [qc])
 
 
   useEffect(() => {

@@ -163,7 +163,7 @@ func fetchAnthropic(ctx context.Context, provider Provider.Provider, override st
 	for page := 0; page < maxListPages; page++ {
 		url := listEndpoint(listBase(provider, override), provider.ModelsPath) + "?limit=1000"
 		if cursor != "" {
-			url += "&page=" + cursor
+			url += "&after_id=" + cursor
 		}
 		body, aerr := doList(ctx, http.MethodGet, url, headers)
 		if aerr != nil {
@@ -174,8 +174,8 @@ func fetchAnthropic(ctx context.Context, provider Provider.Provider, override st
 				ID          string `json:"id"`
 				DisplayName string `json:"display_name"`
 			} `json:"data"`
-			HasMore  bool   `json:"has_more"`
-			NextPage string `json:"next_page"`
+			HasMore bool   `json:"has_more"`
+			LastID  string `json:"last_id"`
 		}
 		if err := json.Unmarshal(body, &response); err != nil {
 			return nil, NewError(CodeBadResponse, "The provider response could not be parsed")
@@ -183,10 +183,10 @@ func fetchAnthropic(ctx context.Context, provider Provider.Provider, override st
 		for _, m := range response.Data {
 			out = append(out, LiveModel{ID: m.ID, Name: firstNonEmpty(m.DisplayName, m.ID)})
 		}
-		if !response.HasMore || response.NextPage == "" {
+		if !response.HasMore || response.LastID == "" {
 			break
 		}
-		cursor = response.NextPage
+		cursor = response.LastID
 	}
 	return out, nil
 }
@@ -388,7 +388,7 @@ func (c *Core) DropLive(providerID string) {
 	c.liveMu.Lock()
 	defer c.liveMu.Unlock()
 	delete(c.live, providerID)
-	c.lockCS.Delete(providerID)
+	// keep the per-provider mutex to avoid concurrent fetches
 }
 
 func indexLiveModels(models []LiveModel) map[string]LiveModel {

@@ -12,16 +12,24 @@ type SelectedModel struct {
 }
 
 func (db *DB) SetProviderSelection(providerID string, refs []string) error {
-	if _, err := db.conn.Exec(`DELETE FROM provider_selected_models WHERE provider_id = ?`, providerID); err != nil {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return fmt.Errorf("storage: begin transaction failed: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM provider_selected_models WHERE provider_id = ?`, providerID); err != nil {
 		return fmt.Errorf("storage: provider selection reset failed: %w", err)
 	}
 	for i, ref := range refs {
-		if _, err := db.conn.Exec(
+		if _, err := tx.Exec(
 			`INSERT INTO provider_selected_models (provider_id, model_ref, position, selected_at) VALUES (?, ?, ?, ?)`,
 			providerID, ref, i, nowRFC3339(),
 		); err != nil {
 			return fmt.Errorf("storage: provider selection save failed: %w", err)
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("storage: commit failed: %w", err)
 	}
 	return nil
 }

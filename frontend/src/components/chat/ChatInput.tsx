@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { LuPlus } from 'react-icons/lu'
 import { FaArrowUp } from 'react-icons/fa'
 import { FiCircle, FiCpu } from 'react-icons/fi'
 import ModelPicker from './ModelPicker'
+import { useChatModels } from '../../domains/models/hooks'
 
 function formatUsage(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`
@@ -14,17 +15,35 @@ function formatUsage(n: number): string {
 const TOTAL_USAGE = 1234
 
 type ChatInputProps = {
-  onSend?: () => void
+  onSend?: (text: string, modelRef: string | null) => void
 }
 
 export default function ChatInput({ onSend }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [modelOpen, setModelOpen] = useState(false)
-  const [selectedModel, setSelectedModel] = useState('GPT-4o')
+  const [selectedRef, setSelectedRef] = useState<string | null>(null)
+  const [text, setText] = useState('')
+  const { data: chatModels = [] } = useChatModels()
+
+  useEffect(() => {
+    if (!selectedRef && chatModels.length > 0) {
+      setSelectedRef(chatModels[0].ref)
+    }
+  }, [chatModels, selectedRef])
+
+  const selectedModel = chatModels.find((m) => m.ref === selectedRef)
+  const displayName = selectedModel?.model?.name ?? selectedRef ?? 'Select model'
 
   const handleSend = () => {
-    onSend?.()
+    const value = text.trim()
+    if (!value) return
+    onSend?.(value, selectedRef)
+    setText('')
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+    }
+    setExpanded(false)
   }
 
   const resize = () => {
@@ -52,6 +71,11 @@ export default function ChatInput({ onSend }: ChatInputProps) {
         <textarea
           ref={textareaRef}
           rows={1}
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value)
+            resize()
+          }}
           onInput={resize}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -86,11 +110,11 @@ export default function ChatInput({ onSend }: ChatInputProps) {
           }`}
         >
           <FiCpu size={12} />
-          {selectedModel}
+          {displayName}
         </button>
         {modelOpen && (
           <div className="absolute bottom-full right-2 mb-1">
-            <ModelPicker onSelect={setSelectedModel} onClose={() => setModelOpen(false)} />
+            <ModelPicker selectedRef={selectedRef} onSelect={setSelectedRef} onClose={() => setModelOpen(false)} />
           </div>
         )}
       </div>

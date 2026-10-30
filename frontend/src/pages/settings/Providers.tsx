@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useDeferredValue } from 'react'
 import { BsOpenai, BsGoogle } from 'react-icons/bs'
 import { SiAnthropic, SiMistralai, SiPerplexity, SiReplicate, SiOpenrouter, SiOllama, SiDeepseek, SiX, SiVercel } from 'react-icons/si'
 import { IoSearch } from 'react-icons/io5'
@@ -37,6 +37,7 @@ export default function Providers() {
   const [active, setActive] = useState<string | null>(null)
   const [noAuth, setNoAuth] = useState(false)
   const [apiKey, setApiKey] = useState('')
+  const [baseUrlOverride, setBaseUrlOverride] = useState('')
   const [modelOpen, setModelOpen] = useState(false)
   const [selectedModels, setSelectedModels] = useState<string[]>([])
   const [modelSearch, setModelSearch] = useState('')
@@ -46,9 +47,10 @@ export default function Providers() {
   const saveKey = useValidateAndSaveKey()
   const removeKey = useRemoveKey()
   const setSelection = useSetProviderSelection()
+  const deferredSearch = useDeferredValue(modelSearch)
   const { data: selectionResult } = useProviderSelection(active)
   const { data: pickerResult } = useProviderPicker(active, {
-    search: modelSearch,
+    search: deferredSearch,
     include_beta: false,
     tools_only: false,
     refresh_live: false,
@@ -88,7 +90,7 @@ export default function Providers() {
   const handleAddProvider = () => {
     if (!active) return
     saveKey.mutate(
-      { providerID: active, key: noAuth ? '' : apiKey },
+      { providerID: active, key: noAuth ? '' : apiKey, refs: selectedModels, baseURLOverride: baseUrlOverride },
       {
         onSuccess: (res) => {
           if (res?.error) {
@@ -96,6 +98,7 @@ export default function Providers() {
           }
           setApiKey('')
           setNoAuth(false)
+          setBaseUrlOverride('')
           setSelectedModels([])
           setActive(null)
         },
@@ -164,13 +167,16 @@ export default function Providers() {
         <p className="text-xs text-secondary">Add a custom provider</p>
         <div className="mt-4 border-t border-primary" />
         <div className="mt-4 flex flex-wrap gap-2">
-          {PROVIDERS.map(({ id, name, icon: Icon, letter }) => {
-            const isActive = active === id
+          {(providerList && providerList.length > 0 ? providerList : PROVIDERS.map((p) => ({ id: p.id, name: p.name }))).map((p: any) => {
+            const meta = PROVIDERS.find((x) => x.id === p.id)
+            const Icon = meta?.icon
+            const letter = meta?.letter
+            const isActive = active === p.id
             return (
               <button
-                key={id}
+                key={p.id}
                 type="button"
-                onClick={() => setActive((cur) => (cur === id ? null : id))}
+                onClick={() => setActive((cur) => (cur === p.id ? null : p.id))}
                 className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors ${
                   isActive
                     ? 'border-primary bg-secondary text-primary'
@@ -186,7 +192,7 @@ export default function Providers() {
                     {Icon && <Icon size={12} />}
                   </span>
                 )}
-                <span className="leading-none">{name}</span>
+                <span className="leading-none">{p.name}</span>
               </button>
             )
           })}
@@ -220,6 +226,14 @@ export default function Providers() {
               </div>
               <p className="pl-11 text-[10px] text-secondary">Enable for local servers like Ollama that don't require an API key.</p>
             </div>
+            <label className="text-xs font-medium text-secondary">Base URL override (optional)</label>
+            <input
+              type="text"
+              value={baseUrlOverride}
+              onChange={(e) => setBaseUrlOverride(e.target.value)}
+              placeholder="https://..."
+              className="rounded-md border border-primary bg-primary px-2 py-1 text-sm text-primary placeholder:text-secondary focus:outline-none"
+            />
             <label className="text-sm font-medium text-secondary">Model</label>
             <div ref={modelRef} className="relative flex items-center gap-2">
               <button

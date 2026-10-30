@@ -29,7 +29,12 @@ Feel free to *ask* anything.
 
 export default function Chat() {
   const [rightOpen, setRightOpen] = useState(false)
+  const [_messages, setMessages] = useState<{ role: string; content: string; model?: string | null }[]>([])
   const tag = useMemo(() => timeTag(), [])
+
+  const handleSend = (text: string, modelRef: string | null) => {
+    setMessages((prev) => [...prev, { role: 'user', content: text, model: modelRef }])
+  }
 
   return (
     <div className="relative flex flex-1 min-h-0">
@@ -57,7 +62,7 @@ export default function Chat() {
             </div>
           </div>
         </div>
-        <ChatInput />
+        <ChatInput onSend={handleSend} />
       </div>
       <AnimatePresence>
         {rightOpen && <RightPanel key="right-panel" onClose={() => setRightOpen(false)} />}

@@ -14,15 +14,21 @@ export const defaultPickerOptions: PickerOptions = {
 }
 
 export async function getPicker(providerID: string, options: PickerOptions = defaultPickerOptions): Promise<PickerResult> {
-  return ModelsService.Picker(providerID, options)
+  const res = await ModelsService.Picker(providerID, options)
+  if (res?.error) throw new Error(res.error.message)
+  return res
 }
 
 export async function setProviderSelection(providerID: string, refs: string[] | null): Promise<ActionResult> {
-  return ModelsService.SetProviderSelection(providerID, refs)
+  const res = await ModelsService.SetProviderSelection(providerID, refs)
+  if (res?.error) throw new Error(res.error.message)
+  return res
 }
 
 export async function getProviderSelection(providerID: string): Promise<SelectionsResult> {
-  return ModelsService.GetProviderSelection(providerID)
+  const res = await ModelsService.GetProviderSelection(providerID)
+  if (res?.error) throw new Error(res.error.message)
+  return res
 }
 
 export async function getChatModels() {

@@ -136,7 +136,10 @@ func (s *Store) Refresh(ctx context.Context) error {
 	if resp.StatusCode == http.StatusNotModified {
 		updated := s.Status()
 		updated.LastAttempt = now
+		updated.FetchedAt = now
+		updated.Stale = false
 		s.status.Store(&updated)
+		s.touchCacheMeta(now)
 		return nil
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -241,6 +244,39 @@ func (s *Store) loadCached(embeddedFetchedAt string) (*Catalog, Status, string, 
 		Placeholder:   false,
 	}
 	return built, st, meta.ETag, true
+}
+
+func (s *Store) touchCacheMeta(now string) {
+	metaPath := filepath.Join(s.cacheDir, cacheMetaName)
+	raw, err := os.ReadFile(metaPath)
+	if err != nil {
+		return
+	}
+	var meta struct {
+		ETag        string `json:"etag"`
+		FetchedAt   string `json:"fetched_at"`
+		ContentHash string `json:"content_hash"`
+	}
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		return
+	}
+	meta.FetchedAt = now
+	b, err := json.Marshal(meta)
+	if err != nil {
+		return
+	}
+	tmp, err := os.CreateTemp(s.cacheDir, "catalog-meta-")
+	if err != nil {
+		return
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(b); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return
+	}
+	tmp.Close()
+	_ = os.Rename(tmpName, metaPath)
 }
 
 func (s *Store) writeCache(body []byte, etag string) error {

@@ -65,9 +65,6 @@ func RecommendFrom(models []Models.Model, rec Provider.Recommended) (Models.Mode
 				break
 			}
 		}
-		if main.ID == "" {
-			main = mainCandidates[0]
-		}
 	}
 
 	if cheap.ID == "" {
