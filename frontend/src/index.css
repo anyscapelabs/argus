@@ -40,22 +40,27 @@
     /* Monospace face: Geist Mono (variable, self-hosted via @fontsource-variable). */
     --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
 
-    /* Background surfaces. Tertiary is a colour token. `secondary` is split
-       by role (like `primary`) so it lives in custom utilities below. */
-    --color-tertiary: #262626;
+    /* Background surfaces. */
+    --color-tertiary: #363636;
 
     /* Sidebar surface, darker than the primary canvas. */
     --color-sidebar: #0a0a0b;
 
-    /* Hover surfaces, aligned with the background ramp. */
-    --color-hover-primary: #242529;
-    --color-hover-secondary: #3a3b40;
+    /* Hover surfaces. */
+    --color-hover-primary: #1f1f1f;
+    --color-hover-secondary: #363636;
 
     /* Accent. */
     --color-accent: #ffffff;
 
     /* Accent hover, a subtle step down from white. */
     --color-hover-accent: #e6e6e8;
+
+    /* Secondary accent (purple). */
+    --color-accent-secondary: #7B61FF;
+
+    /* Secondary accent hover. */
+    --color-hover-accent-secondary: #6554C0;
 }
 
 /* `primary` is split by role: a dark surface for backgrounds and white for
@@ -69,7 +74,7 @@
 }
 
 @utility bg-secondary {
-    background-color: #181818;
+    background-color: #262626;
 }
 
 @utility text-secondary {
@@ -77,15 +82,15 @@
 }
 
 @utility border-primary {
-    border-color: #242529;
+    border-color: #262626;
 }
 
 @utility border-secondary {
-    border-color: #3a3b40;
+    border-color: #363636;
 }
 
 @utility border-tertiary {
-    border-color: #6e7076;
+    border-color: #444444;
 }
 
 /* ----- Base ----------------------------------------------------------------
@@ -149,4 +154,35 @@
 
 @utility no-drag {
     --wails-draggable: no-drag;
+}
+
+/* Markdown rendering inside agent bubbles. */
+.markdown p {
+    margin: 0;
+}
+.markdown ul {
+    list-style-type: disc;
+    padding-left: 1.25rem;
+    margin: 0.25rem 0;
+}
+.markdown ol {
+    list-style-type: decimal;
+    padding-left: 1.25rem;
+    margin: 0.25rem 0;
+}
+.markdown li {
+    margin: 0.125rem 0;
+}
+.markdown em {
+    font-style: italic;
+}
+.markdown strong {
+    font-weight: 600;
+}
+.markdown code {
+    background-color: #141414;
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+    font-family: 'Geist Mono Variable', monospace;
+    font-size: 0.85em;
 }

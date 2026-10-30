@@ -1,0 +1,67 @@
+import { useMemo, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { FiChevronRight } from 'react-icons/fi'
+import Toolbar from '../components/layout/Toolbar'
+import ChatInput from '../components/chat/ChatInput'
+import AgentBubble from '../components/chat/AgentBubble'
+import RightPanel from '../components/layout/RightPanel'
+
+function timeTag() {
+  const now = new Date()
+  const h = now.getHours()
+  const m = now.getMinutes().toString().padStart(2, '0')
+  const ampm = h >= 12 ? 'pm' : 'am'
+  const hour12 = h % 12 || 12
+  return `Today at ${hour12}:${m}${ampm}`
+}
+
+const EXAMPLE_MESSAGE = `
+Hello! I'm **Argus**, your always-on companion.
+
+Here's what I can do:
+
+- Check git status
+- Scaffold components
+- Run terminal commands
+
+Feel free to *ask* anything.
+`
+
+export default function Chat() {
+  const [rightOpen, setRightOpen] = useState(false)
+  const tag = useMemo(() => timeTag(), [])
+
+  return (
+    <div className="relative flex flex-1 min-h-0">
+      <div className="flex flex-1 flex-col min-h-0">
+        <Toolbar />
+        <div className="relative flex-1 min-h-0">
+          <div className="absolute left-1/2 -top-10 z-10 -translate-x-1/2">
+            <motion.button
+              type="button"
+              onClick={() => setRightOpen((v) => !v)}
+              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+              className="group flex cursor-pointer items-center gap-2 rounded-full bg-secondary px-3 py-1 transition-colors hover:bg-hover-secondary"
+            >
+              <img src="/logo.png" alt="Argus" className="h-8 w-8 rounded-full" />
+              <span className="text-sm font-medium text-primary">Argus</span>
+              <FiChevronRight size={14} className="w-0 overflow-hidden opacity-0 transition-all duration-300 ease-out group-hover:w-4 group-hover:translate-x-1 group-hover:opacity-100" />
+            </motion.button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-6 py-6">
+            <div className="mx-auto flex max-w-3xl flex-col gap-3">
+              <div className="mx-auto w-fit rounded-md px-2 py-0.5 text-center text-xs text-secondary transition-colors hover:bg-secondary hover:text-primary">
+                {tag}
+              </div>
+              <AgentBubble content={EXAMPLE_MESSAGE} />
+            </div>
+          </div>
+        </div>
+        <ChatInput />
+      </div>
+      <AnimatePresence>
+        {rightOpen && <RightPanel key="right-panel" onClose={() => setRightOpen(false)} />}
+      </AnimatePresence>
+    </div>
+  )
+}
