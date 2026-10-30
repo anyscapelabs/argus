@@ -4,7 +4,7 @@ export default function Providers() {
       <div className="mx-auto w-full max-w-2xl p-2">
         <h1 className="text-lg font-medium text-primary">Providers</h1>
         <p className="text-sm text-secondary">Manage your AI providers and API keys</p>
-        <div className="mt-4 border-t border-border" />
+        <div className="mt-4 border-t border-primary" />
       </div>
     </div>
   )
