@@ -3,7 +3,7 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wailsio/runtime";
+import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -15,18 +15,32 @@ import * as Provider$0 from "../../Provider/models.js";
 // @ts-ignore: Unused imports
 import * as Shared$0 from "../Shared/models.js";
 
-export function ListProviders(): $CancellablePromise<Shared$0.ProviderView[] | null> {
-    return $Call.ByID(2805701055);
+export function ListProviders(): $CancellablePromise<Shared$0.ProviderView[]> {
+    return $Call.ByID(2805701055).then(($result: any) => {
+        return $$createType1($result);
+    });
 }
 
 export function ProviderView(cat: Catalog$0.Catalog | null, p: Provider$0.Provider): $CancellablePromise<Shared$0.ProviderView> {
-    return $Call.ByID(3341094607, cat, p);
+    return $Call.ByID(3341094607, cat, p).then(($result: any) => {
+        return $$createType0($result);
+    });
 }
 
 export function RemoveKey(providerID: string): $CancellablePromise<Shared$0.ActionResult> {
-    return $Call.ByID(1667295738, providerID);
+    return $Call.ByID(1667295738, providerID).then(($result: any) => {
+        return $$createType2($result);
+    });
 }
 
-export function ValidateAndSaveKey(providerID: string, key: string, refs: string[] | null, baseURLOverride: string): $CancellablePromise<Shared$0.SaveKeyResult> {
-    return $Call.ByID(1516885870, providerID, key, refs, baseURLOverride);
+export function ValidateAndSaveKey(providerID: string, key: string, refs: string[], baseURLOverride: string): $CancellablePromise<Shared$0.SaveKeyResult> {
+    return $Call.ByID(1516885870, providerID, key, refs, baseURLOverride).then(($result: any) => {
+        return $$createType3($result);
+    });
 }
+
+// Private type creation functions
+const $$createType0 = Shared$0.ProviderView.createFrom;
+const $$createType1 = $Create.Array($$createType0);
+const $$createType2 = Shared$0.ActionResult.createFrom;
+const $$createType3 = Shared$0.SaveKeyResult.createFrom;

@@ -77,8 +77,8 @@ type Delta struct {
 }
 
 type BlockStart struct {
-	Index int
-	Block Block
+	Index int   `json:"index"`
+	Block Block `json:"block"`
 }
 
 type Error struct {
@@ -103,7 +103,7 @@ type Event struct {
 	Delta *Delta      `json:"delta,omitempty"`
 	Stop  *Stop       `json:"stop,omitempty"`
 	Usage *Usage      `json:"usage,omitempty"`
-	Error *Error      `json:"-"`
+	Error *Error      `json:"error,omitempty"`
 }
 
 func ErrorEvent(err *Error) Event {

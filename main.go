@@ -8,6 +8,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	servicecatalog "github.com/anyscapelabs/argus/Services/Catalog"
+	servicechat "github.com/anyscapelabs/argus/Services/Chat"
 	servicemodels "github.com/anyscapelabs/argus/Services/Models"
 	serviceprovider "github.com/anyscapelabs/argus/Services/Provider"
 	"github.com/anyscapelabs/argus/Services/Shared"
@@ -40,6 +41,7 @@ func main() {
 	providers := &serviceprovider.Service{Core: core}
 	models := &servicemodels.Service{Core: core}
 	catalog := &servicecatalog.Service{Core: core}
+	chat := &servicechat.Service{Core: core}
 
 	app := application.New(application.Options{
 		Name:        "argus",
@@ -49,6 +51,7 @@ func main() {
 			application.NewService(providers),
 			application.NewService(models),
 			application.NewService(catalog),
+			application.NewService(chat),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

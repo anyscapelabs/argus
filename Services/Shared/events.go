@@ -5,6 +5,8 @@ const (
 	EventProvidersChanged  = "providers:changed"
 	EventSlotsChanged      = "slots:changed"
 	EventSelectionsChanged = "selections:changed"
+	EventModelStream       = "model:stream"
+	EventStreamCancelled   = "model:stream_cancelled"
 )
 
 const (
