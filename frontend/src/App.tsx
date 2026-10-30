@@ -3,8 +3,11 @@ import { Events } from '@wailsio/runtime'
 import { Time } from '../bindings/events'
 import Toolbar from './components/layout/Toolbar'
 import Sidebar from './components/layout/Sidebar'
+import SettingsSidebar from './components/settings/SettingsSidebar'
 import Onboarding from './pages/Onboarding'
 import Home from './pages/Home'
+import Chat from './pages/Chat'
+import Providers from './pages/settings/Providers'
 
 // Blank black canvas.
 //
@@ -20,7 +23,9 @@ import Home from './pages/Home'
 
 export default function App() {
   const canvasRef = useRef<HTMLDivElement | null>(null);
-  const [page, setPage] = useState<'onboarding' | 'home'>('onboarding');
+  const [page, setPage] = useState<'onboarding' | 'home' | 'chat' | 'settings'>('onboarding');
+  const [sidebarMode, setSidebarMode] = useState<'main' | 'settings'>('main');
+
 
   useEffect(() => {
     // `Events.On` returns an unsubscribe function. StrictMode mounts effects
@@ -42,13 +47,40 @@ export default function App() {
           <Toolbar />
           <Onboarding onContinue={() => setPage('home')} />
         </>
+      ) : page === 'home' ? (
+        <div className="flex flex-1 min-h-0">
+          <Sidebar mode={sidebarMode} onToggleSettings={() => {
+            if (sidebarMode === 'settings') {
+              setSidebarMode('main')
+            } else {
+              setSidebarMode('settings')
+              setPage('settings')
+            }
+          }} />
+          <Home onSend={() => setPage('chat')} />
+        </div>
+      ) : page === 'settings' ? (
+        <div className="flex flex-1 min-h-0">
+          <SettingsSidebar onBack={() => {
+            setSidebarMode('main')
+            setPage('home')
+          }} />
+          <div className="flex flex-1 min-h-0 flex-col">
+            <Toolbar />
+            <Providers />
+          </div>
+        </div>
       ) : (
         <div className="flex flex-1 min-h-0">
-          <Sidebar />
-          <div className="flex flex-1 flex-col min-h-0">
-            <Toolbar />
-            <Home />
-          </div>
+          <Sidebar mode={sidebarMode} onToggleSettings={() => {
+            if (sidebarMode === 'settings') {
+              setSidebarMode('main')
+            } else {
+              setSidebarMode('settings')
+              setPage('settings')
+            }
+          }} />
+          <Chat />
         </div>
       )}
     </div>
