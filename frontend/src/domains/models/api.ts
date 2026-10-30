@@ -4,6 +4,8 @@ import type {
   PickerOptions,
   SelectionsResult,
   ActionResult,
+  AgentProfile,
+  AgentProfileResult,
 } from '../../../bindings/github.com/anyscapelabs/argus/Services/Shared/models.js'
 
 export const defaultPickerOptions: PickerOptions = {
@@ -34,4 +36,22 @@ export async function getProviderSelection(providerID: string): Promise<Selectio
 export async function getChatModels() {
   const res = await ModelsService.ChatModels()
   return res ?? []
+}
+
+export async function getAgentProfile(id: string): Promise<AgentProfile | null> {
+  const res: AgentProfileResult = await ModelsService.GetAgentProfile(id)
+  if (res?.error) throw new Error(res.error.message)
+  return (res?.profile as AgentProfile) ?? null
+}
+
+export async function saveAgentProfile(profile: AgentProfile): Promise<ActionResult> {
+  const res = await ModelsService.SaveAgentProfile(profile)
+  if (res?.error) throw new Error(res.error.message)
+  return res
+}
+
+export async function setAgentModel(id: string, modelRef: string): Promise<ActionResult> {
+  const res = await ModelsService.SetAgentModel(id, modelRef)
+  if (res?.error) throw new Error(res.error.message)
+  return res
 }

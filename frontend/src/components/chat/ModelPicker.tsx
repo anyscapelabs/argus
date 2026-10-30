@@ -17,7 +17,7 @@ export default function ModelPicker({ selectedRef, onSelect, onClose }: ModelPic
     (m.model?.name ?? m.ref).toLowerCase().includes(search.toLowerCase()),
   )
 
-  const grouped = filtered.reduce<Record<string, typeof chatModels>>((acc, m) => {
+  const grouped = filtered.reduce<Record<string, any>>((acc, m) => {
     const key = m.provider_name || m.provider_id
     ;(acc[key] ??= []).push(m)
     return acc
@@ -48,7 +48,7 @@ export default function ModelPicker({ selectedRef, onSelect, onClose }: ModelPic
         />
       </div>
       <div className="max-h-64 overflow-y-auto p-1">
-        {Object.entries(grouped).map(([provider, models]) => (
+        {Object.entries(grouped).map(([provider, models]: [string, any]) => (
           <div key={provider}>
             <div className="px-2 pt-1">
               <span className="text-[10px] font-medium uppercase tracking-widest text-secondary">

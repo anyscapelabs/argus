@@ -83,6 +83,13 @@ func (db *DB) migrate() error {
 			selected_at TEXT NOT NULL,
 			PRIMARY KEY(provider_id, model_ref)
 		)`,
+		`CREATE TABLE IF NOT EXISTS agent_profiles (
+			id TEXT PRIMARY KEY,
+			avatar TEXT NOT NULL DEFAULT '',
+			agent_name TEXT NOT NULL DEFAULT '',
+			model_ref TEXT,
+			updated_at TEXT NOT NULL
+		)`,
 	}
 	for _, q := range statements {
 		if _, err := db.conn.Exec(q); err != nil {

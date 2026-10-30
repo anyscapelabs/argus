@@ -3,7 +3,7 @@ import { LuPlus } from 'react-icons/lu'
 import { FaArrowUp } from 'react-icons/fa'
 import { FiCircle, FiCpu } from 'react-icons/fi'
 import ModelPicker from './ModelPicker'
-import { useChatModels } from '../../domains/models/hooks'
+import { useChatModels, useAgentProfile, useSetAgentModel } from '../../domains/models/hooks'
 
 function formatUsage(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`
@@ -25,6 +25,14 @@ export default function ChatInput({ onSend }: ChatInputProps) {
   const [selectedRef, setSelectedRef] = useState<string | null>(null)
   const [text, setText] = useState('')
   const { data: chatModels = [] } = useChatModels()
+  const { data: agentProfile } = useAgentProfile('default')
+  const setAgentModel = useSetAgentModel()
+
+  useEffect(() => {
+    if (agentProfile?.model_ref && !selectedRef) {
+      setSelectedRef(agentProfile.model_ref)
+    }
+  }, [agentProfile, selectedRef])
 
   useEffect(() => {
     if (!selectedRef && chatModels.length > 0) {
@@ -34,6 +42,11 @@ export default function ChatInput({ onSend }: ChatInputProps) {
 
   const selectedModel = chatModels.find((m) => m.ref === selectedRef)
   const displayName = selectedModel?.model?.name ?? selectedRef ?? 'Select model'
+
+  const handleSelectModel = (ref: string) => {
+    setSelectedRef(ref)
+    setAgentModel.mutate({ id: 'default', modelRef: ref })
+  }
 
   const handleSend = () => {
     const value = text.trim()
@@ -114,7 +127,7 @@ export default function ChatInput({ onSend }: ChatInputProps) {
         </button>
         {modelOpen && (
           <div className="absolute bottom-full right-2 mb-1">
-            <ModelPicker selectedRef={selectedRef} onSelect={setSelectedRef} onClose={() => setModelOpen(false)} />
+            <ModelPicker selectedRef={selectedRef} onSelect={handleSelectModel} onClose={() => setModelOpen(false)} />
           </div>
         )}
       </div>

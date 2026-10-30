@@ -154,6 +154,19 @@ type SelectionsResult struct {
 	Error *ActionError `json:"error,omitempty"`
 }
 
+type AgentProfile struct {
+	ID        string `json:"id"`
+	Avatar    string `json:"avatar"`
+	AgentName string `json:"agent_name"`
+	ModelRef  string `json:"model_ref"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+type AgentProfileResult struct {
+	Profile *AgentProfile `json:"profile,omitempty"`
+	Error   *ActionError  `json:"error,omitempty"`
+}
+
 type StreamRequest struct {
 	Ref             string             `json:"ref"`
 	System          string             `json:"system,omitempty"`

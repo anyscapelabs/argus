@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { getPicker, setProviderSelection, getProviderSelection, getChatModels, defaultPickerOptions } from './api'
+import { getPicker, setProviderSelection, getProviderSelection, getChatModels, getAgentProfile, setAgentModel, saveAgentProfile, defaultPickerOptions } from './api'
 import type { PickerOptions } from '../../../bindings/github.com/anyscapelabs/argus/Services/Shared/models.js'
 
 export function useProviderPicker(providerID: string | null, options: PickerOptions = defaultPickerOptions) {
@@ -35,5 +35,33 @@ export function useChatModels() {
   return useQuery({
     queryKey: ['models', 'chat'],
     queryFn: getChatModels,
+  })
+}
+
+export function useAgentProfile(id: string) {
+  return useQuery({
+    queryKey: ['models', 'agent-profile', id],
+    queryFn: () => getAgentProfile(id),
+  })
+}
+
+export function useSetAgentModel() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, modelRef }: { id: string; modelRef: string }) => setAgentModel(id, modelRef),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: ['models', 'agent-profile', id] })
+      qc.invalidateQueries({ queryKey: ['models', 'chat'] })
+    },
+  })
+}
+
+export function useSaveAgentProfile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (profile: any) => saveAgentProfile(profile),
+    onSuccess: (_data, profile: any) => {
+      qc.invalidateQueries({ queryKey: ['models', 'agent-profile', profile?.id ?? 'default'] })
+    },
   })
 }
