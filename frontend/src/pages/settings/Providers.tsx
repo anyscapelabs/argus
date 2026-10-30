@@ -22,7 +22,8 @@ export default function Providers() {
           </div>
         </div>
         <div className="border-t border-primary" />
-        <h2 className="mt-6 text-sm font-medium text-primary">Add Custom Provider</h2>
+        <h2 className="mt-8 text-sm font-medium text-primary">Add Custom Provider</h2>
+        <p className="text-xs text-secondary">Add a custom OpenAI-compatible provider</p>
         <div className="mt-4 border-t border-primary" />
       </div>
     </div>
