@@ -28,22 +28,25 @@ export default function ChatInput({ onSend }: ChatInputProps) {
   const { data: agentProfile } = useAgentProfile('default')
   const setAgentModel = useSetAgentModel()
 
+  const initialized = useRef(false)
   useEffect(() => {
-    if (agentProfile?.model_ref && !selectedRef) {
+    if (initialized.current) return
+    if (agentProfile === undefined) return
+    if (agentProfile?.model_ref) {
       setSelectedRef(agentProfile.model_ref)
-    }
-  }, [agentProfile, selectedRef])
-
-  useEffect(() => {
-    if (!selectedRef && chatModels.length > 0) {
+    } else if (chatModels.length > 0) {
       setSelectedRef(chatModels[0].ref)
     }
-  }, [chatModels, selectedRef])
+    if (agentProfile !== undefined || chatModels.length > 0) {
+      initialized.current = true
+    }
+  }, [agentProfile, chatModels])
 
   const selectedModel = chatModels.find((m) => m.ref === selectedRef)
   const displayName = selectedModel?.model?.name ?? selectedRef ?? 'Select model'
 
   const handleSelectModel = (ref: string) => {
+    initialized.current = true
     setSelectedRef(ref)
     setAgentModel.mutate({ id: 'default', modelRef: ref })
   }
