@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useAgentProfile } from '../domains/models/hooks'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiChevronRight } from 'react-icons/fi'
 import Toolbar from '../components/layout/Toolbar'
@@ -19,6 +20,7 @@ type HomeProps = {
 export default function Home({ onSend }: HomeProps) {
   const greeting = useMemo(() => `Good ${timeOfDay()}`, [])
   const [rightOpen, setRightOpen] = useState(false)
+  const { data: agentProfile } = useAgentProfile('default')
 
   return (
     <div className="flex flex-1 min-h-0">
@@ -33,7 +35,7 @@ export default function Home({ onSend }: HomeProps) {
               className="group flex cursor-pointer items-center gap-2 rounded-full bg-secondary px-3 py-1 transition-colors hover:bg-hover-secondary"
             >
               <img src="/logo.png" alt="Argus" className="h-8 w-8 rounded-full" />
-              <span className="text-sm font-medium text-primary">Argus</span>
+              <span className="text-sm font-medium text-primary">{agentProfile?.agent_name || 'Argus'}</span>
               <FiChevronRight size={14} className="w-0 overflow-hidden opacity-0 transition-all duration-300 ease-out group-hover:w-4 group-hover:translate-x-1 group-hover:opacity-100" />
             </motion.button>
           </div>
