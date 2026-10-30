@@ -7,6 +7,8 @@ const (
 	EventSelectionsChanged = "selections:changed"
 	EventModelStream       = "model:stream"
 	EventStreamCancelled   = "model:stream_cancelled"
+	EventChatMessage       = "chat:message"
+	EventChatRunFinished   = "chat:run_finished"
 )
 
 const (

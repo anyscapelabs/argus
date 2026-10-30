@@ -2,11 +2,12 @@ package Chat
 
 import (
 	"context"
-	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+
+	"github.com/google/uuid"
 
 	"github.com/anyscapelabs/argus/Keyring"
 	"github.com/anyscapelabs/argus/Models"
@@ -18,13 +19,16 @@ import (
 type Service struct {
 	Core *Shared.Core
 
-	mu      sync.Mutex
-	cancels map[string]context.CancelFunc
-	nextID  int
+	mu       sync.Mutex
+	cancels  map[string]context.CancelFunc
+	agentRun map[string]string // agentID -> runID
 }
 
 func (s *Service) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
-	return s.Core.Bootstrap(ctx)
+	if err := s.Core.Bootstrap(ctx); err != nil {
+		return err
+	}
+	return s.Core.DB.SweepInterrupted()
 }
 
 func (s *Service) ServiceShutdown(ctx context.Context) error {
@@ -84,6 +88,11 @@ func (s *Service) Stop(runID string) Shared.ActionResult {
 	}
 	s.mu.Lock()
 	delete(s.cancels, runID)
+	for agentID, r := range s.agentRun {
+		if r == runID {
+			delete(s.agentRun, agentID)
+		}
+	}
 	s.mu.Unlock()
 	cancel()
 	return Shared.ActionResult{Ok: true}
@@ -110,10 +119,10 @@ func (s *Service) Active() []string {
 }
 
 func (s *Service) register() (string, context.Context, context.CancelFunc) {
+	id, _ := uuid.NewV7()
+	runID := id.String()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.nextID++
-	runID := "run-" + strconv.Itoa(s.nextID)
 	ctx, cancel := context.WithCancel(context.Background())
 	if s.cancels == nil {
 		s.cancels = map[string]context.CancelFunc{}
@@ -131,7 +140,7 @@ func (s *Service) take(runID string) (context.CancelFunc, bool) {
 
 func (s *Service) run(runID string, ctx context.Context, cancel context.CancelFunc, req *Protocol.Request, target *Protocol.Target) {
 	terminal := false
-	for ev := range Router.New().Run(ctx, req, target) {
+	for ev := range Router.New().Run(ctx, req, target, nil) {
 		if ev.Type == Protocol.EventMessageStop || ev.Type == Protocol.EventError {
 			terminal = true
 		}

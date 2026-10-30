@@ -6,11 +6,12 @@ import (
 )
 
 type AgentProfile struct {
-	ID        string
-	Avatar    string
-	AgentName string
-	ModelRef  string
-	UpdatedAt string
+	ID           string
+	Avatar       string
+	AgentName    string
+	ModelRef     string
+	SystemPrompt string
+	UpdatedAt    string
 }
 
 func (db *DB) SaveAgentProfile(p AgentProfile) error {
@@ -21,14 +22,15 @@ func (db *DB) SaveAgentProfile(p AgentProfile) error {
 		p.UpdatedAt = nowRFC3339()
 	}
 	_, err := db.conn.Exec(
-		`INSERT INTO agent_profiles (id, avatar, agent_name, model_ref, updated_at)
-		 VALUES (?, ?, ?, ?, ?)
+		`INSERT INTO agent_profiles (id, avatar, agent_name, model_ref, system_prompt, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET
 		   avatar = excluded.avatar,
 		   agent_name = excluded.agent_name,
 		   model_ref = excluded.model_ref,
+		   system_prompt = excluded.system_prompt,
 		   updated_at = excluded.updated_at`,
-		p.ID, p.Avatar, p.AgentName, nullString(p.ModelRef), p.UpdatedAt,
+		p.ID, p.Avatar, p.AgentName, nullString(p.ModelRef), p.SystemPrompt, p.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("storage: agent profile save failed: %w", err)
@@ -38,11 +40,12 @@ func (db *DB) SaveAgentProfile(p AgentProfile) error {
 
 func (db *DB) GetAgentProfile(id string) (AgentProfile, bool, error) {
 	row := db.conn.QueryRow(
-		`SELECT id, avatar, agent_name, model_ref, updated_at
+		`SELECT id, avatar, agent_name, model_ref, system_prompt, updated_at
 		 FROM agent_profiles WHERE id = ?`, id)
 	var p AgentProfile
 	var modelRef sql.NullString
-	err := row.Scan(&p.ID, &p.Avatar, &p.AgentName, &modelRef, &p.UpdatedAt)
+	var systemPrompt sql.NullString
+	err := row.Scan(&p.ID, &p.Avatar, &p.AgentName, &modelRef, &systemPrompt, &p.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return AgentProfile{}, false, nil
 	}
@@ -50,12 +53,13 @@ func (db *DB) GetAgentProfile(id string) (AgentProfile, bool, error) {
 		return AgentProfile{}, false, fmt.Errorf("storage: agent profile read failed: %w", err)
 	}
 	p.ModelRef = modelRef.String
+	p.SystemPrompt = systemPrompt.String
 	return p, true, nil
 }
 
 func (db *DB) ListAgentProfiles() ([]AgentProfile, error) {
 	rows, err := db.conn.Query(
-		`SELECT id, avatar, agent_name, model_ref, updated_at FROM agent_profiles`)
+		`SELECT id, avatar, agent_name, model_ref, system_prompt, updated_at FROM agent_profiles`)
 	if err != nil {
 		return nil, fmt.Errorf("storage: agent profile listing failed: %w", err)
 	}
@@ -64,10 +68,12 @@ func (db *DB) ListAgentProfiles() ([]AgentProfile, error) {
 	for rows.Next() {
 		var p AgentProfile
 		var modelRef sql.NullString
-		if err := rows.Scan(&p.ID, &p.Avatar, &p.AgentName, &modelRef, &p.UpdatedAt); err != nil {
+		var systemPrompt sql.NullString
+		if err := rows.Scan(&p.ID, &p.Avatar, &p.AgentName, &modelRef, &systemPrompt, &p.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("storage: agent profile scan failed: %w", err)
 		}
 		p.ModelRef = modelRef.String
+		p.SystemPrompt = systemPrompt.String
 		out = append(out, p)
 	}
 	return out, rows.Err()

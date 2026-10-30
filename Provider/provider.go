@@ -25,7 +25,10 @@ type Quirks struct {
 }
 
 func (q *Quirks) HasStreamUsage() bool {
-	return q != nil && q.StreamUsage != nil && *q.StreamUsage
+	if q == nil || q.StreamUsage == nil {
+		return true
+	}
+	return *q.StreamUsage
 }
 
 func (q *Quirks) AllowsParallelTools() bool {

@@ -36,8 +36,12 @@ type wireUsage struct {
 }
 
 func (w *wireUsage) Canonical() Protocol.Usage {
+	input := w.PromptTokenCount - w.CachedTokenCount
+	if input < 0 {
+		input = 0
+	}
 	return Protocol.Usage{
-		InputTokens:     w.PromptTokenCount,
+		InputTokens:     input,
 		OutputTokens:    w.CandidatesTokenCount,
 		CacheReadTokens: w.CachedTokenCount,
 		ReasoningTokens: w.ThoughtsTokenCount,

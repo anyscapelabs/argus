@@ -4,6 +4,7 @@ import { FaArrowUp } from 'react-icons/fa'
 import { FiCircle, FiCpu } from 'react-icons/fi'
 import ModelPicker from './ModelPicker'
 import { useChatModels, useAgentProfile, useSetAgentModel } from '../../domains/models/hooks'
+import { useUsage } from '../../domains/chat/hooks'
 
 function formatUsage(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`
@@ -11,8 +12,6 @@ function formatUsage(n: number): string {
   if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`
   return `${n}`
 }
-
-const TOTAL_USAGE = 1234
 
 type ChatInputProps = {
   onSend?: (text: string, modelRef: string | null) => void
@@ -27,6 +26,7 @@ export default function ChatInput({ onSend }: ChatInputProps) {
   const { data: chatModels = [] } = useChatModels()
   const { data: agentProfile } = useAgentProfile('default')
   const setAgentModel = useSetAgentModel()
+  const { data: usage } = useUsage('default')
 
   const initialized = useRef(false)
   useEffect(() => {
@@ -114,7 +114,7 @@ export default function ChatInput({ onSend }: ChatInputProps) {
       <div className="relative flex items-center justify-between pr-2">
         <span className="flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs text-secondary transition-colors hover:bg-hover-secondary hover:text-primary">
           <FiCircle size={12} />
-          {formatUsage(TOTAL_USAGE)} tokens
+          {usage && usage.requests ? formatUsage((usage.input_tokens ?? 0) + (usage.output_tokens ?? 0)) : '—'} tokens
         </span>
         <button
           type="button"
