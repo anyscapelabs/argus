@@ -17,11 +17,18 @@ func applySearch(views []Shared.ModelView, search string) {
 	if len(terms) == 0 {
 		return
 	}
-	for i := range views {
-		if !matchesSearch(views[i], terms) {
-			views[i] = Shared.ModelView{}
+	n := 0
+	for _, v := range views {
+		if matchesSearch(v, terms) {
+			views[n] = v
+			n++
 		}
 	}
+	// zero out tail
+	for i := n; i < len(views); i++ {
+		views[i] = Shared.ModelView{}
+	}
+	// Note: callers use len(views); compaction handled by pickAvailability filters
 }
 
 func searchTerms(search string) []string {
@@ -54,7 +61,7 @@ func applyBetaHandicap(views []Shared.ModelView, includeBeta bool) {
 		return
 	}
 	for i := range views {
-		if views[i].Status == string(Models.StatusBeta) || views[i].Status == string(Models.StatusAlpha) {
+		if (views[i].Status == string(Models.StatusBeta) || views[i].Status == string(Models.StatusAlpha)) && len(views[i].SelectedFor) == 0 {
 			views[i] = Shared.ModelView{}
 		}
 	}

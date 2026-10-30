@@ -28,7 +28,20 @@ func Open(path string) (*DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("storage: could not open database: %w", err)
 	}
+	conn.SetMaxOpenConns(1)
 	db := &DB{conn: conn}
+	if _, err := conn.Exec(`PRAGMA journal_mode=WAL`); err != nil {
+		conn.Close()
+		return nil, err
+	}
+	if _, err := conn.Exec(`PRAGMA busy_timeout=5000`); err != nil {
+		conn.Close()
+		return nil, err
+	}
+	if _, err := conn.Exec(`PRAGMA foreign_keys=ON`); err != nil {
+		conn.Close()
+		return nil, err
+	}
 	if err := db.migrate(); err != nil {
 		conn.Close()
 		return nil, err

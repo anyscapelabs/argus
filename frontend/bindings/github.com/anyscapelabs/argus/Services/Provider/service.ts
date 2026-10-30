@@ -27,6 +27,6 @@ export function RemoveKey(providerID: string): $CancellablePromise<Shared$0.Acti
     return $Call.ByID(1667295738, providerID);
 }
 
-export function ValidateAndSaveKey(providerID: string, key: string): $CancellablePromise<Shared$0.SaveKeyResult> {
-    return $Call.ByID(1516885870, providerID, key);
+export function ValidateAndSaveKey(providerID: string, key: string, refs: string[] | null, baseURLOverride: string): $CancellablePromise<Shared$0.SaveKeyResult> {
+    return $Call.ByID(1516885870, providerID, key, refs, baseURLOverride);
 }

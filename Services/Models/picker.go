@@ -104,8 +104,19 @@ func (s *Service) Assemble(cat *Catalog.Catalog, provider Provider.Provider, ove
 	if recommendedModels(s, all, recMain.Ref, recCheap.Ref, options) != nil {
 		sections = append(sections, Shared.Section{ID: "recommended", Title: "Recommended", Models: recommendedModels(s, all, recMain.Ref, recCheap.Ref, options)})
 	}
-	if models := pickAvailability(all, Shared.AvailabilityAvailable, Shared.AvailabilityUnverified); len(models) > 0 || len(available) > 0 {
-		sections = append(sections, Shared.Section{ID: "available", Title: "All available models", Models: models})
+	availModels := pickAvailability(all, Shared.AvailabilityAvailable, Shared.AvailabilityUnverified)
+	// remove recommended models to avoid duplicate React keys
+	if recMain.Ref != "" {
+		filtered := availModels[:0]
+		for _, m := range availModels {
+			if !strings.EqualFold(m.Ref, recMain.Ref) && (recCheap.Ref == "" || !strings.EqualFold(m.Ref, recCheap.Ref)) {
+				filtered = append(filtered, m)
+			}
+		}
+		availModels = filtered
+	}
+	if len(availModels) > 0 {
+		sections = append(sections, Shared.Section{ID: "available", Title: "All available models", Models: availModels})
 	}
 	if models := pickAvailability(all, Shared.AvailabilityCustom); len(models) > 0 {
 		sections = append(sections, Shared.Section{ID: "custom", Title: "Your custom models", Models: models})
@@ -153,6 +164,11 @@ func (s *Service) ProviderHead(cat *Catalog.Catalog, provider Provider.Provider,
 		Configured: configured,
 		ModelCount: len(cat.ByProvider(provider.ID)),
 		Order:      provider.Order,
+	}
+	if configured {
+		if refs, err := s.Core.DB.ListProviderSelection(provider.ID); err == nil {
+			view.SelectedModelCount = len(refs)
+		}
 	}
 	if configured {
 		view.KeyLast4 = config.KeyLast4
