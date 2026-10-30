@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useAgentProfile } from '../domains/models/hooks'
+import { useChatMessages, useSendMessage } from '../domains/chat/hooks'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiChevronRight } from 'react-icons/fi'
 import Toolbar from '../components/layout/Toolbar'
@@ -17,26 +18,15 @@ function timeTag() {
   return `Today at ${hour12}:${m}${ampm}`
 }
 
-const EXAMPLE_MESSAGE = `
-Hello! I'm **Argus**, your always-on companion.
-
-Here's what I can do:
-
-- Check git status
-- Scaffold components
-- Run terminal commands
-
-Feel free to *ask* anything.
-`
-
 export default function Chat() {
   const [rightOpen, setRightOpen] = useState(false)
-  const [messages, setMessages] = useState<{ role: string; content: string; model?: string | null }[]>([])
   const { data: agentProfile } = useAgentProfile('default')
+  const { data: messages = [] } = useChatMessages('default')
+  const send = useSendMessage('default')
   const tag = useMemo(() => timeTag(), [])
 
-  const handleSend = (text: string, modelRef: string | null) => {
-    setMessages((prev) => [...prev, { role: 'user', content: text, model: modelRef }])
+  const handleSend = (text: string, _modelRef: string | null) => {
+    send.mutate(text)
   }
 
   return (
@@ -61,14 +51,13 @@ export default function Chat() {
               <div className="mx-auto w-fit rounded-md px-2 py-0.5 text-center text-xs text-secondary transition-colors hover:bg-secondary hover:text-primary">
                 {tag}
               </div>
-              <AgentBubble content={EXAMPLE_MESSAGE} />
-              {messages.map((m, i) =>
+              {messages.map((m: any) => (
                 m.role === 'user' ? (
-                  <UserBubble key={i} content={m.content} />
+                  <UserBubble key={m.id} content={m.text} />
                 ) : (
-                  <AgentBubble key={i} content={m.content} />
+                  <AgentBubble key={m.id} content={m.text} />
                 )
-              )}
+              ))}
             </div>
           </div>
         </div>

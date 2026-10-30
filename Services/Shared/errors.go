@@ -28,6 +28,7 @@ const (
 	CodeIneligible      Code = "ineligible"
 	CodeNotFound        Code = "not_found"
 	CodeBadInput        Code = "bad_input"
+	CodeBusy            Code = "busy"
 )
 
 func NewError(code Code, message string) *ActionError {

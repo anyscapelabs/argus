@@ -310,11 +310,15 @@ func deltaFor(d *wireEventDelta) (Protocol.DeltaKind, string, bool) {
 }
 
 func (u wireUsageFields) Canonical() Protocol.Usage {
+	cacheWrite := u.CacheCreationInputTokens
+	if cacheWrite == 0 {
+		cacheWrite = extractCacheWrite(u.CacheCreation)
+	}
 	return Protocol.Usage{
 		InputTokens:      u.InputTokens,
 		OutputTokens:     u.OutputTokens,
 		CacheReadTokens:  u.CacheReadInputTokens,
-		CacheWriteTokens: extractCacheWrite(u.CacheCreation),
+		CacheWriteTokens: cacheWrite,
 	}
 }
 

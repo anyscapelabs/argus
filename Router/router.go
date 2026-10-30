@@ -100,10 +100,21 @@ func adapterFor(t *Protocol.Target) (Protocol.Adapter, error) {
 	return nil, fmt.Errorf("no adapter for protocol family %q", t.Family)
 }
 
-func (r *Router) Run(ctx context.Context, req *Protocol.Request, target *Protocol.Target) iter.Seq[Protocol.Event] {
+type Trace struct {
+	HTTPStatus         int
+	ProviderRequestID  string
+	StartedAt          int64
+	FirstByteAt        int64
+	FirstTokenAt       int64
+}
+
+func (r *Router) Run(ctx context.Context, req *Protocol.Request, target *Protocol.Target, trace *Trace) iter.Seq[Protocol.Event] {
 	return func(yield func(Protocol.Event) bool) {
-		g := &gate{ok: true}
+		g := &gate{ok: true, trace: trace}
 		g.yield = yield
+		if trace != nil {
+			trace.StartedAt = time.Now().UnixMilli()
+		}
 		if req == nil || target == nil || target.ModelID == "" {
 			g.fail(Protocol.NewError(Protocol.CodeBadInput, "A model id is required to call the provider"))
 			return
@@ -125,6 +136,9 @@ func (r *Router) Run(ctx context.Context, req *Protocol.Request, target *Protoco
 			return
 		}
 		resp, err := client.Do(httpReq)
+		if trace != nil {
+			trace.FirstByteAt = time.Now().UnixMilli()
+		}
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil {
 				g.fail(Protocol.CancelledError())
@@ -132,6 +146,15 @@ func (r *Router) Run(ctx context.Context, req *Protocol.Request, target *Protoco
 			}
 			g.fail(Protocol.NetworkError(err))
 			return
+		}
+		if trace != nil {
+			trace.HTTPStatus = resp.StatusCode
+			for _, h := range []string{"x-request-id", "request-id", "openai-request-id"} {
+				if v := resp.Header.Get(h); v != "" {
+					trace.ProviderRequestID = v
+					break
+				}
+			}
 		}
 		if resp.StatusCode != http.StatusOK {
 			body := readLimited(resp.Body, errorBodyCap)
@@ -168,11 +191,15 @@ func retryAfter(raw string) time.Duration {
 type gate struct {
 	yield func(Protocol.Event) bool
 	ok    bool
+	trace *Trace
 }
 
 func (g *gate) emit(ev Protocol.Event) bool {
 	if !g.ok {
 		return false
+	}
+	if g.trace != nil && g.trace.FirstTokenAt == 0 {
+		g.trace.FirstTokenAt = time.Now().UnixMilli()
 	}
 	if !g.yield(ev) {
 		g.ok = false

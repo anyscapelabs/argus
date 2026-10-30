@@ -64,14 +64,28 @@ type wireCompletionUsageDetail struct {
 }
 
 func (w *wireUsage) Canonical() Protocol.Usage {
-	u := Protocol.Usage{InputTokens: w.PromptTokens, OutputTokens: w.CompletionTokens}
+	cacheRead := int64(0)
 	if w.PromptDetail != nil {
-		u.CacheReadTokens = w.PromptDetail.CachedTokens
+		cacheRead = w.PromptDetail.CachedTokens
 	}
+	input := w.PromptTokens - cacheRead
+	if input < 0 {
+		input = 0
+	}
+	reasoning := int64(0)
 	if w.CompletionDetail != nil {
-		u.ReasoningTokens = w.CompletionDetail.ReasoningTokens
+		reasoning = w.CompletionDetail.ReasoningTokens
 	}
-	return u
+	output := w.CompletionTokens - reasoning
+	if output < 0 {
+		output = 0
+	}
+	return Protocol.Usage{
+		InputTokens:      input,
+		OutputTokens:     output,
+		CacheReadTokens:  cacheRead,
+		ReasoningTokens:  reasoning,
+	}
 }
 
 type toolState struct {
