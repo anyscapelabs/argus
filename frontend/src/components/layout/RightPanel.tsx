@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
+import { useAgentProfile, useSaveAgentProfile } from '../../domains/models/hooks'
 import { GoPencil } from 'react-icons/go'
 import { BsLayoutSidebarInset } from 'react-icons/bs'
 import { FiImage, FiMoreHorizontal } from 'react-icons/fi'
@@ -27,10 +28,19 @@ const INITIAL_ARTIFACTS: Artifact[] = [
   { id: '3', name: 'notes.md', description: 'Meeting notes', kind: 'Doc', createdAt: '1d ago' },
 ]
 
-export default function RightPanel({ onClose, agentName = 'Argus' }: RightPanelProps) {
+export default function RightPanel({ onClose }: RightPanelProps) {
+  const { data: profile } = useAgentProfile('default')
+  const saveProfile = useSaveAgentProfile()
+  const [agentName, setAgentName] = useState('Argus')
   const [active, setActive] = useState(TABS[0])
   const [routines, setRoutines] = useState<Routine[]>(INITIAL_ROUTINES)
   const [artifacts] = useState<Artifact[]>(INITIAL_ARTIFACTS)
+
+  useEffect(() => {
+    if (profile?.agent_name) {
+      setAgentName(profile.agent_name)
+    }
+  }, [profile])
 
   const toggleRoutine = (id: string) => {
     setRoutines((rs) => rs.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)))
@@ -66,8 +76,18 @@ export default function RightPanel({ onClose, agentName = 'Argus' }: RightPanelP
         <div className="w-fit rounded-lg px-3 py-1.5 text-center transition-colors hover:bg-secondary">
           <input
             type="text"
-            defaultValue={agentName}
-            size={agentName.length}
+            value={agentName}
+            size={Math.max(1, agentName.length)}
+            onChange={(e) => setAgentName(e.target.value)}
+            onBlur={() => {
+              saveProfile.mutate({
+                id: 'default',
+                avatar: profile?.avatar ?? '',
+                agent_name: agentName,
+                model_ref: profile?.model_ref ?? '',
+                updated_at: profile?.updated_at ?? '',
+              })
+            }}
             className="bg-transparent text-center text-sm font-medium text-primary outline-none"
           />
         </div>
