@@ -22,6 +22,8 @@ export default function Providers() {
           </div>
         </div>
         <div className="border-t border-primary" />
+        <h2 className="mt-6 text-sm font-medium text-primary">Add Custom Provider</h2>
+        <div className="mt-4 border-t border-primary" />
       </div>
     </div>
   )
