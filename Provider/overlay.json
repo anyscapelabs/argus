@@ -1,0 +1,196 @@
+{
+  "default_live_exclude_patterns": ["*embed*", "*speech*", "*transcription*", "*whisper*", "*tts*", "*image*", "*moderation*", "*rerank*", "*realtime*", "*audio*", "*guard*", "*stable-video*", "*flux*"],
+  "providers": [
+    {
+      "id": "openrouter",
+      "display_name": "OpenRouter",
+      "adapter": "openai_compat",
+      "base_url": "https://openrouter.ai/api/v1",
+      "models_path": "/models",
+      "key_hint": "sk-or-",
+      "key_help_url": "https://openrouter.ai/settings/keys",
+      "doc_url": "https://openrouter.ai/docs",
+      "order": 1
+    },
+    {
+      "id": "ollama",
+      "display_name": "Ollama",
+      "adapter": "openai_compat",
+      "base_url": "http://localhost:11434/v1",
+      "models_path": "/models",
+      "no_auth": true,
+      "doc_url": "https://ollama.com/docs",
+      "order": 2
+    },
+    {
+      "id": "baseten",
+      "display_name": "Baseten",
+      "adapter": "openai_compat",
+      "base_url": "https://inference.baseten.co/v1",
+      "models_path": "/models",
+      "key_help_url": "https://app.baseten.co/settings/settings",
+      "doc_url": "https://docs.baseten.co/",
+      "order": 3
+    },
+    {
+      "id": "openai",
+      "display_name": "OpenAI",
+      "adapter": "openai_compat",
+      "base_url": "https://api.openai.com/v1",
+      "models_path": "/models",
+      "key_hint": "sk-",
+      "key_help_url": "https://platform.openai.com/api-keys",
+      "doc_url": "https://platform.openai.com/docs",
+      "order": 4
+    },
+    {
+      "id": "anthropic",
+      "display_name": "Anthropic",
+      "adapter": "anthropic",
+      "base_url": "https://api.anthropic.com",
+      "models_path": "/v1/models",
+      "key_hint": "sk-ant-",
+      "key_help_url": "https://console.anthropic.com/settings/keys",
+      "doc_url": "https://docs.anthropic.com",
+      "order": 5
+    },
+    {
+      "id": "google",
+      "display_name": "Google Gemini",
+      "adapter": "gemini",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "models_path": "/models",
+      "key_hint": "AIza",
+      "key_help_url": "https://aistudio.google.com/apikey",
+      "doc_url": "https://ai.google.dev/gemini-api/docs",
+      "order": 6
+    },
+    {
+      "id": "groq",
+      "display_name": "Groq",
+      "adapter": "openai_compat",
+      "base_url": "https://api.groq.com/openai/v1",
+      "models_path": "/models",
+      "key_hint": "gsk_",
+      "key_help_url": "https://console.groq.com/keys",
+      "doc_url": "https://console.groq.com/docs",
+      "order": 7
+    },
+    {
+      "id": "mistral",
+      "display_name": "Mistral AI",
+      "adapter": "openai_compat",
+      "base_url": "https://api.mistral.ai/v1",
+      "models_path": "/models",
+      "key_help_url": "https://console.mistral.ai/api-keys",
+      "doc_url": "https://docs.mistral.ai",
+      "order": 8
+    },
+    {
+      "id": "cohere",
+      "display_name": "Cohere",
+      "adapter": "openai_compat",
+      "base_url": "https://api.cohere.ai/compatibility/v1",
+      "models_path": "/models",
+      "key_help_url": "https://dashboard.cohere.com/api-keys",
+      "doc_url": "https://docs.cohere.com",
+      "order": 9
+    },
+    {
+      "id": "perplexity",
+      "display_name": "Perplexity",
+      "adapter": "openai_compat",
+      "base_url": "https://api.perplexity.ai",
+      "models_path": "/models",
+      "key_hint": "pplx-",
+      "key_help_url": "https://www.perplexity.ai/settings/api",
+      "doc_url": "https://docs.perplexity.ai",
+      "order": 10
+    },
+    {
+      "id": "togetherai",
+      "display_name": "Together AI",
+      "adapter": "openai_compat",
+      "base_url": "https://api.together.xyz/v1",
+      "models_path": "/models",
+      "key_help_url": "https://api.together.xyz/settings/api-keys",
+      "doc_url": "https://docs.together.ai",
+      "order": 11
+    },
+    {
+      "id": "replicate",
+      "display_name": "Replicate",
+      "adapter": "openai_compat",
+      "base_url": "https://api.replicate.com/v1",
+      "models_path": "/models",
+      "key_hint": "r8_",
+      "key_help_url": "https://replicate.com/accountapi-tokens",
+      "doc_url": "https://replicate.com/docs/topics/openai-compatibility",
+      "order": 12
+    },
+    {
+      "id": "deepseek",
+      "display_name": "DeepSeek",
+      "adapter": "openai_compat",
+      "base_url": "https://api.deepseek.com",
+      "models_path": "/models",
+      "key_hint": "sk-",
+      "key_help_url": "https://platform.deepseek.com/api_keys",
+      "doc_url": "https://api-docs.deepseek.com",
+      "order": 13
+    },
+    {
+      "id": "cerebras",
+      "display_name": "Cerebras",
+      "adapter": "openai_compat",
+      "base_url": "https://api.cerebras.ai/v1",
+      "models_path": "/models",
+      "key_hint": "csk-",
+      "key_help_url": "https://cloud.cerebras.ai/platform/apikeys",
+      "doc_url": "https://inference-docs.cerebras.ai",
+      "order": 14
+    },
+    {
+      "id": "deepinfra",
+      "display_name": "Deep Infra",
+      "adapter": "openai_compat",
+      "base_url": "https://api.deepinfra.com/v1/openai",
+      "models_path": "/models",
+      "key_help_url": "https://deepinfra.com/dash/keys",
+      "doc_url": "https://deepinfra.com/docs",
+      "order": 15
+    },
+    {
+      "id": "xai",
+      "display_name": "xAI",
+      "adapter": "openai_compat",
+      "base_url": "https://api.x.ai/v1",
+      "models_path": "/models",
+      "key_hint": "xai-",
+      "key_help_url": "https://console.x.ai",
+      "doc_url": "https://docs.x.ai",
+      "order": 16
+    },
+    {
+      "id": "vercel",
+      "display_name": "Vercel AI Gateway",
+      "adapter": "openai_compat",
+      "base_url": "https://gateway.ai.vercel.app/api/v1",
+      "models_path": "/models",
+      "key_hint": "vck_",
+      "key_help_url": "https://vercel.com/settings/ai-gateway",
+      "doc_url": "https://vercel.com/docs/ai-gateway",
+      "order": 17
+    },
+    {
+      "id": "fireworks-ai",
+      "display_name": "Fireworks AI",
+      "adapter": "openai_compat",
+      "base_url": "https://api.fireworks.ai/inference/v1",
+      "models_path": "/models",
+      "key_help_url": "https://app.fireworks.ai/settings/users/api-keys",
+      "doc_url": "https://docs.fireworks.ai",
+      "order": 18
+    }
+  ]
+}
