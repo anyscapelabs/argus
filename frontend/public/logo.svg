@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="330" height="300" viewBox="0 0 330 300" fill="none">
+  <defs>
+    <linearGradient id="body" x1="92" y1="15" x2="230" y2="292" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.55" stop-color="#F8F8FB"/>
+      <stop offset="1" stop-color="#E7E8EF"/>
+    </linearGradient>
+    <linearGradient id="sideShade" x1="15" y1="130" x2="92" y2="245" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D9DBE4" stop-opacity=".42"/>
+      <stop offset="1" stop-color="#C8CBD6" stop-opacity=".12"/>
+    </linearGradient>
+    <radialGradient id="eye" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(111 164) rotate(90) scale(22 17)">
+      <stop offset="0" stop-color="#161719"/>
+      <stop offset="1" stop-color="#030405"/>
+    </radialGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feGaussianBlur stdDeviation="2.2"/>
+    </filter>
+  </defs>
+  <!-- Soft, rounded mascot body -->
+  <path d="M165 5
+    C180 5 193 13 208 23
+    L290 78
+    C311 92 326 110 325 132
+    L314 211
+    C310 247 286 270 251 280
+    C225 288 195 292 165 292
+    C135 292 105 288 79 280
+    C44 270 20 247 16 211
+    L5 132
+    C4 110 19 92 40 78
+    L122 23
+    C137 13 150 5 165 5Z"
+    fill="#C8CAD3" opacity=".34" filter="url(#shadow)" transform="translate(0 3)"/>
+  <path d="M165 5
+    C180 5 193 13 208 23
+    L290 78
+    C311 92 326 110 325 132
+    L314 211
+    C310 247 286 270 251 280
+    C225 288 195 292 165 292
+    C135 292 105 288 79 280
+    C44 270 20 247 16 211
+    L5 132
+    C4 110 19 92 40 78
+    L122 23
+    C137 13 150 5 165 5Z"
+    fill="url(#body)" stroke="#E1E2E9" stroke-width="1.2"/>
+  <path d="M7 133 C5 111 20 93 41 79 L69 60
+    C48 83 35 107 34 132 L42 207
+    C46 244 65 264 94 278
+    C60 269 23 248 16 211Z"
+    fill="url(#sideShade)"/>
+  <!-- Open eye -->
+  <ellipse cx="114" cy="178" rx="17.3" ry="21.6" fill="url(#eye)"/>
+  <ellipse cx="118.4" cy="166.4" rx="5.1" ry="6.3" fill="#FFFFFF"/>
+  <ellipse cx="107.5" cy="184.5" rx="2.1" ry="3" fill="#101114" opacity=".55"/>
+  <!-- Smile -->
+  <path d="M157 197.5
+    C168 207.2 186 207.4 198 198.2
+    C201.2 195.8 203.5 192.9 205.3 189.6"
+    stroke="#050607" stroke-width="8.7" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Wink -->
+  <path d="M222.5 164.8
+    C230.3 151.8 240.4 143.5 251.2 139.9
+    M222.5 164.8
+    C233.9 160.9 245.3 161.2 257.2 164.7"
+    stroke="#050607" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,152 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist-mono";
+
+@font-face {
+    font-family: 'Geist';
+    src: url('/fonts/Geist-Variable.woff2') format('woff2');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Geist Pixel Square';
+    src: url('/fonts/GeistPixel-Square.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* ----- Design tokens -------------------------------------------------------
+   Argus is a black/grey palette. Per convention the tokens are declared here
+   as Tailwind theme colours so they surface as real utilities (`bg-grey-800`,
+   `text-grey-300`, `border-grey-700`, …) rather than as loose `:root` CSS
+   variables that components would have to consume by hand.
+
+   `bg-black` is Tailwind's own #000000 and is deliberately not redefined —
+   the canvas uses it directly. */
+@theme {
+    /* Grey ramp, darkest to lightest. */
+    --color-grey-950: #0a0a0b;
+    --color-grey-900: #131417;
+    --color-grey-800: #242529;
+    --color-grey-700: #3a3b40;
+    --color-grey-500: #6e7076;
+    --color-grey-300: #b0b1b6;
+    --color-grey-100: #e6e6e8;
+
+    /* UI face: Geist (variable, self-hosted from the geist package). */
+    --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+    /* Monospace face: Geist Mono (variable, self-hosted via @fontsource-variable). */
+    --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+
+    /* Background surfaces. Tertiary is a colour token. `secondary` is split
+       by role (like `primary`) so it lives in custom utilities below. */
+    --color-tertiary: #262626;
+
+    /* Sidebar surface, darker than the primary canvas. */
+    --color-sidebar: #0a0a0b;
+
+    /* Hover surfaces, aligned with the background ramp. */
+    --color-hover-primary: #242529;
+    --color-hover-secondary: #3a3b40;
+
+    /* Accent. */
+    --color-accent: #ffffff;
+
+    /* Accent hover, a subtle step down from white. */
+    --color-hover-accent: #e6e6e8;
+}
+
+/* `primary` is split by role: a dark surface for backgrounds and white for
+   text, so it cannot live in a single `--color-primary` token. */
+@utility bg-primary {
+    background-color: #141414;
+}
+
+@utility text-primary {
+    color: #ffffff;
+}
+
+@utility bg-secondary {
+    background-color: #181818;
+}
+
+@utility text-secondary {
+    color: #b0b1b6;
+}
+
+@utility border-primary {
+    border-color: #242529;
+}
+
+@utility border-secondary {
+    border-color: #3a3b40;
+}
+
+@utility border-tertiary {
+    border-color: #6e7076;
+}
+
+/* ----- Base ----------------------------------------------------------------
+   Carried over from the template's global stylesheet, because these are Wails
+   behaviours rather than demo styling: */
+@layer base {
+    html {
+        background-color: #141414;
+        color-scheme: dark;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        -webkit-text-size-adjust: 100%;
+    }
+
+    html,
+    body {
+        margin: 0;
+        /* Painted with the primary surface at the document level so the canvas
+           is already the right colour before React mounts — no flash. */
+        background-color: #141414;
+    }
+
+    body {
+        min-height: 100dvh;
+        overflow-x: hidden;
+        font-family: var(--font-sans);
+        /* This is an app, not a document: nothing in the chrome is selectable
+           unless a control opts back in with `select-text`. */
+        -webkit-user-select: none;
+        user-select: none;
+        /* Drag the window by its background. Interactive controls opt out with
+           `--wails-draggable: no-drag` (see button/input below); the property
+           inherits, so set it on the control or its closest wrapper. */
+        --wails-draggable: drag;
+    }
+
+    /* The React mount node should fill the viewport rather than wrap at
+       content height, so screens can lay out against 100dvh. */
+    #root {
+        min-height: 100dvh;
+    }
+
+    button,
+    input {
+        --wails-draggable: no-drag;
+        font-family: inherit;
+    }
+
+    input {
+        -webkit-user-select: text;
+        user-select: text;
+    }
+}
+
+/* ----- Custom utilities ----------------------------------------------------
+   Window-drag roles as first-class utilities, so a component declares its
+   place in the chrome with `no-drag` instead of an inline custom property. */
+@utility drag {
+    --wails-draggable: drag;
+}
+
+@utility no-drag {
+    --wails-draggable: no-drag;
+}
