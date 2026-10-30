@@ -23,8 +23,20 @@ export default function Providers() {
         </div>
         <div className="border-t border-primary" />
         <h2 className="mt-8 text-sm font-medium text-primary">Add Custom Provider</h2>
-        <p className="text-xs text-secondary">Add a custom OpenAI-compatible provider</p>
+        <p className="text-xs text-secondary">Add a custom provider</p>
         <div className="mt-4 border-t border-primary" />
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button className="rounded-full border border-primary px-3 py-1 text-xs text-secondary hover:text-primary">OpenAI</button>
+          <button className="rounded-full border border-primary px-3 py-1 text-xs text-secondary hover:text-primary">Anthropic</button>
+          <button className="rounded-full border border-primary px-3 py-1 text-xs text-secondary hover:text-primary">Google</button>
+          <button className="rounded-full border border-primary px-3 py-1 text-xs text-secondary hover:text-primary">Groq</button>
+          <button className="rounded-full border border-primary px-3 py-1 text-xs text-secondary hover:text-primary">Mistral</button>
+          <button className="rounded-full border border-primary px-3 py-1 text-xs text-secondary hover:text-primary">Cohere</button>
+          <button className="rounded-full border border-primary px-3 py-1 text-xs text-secondary hover:text-primary">Perplexity</button>
+          <button className="rounded-full border border-primary px-3 py-1 text-xs text-secondary hover:text-primary">Together</button>
+          <button className="rounded-full border border-primary px-3 py-1 text-xs text-secondary hover:text-primary">Replicate</button>
+          <button className="rounded-full border border-primary px-3 py-1 text-xs text-secondary hover:text-primary">Firecrawl</button>
+        </div>
       </div>
     </div>
   )
