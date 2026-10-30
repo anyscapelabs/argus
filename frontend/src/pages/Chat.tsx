@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Events } from '@wailsio/runtime'
 import { useAgentProfile } from '../domains/models/hooks'
 import { useChatMessages, useSendMessage } from '../domains/chat/hooks'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -21,9 +23,23 @@ function timeTag() {
 export default function Chat() {
   const [rightOpen, setRightOpen] = useState(false)
   const { data: agentProfile } = useAgentProfile('default')
+  const qc = useQueryClient()
   const { data: messages = [] } = useChatMessages('default')
   const send = useSendMessage('default')
   const tag = useMemo(() => timeTag(), [])
+
+  useEffect(() => {
+    const unsubs = [
+      Events.On('chat:message', () => {
+        qc.invalidateQueries({ queryKey: ['chat', 'default', 'messages'] })
+      }),
+      Events.On('chat:run_finished', () => {
+        qc.invalidateQueries({ queryKey: ['chat', 'default', 'messages'] })
+        qc.invalidateQueries({ queryKey: ['chat', 'default', 'usage'] })
+      }),
+    ]
+    return () => unsubs.forEach((u) => u && u())
+  }, [qc])
 
   const handleSend = (text: string, _modelRef: string | null) => {
     send.mutate(text)
