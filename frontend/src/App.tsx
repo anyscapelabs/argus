@@ -8,6 +8,7 @@ import SettingsSidebar from './components/settings/SettingsSidebar'
 import Onboarding from './pages/Onboarding'
 import Home from './pages/Home'
 import Chat from './pages/Chat'
+import { getChat } from './domains/chat/api'
 import Providers from './pages/settings/Providers'
 
 // Blank black canvas.
@@ -27,6 +28,16 @@ export default function App() {
   const qc = useQueryClient()
   const [page, setPage] = useState<'onboarding' | 'home' | 'chat' | 'settings'>('onboarding');
   const [sidebarMode, setSidebarMode] = useState<'main' | 'settings'>('main');
+
+  useEffect(() => {
+    getChat('default')
+      .then((res) => {
+        if (res?.messages && res.messages.length > 0) {
+          setPage('chat')
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     const invalidateAll = () => {

@@ -9,6 +9,7 @@ import Toolbar from '../components/layout/Toolbar'
 import ChatInput from '../components/chat/ChatInput'
 import AgentBubble from '../components/chat/AgentBubble'
 import UserBubble from '../components/chat/UserBubble'
+import ThinkingIndicator from '../components/chat/ThinkingIndicator'
 import RightPanel from '../components/layout/RightPanel'
 
 function timeTag() {
@@ -42,7 +43,9 @@ export default function Chat() {
   }, [qc])
 
   const handleSend = (text: string, _modelRef: string | null) => {
-    send.mutate(text)
+    send.mutate(text, {
+      onError: (err: any) => console.error('send failed', err),
+    })
   }
 
   return (
@@ -74,6 +77,7 @@ export default function Chat() {
                   <AgentBubble key={m.id} content={m.text} />
                 )
               ))}
+              {messages.some((m: any) => m.status === 'streaming') && <ThinkingIndicator />}
             </div>
           </div>
         </div>

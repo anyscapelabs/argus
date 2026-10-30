@@ -156,6 +156,25 @@
     --wails-draggable: no-drag;
 }
 
+/* Shimmer text for thinking indicator. */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@utility shimmer-text {
+  background: linear-gradient(90deg, #6e7076 0%, #e6e6e8 50%, #6e7076 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 2s linear infinite;
+}
+
 /* Markdown rendering inside agent bubbles. */
 .markdown p {
     margin: 0;
