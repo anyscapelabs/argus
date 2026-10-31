@@ -28,6 +28,7 @@ export default function App() {
   const qc = useQueryClient()
   const [page, setPage] = useState<'onboarding' | 'home' | 'chat' | 'settings'>('onboarding');
   const [sidebarMode, setSidebarMode] = useState<'main' | 'settings'>('main');
+  const [pendingSend, setPendingSend] = useState<{ id: number; text: string; modelRef: string | null } | null>(null);
 
   useEffect(() => {
     getChat('default')
@@ -83,7 +84,10 @@ export default function App() {
               setPage('settings')
             }
           }} />
-          <Home onSend={() => setPage('chat')} />
+          <Home onSend={(text: string, modelRef: string | null) => {
+            setPendingSend({ id: Date.now(), text, modelRef });
+            setPage('chat');
+          }} />
         </div>
       ) : page === 'settings' ? (
         <div className="flex flex-1 min-h-0">
@@ -106,7 +110,7 @@ export default function App() {
               setPage('settings')
             }
           }} />
-          <Chat />
+          <Chat pendingSend={pendingSend} onPendingConsumed={() => setPendingSend(null)} />
         </div>
       )}
     </div>

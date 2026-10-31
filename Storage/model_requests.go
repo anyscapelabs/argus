@@ -6,43 +6,43 @@ import (
 )
 
 type ModelRequest struct {
-	ID                 string
-	AgentID            string
-	MessageID          string
-	Attempt            int
-	ProviderID         string
-	ModelID            string
-	ModelRef           string
-	AdapterFamily      string
-	BaseHost           string
-	Slot               string
-	ReasoningLevel     string
-	Temperature        *float64
-	MaxOutputTokens    int64
-	SystemPrompt       string
-	ContextThroughSeq  int
+	ID                  string
+	AgentID             string
+	MessageID           string
+	Attempt             int
+	ProviderID          string
+	ModelID             string
+	ModelRef            string
+	AdapterFamily       string
+	BaseHost            string
+	Slot                string
+	ReasoningLevel      string
+	Temperature         *float64
+	MaxOutputTokens     int64
+	SystemPrompt        string
+	ContextThroughSeq   int
 	ContextMessageCount int
-	Status             string
-	HTTPStatus         int
-	ProviderRequestID  string
-	StopReason         string
-	ErrorCode          string
-	ErrorMessage       string
-	ErrorRetryable     bool
-	ErrorRaw           string
-	UsageSource        string
-	InputTokens        *int64
-	CacheReadTokens    *int64
-	CacheWriteTokens   *int64
-	OutputTokens       *int64
-	ReasoningTokens    *int64
-	UsageRawJSON       string
-	CostUSD            *float64
-	PriceJSON          string
-	StartedAt          int64
-	FirstByteAt        int64
-	FirstTokenAt       int64
-	CompletedAt        int64
+	Status              string
+	HTTPStatus          int
+	ProviderRequestID   string
+	StopReason          string
+	ErrorCode           string
+	ErrorMessage        string
+	ErrorRetryable      bool
+	ErrorRaw            string
+	UsageSource         string
+	InputTokens         *int64
+	CacheReadTokens     *int64
+	CacheWriteTokens    *int64
+	OutputTokens        *int64
+	ReasoningTokens     *int64
+	UsageRawJSON        string
+	CostUSD             *float64
+	PriceJSON           string
+	StartedAt           int64
+	FirstByteAt         int64
+	FirstTokenAt        int64
+	CompletedAt         int64
 }
 
 func (db *DB) InsertModelRequest(r ModelRequest) error {
@@ -202,4 +202,3 @@ func boolToInt(b bool) int {
 	}
 	return 0
 }
-

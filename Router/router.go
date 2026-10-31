@@ -100,12 +100,18 @@ func adapterFor(t *Protocol.Target) (Protocol.Adapter, error) {
 	return nil, fmt.Errorf("no adapter for protocol family %q", t.Family)
 }
 
+// AdapterFor exposes the protocol adapter for a target, for callers that need
+// the adapter's capability information outside of a streaming run.
+func AdapterFor(t *Protocol.Target) (Protocol.Adapter, error) {
+	return adapterFor(t)
+}
+
 type Trace struct {
-	HTTPStatus         int
-	ProviderRequestID  string
-	StartedAt          int64
-	FirstByteAt        int64
-	FirstTokenAt       int64
+	HTTPStatus        int
+	ProviderRequestID string
+	StartedAt         int64
+	FirstByteAt       int64
+	FirstTokenAt      int64
 }
 
 func (r *Router) Run(ctx context.Context, req *Protocol.Request, target *Protocol.Target, trace *Trace) iter.Seq[Protocol.Event] {

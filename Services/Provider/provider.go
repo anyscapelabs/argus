@@ -195,8 +195,16 @@ func (s *Service) RemoveKey(providerID string) Shared.ActionResult {
 			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, "The secrets store refused to remove the key")}
 		}
 	}
+	if err := s.Core.DB.RemoveProviderConfig(providerID); err != nil {
+		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+	}
+	// Any agent pointed at this provider now has no usable model.
+	if _, err := s.Core.DB.ClearAgentModelsNotIn(providerID, nil); err != nil {
+		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+	}
 	s.Core.DropLive(providerID)
 	s.Core.EmitEvent(Shared.EventProvidersChanged, nil)
+	s.Core.EmitEvent(Shared.EventSlotsChanged, nil)
 	if len(cleared) > 0 {
 		s.Core.EmitEvent(Shared.EventSlotsChanged, nil)
 	}

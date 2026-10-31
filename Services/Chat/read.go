@@ -22,17 +22,18 @@ func (s *Service) GetChat(agentID string, beforeSeq, limit int) Shared.GetChatRe
 	out := make([]Shared.ChatMessage, 0, len(msgs))
 	for _, m := range msgs {
 		out = append(out, Shared.ChatMessage{
-			ID:          m.ID,
-			AgentID:     m.AgentID,
-			Seq:         m.Seq,
-			Role:        m.Role,
-			Text:        m.Text,
-			Status:      m.Status,
-			StopReason:  m.StopReason,
-			ModelRef:    m.ModelRef,
-			CreatedAt:   m.CreatedAt,
-			CompletedAt: m.CompletedAt,
-			Blocks:      m.Blocks(),
+			ID:           m.ID,
+			AgentID:      m.AgentID,
+			Seq:          m.Seq,
+			Role:         m.Role,
+			Text:         m.Text,
+			Status:       m.Status,
+			ErrorMessage: m.ErrorMessage,
+			StopReason:   m.StopReason,
+			ModelRef:     m.ModelRef,
+			CreatedAt:    m.CreatedAt,
+			CompletedAt:  m.CompletedAt,
+			Blocks:       m.Blocks(),
 		})
 	}
 	return Shared.GetChatResult{Messages: out}
@@ -124,14 +125,14 @@ func (s *Service) ListRequests(agentID string, limit int) Shared.ListRequestsRes
 			cost = *r.CostUSD
 		}
 		out = append(out, Shared.ModelRequestView{
-			ID:          r.ID,
-			Status:      r.Status,
-			ModelRef:    r.ModelRef,
-			InputTokens: in,
+			ID:           r.ID,
+			Status:       r.Status,
+			ModelRef:     r.ModelRef,
+			InputTokens:  in,
 			OutputTokens: outTok,
-			CostUSD:     cost,
-			StartedAt:   r.StartedAt,
-			CompletedAt: r.CompletedAt,
+			CostUSD:      cost,
+			StartedAt:    r.StartedAt,
+			CompletedAt:  r.CompletedAt,
 		})
 	}
 	return Shared.ListRequestsResult{Requests: out}

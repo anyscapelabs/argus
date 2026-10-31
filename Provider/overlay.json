@@ -1,5 +1,19 @@
 {
-  "default_live_exclude_patterns": ["*embed*", "*speech*", "*transcription*", "*whisper*", "*tts*", "*image*", "*moderation*", "*rerank*", "*realtime*", "*audio*", "*guard*", "*stable-video*", "*flux*"],
+  "default_live_exclude_patterns": [
+    "*embed*",
+    "*speech*",
+    "*transcription*",
+    "*whisper*",
+    "*tts*",
+    "*image*",
+    "*moderation*",
+    "*rerank*",
+    "*realtime*",
+    "*audio*",
+    "*guard*",
+    "*stable-video*",
+    "*flux*"
+  ],
   "providers": [
     {
       "id": "openrouter",
@@ -41,7 +55,11 @@
       "key_hint": "sk-",
       "key_help_url": "https://platform.openai.com/api-keys",
       "doc_url": "https://platform.openai.com/docs",
-      "order": 4
+      "order": 4,
+      "quirks": {
+        "max_tokens_field": "max_completion_tokens",
+        "stream_usage": true
+      }
     },
     {
       "id": "anthropic",
@@ -74,7 +92,10 @@
       "key_hint": "gsk_",
       "key_help_url": "https://console.groq.com/keys",
       "doc_url": "https://console.groq.com/docs",
-      "order": 7
+      "order": 7,
+      "quirks": {
+        "stream_usage": true
+      }
     },
     {
       "id": "mistral",
@@ -115,18 +136,10 @@
       "models_path": "/models",
       "key_help_url": "https://api.together.xyz/settings/api-keys",
       "doc_url": "https://docs.together.ai",
-      "order": 11
-    },
-    {
-      "id": "replicate",
-      "display_name": "Replicate",
-      "adapter": "openai_compat",
-      "base_url": "https://api.replicate.com/v1",
-      "models_path": "/models",
-      "key_hint": "r8_",
-      "key_help_url": "https://replicate.com/accountapi-tokens",
-      "doc_url": "https://replicate.com/docs/topics/openai-compatibility",
-      "order": 12
+      "order": 11,
+      "quirks": {
+        "stream_usage": true
+      }
     },
     {
       "id": "deepseek",
@@ -175,12 +188,15 @@
       "id": "vercel",
       "display_name": "Vercel AI Gateway",
       "adapter": "openai_compat",
-      "base_url": "https://gateway.ai.vercel.app/api/v1",
+      "base_url": "https://ai-gateway.vercel.sh/v1",
       "models_path": "/models",
       "key_hint": "vck_",
       "key_help_url": "https://vercel.com/settings/ai-gateway",
       "doc_url": "https://vercel.com/docs/ai-gateway",
-      "order": 17
+      "order": 17,
+      "quirks": {
+        "stream_usage": true
+      }
     },
     {
       "id": "fireworks-ai",
