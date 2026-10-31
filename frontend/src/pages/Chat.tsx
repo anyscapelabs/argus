@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Events } from '@wailsio/runtime'
 import { useAgentProfile } from '../domains/models/hooks'
@@ -21,32 +21,96 @@ function timeTag() {
   return `Today at ${hour12}:${m}${ampm}`
 }
 
-export default function Chat() {
+const messagesKey = ['chat', 'default', 'messages']
+const usageKey = ['chat', 'default', 'usage']
+
+type PendingSend = { id: number; text: string; modelRef: string | null }
+
+type StreamPayload = {
+  run_id?: string
+  agent_id?: string
+  message_id?: string
+  event?: {
+    type?: string
+    index?: number
+    delta?: { kind?: string; text?: string; signature?: string }
+    error?: { code?: string; message?: string }
+  }
+}
+
+export default function Chat({
+  pendingSend,
+  onPendingConsumed,
+}: {
+  pendingSend?: PendingSend | null
+  onPendingConsumed?: () => void
+}) {
   const [rightOpen, setRightOpen] = useState(false)
   const { data: agentProfile } = useAgentProfile('default')
   const qc = useQueryClient()
   const { data: messages = [], error: messagesError, isLoading } = useChatMessages('default')
   const send = useSendMessage('default')
   const tag = useMemo(() => timeTag(), [])
+  const pendingConsumedId = useRef<number | null>(null)
+  const streamText = useRef(new Map<string, string>())
 
   useEffect(() => {
     const unsubs = [
-      Events.On('chat:message', () => {
-        qc.invalidateQueries({ queryKey: ['chat', 'default', 'messages'] })
+      Events.On('chat:message', (event: any) => {
+        if (event?.data?.message_id) {
+          streamText.current.delete(event.data.message_id)
+        }
+        qc.invalidateQueries({ queryKey: messagesKey })
+        qc.invalidateQueries({ queryKey: usageKey })
       }),
       Events.On('chat:run_finished', () => {
-        qc.invalidateQueries({ queryKey: ['chat', 'default', 'messages'] })
-        qc.invalidateQueries({ queryKey: ['chat', 'default', 'usage'] })
+        streamText.current.clear()
+        qc.invalidateQueries({ queryKey: messagesKey })
+        qc.invalidateQueries({ queryKey: usageKey })
+      }),
+      Events.On('model:stream', (event: any) => {
+        const payload = (event?.data ?? event) as StreamPayload | undefined
+        if (!payload?.message_id || !payload?.event) return
+        const ev = payload.event
+        if (ev.type === 'block_delta' && ev.delta?.kind === 'text' && ev.delta.text) {
+          const muid = payload.message_id
+          const accumulated = (streamText.current.get(muid) ?? '') + ev.delta.text
+          streamText.current.set(muid, accumulated)
+          qc.setQueryData<unknown[] | undefined>(messagesKey, (old) => {
+            if (!old) return old
+            const idx = old.findIndex((m: any) => m.id === muid)
+            if (idx < 0) return old
+            const next = old.slice()
+            next[idx] = { ...(next[idx] as Record<string, unknown>), text: accumulated }
+            return next
+          })
+        }
       }),
     ]
     return () => unsubs.forEach((u) => u && u())
   }, [qc])
 
   const handleSend = (text: string, _modelRef: string | null) => {
+    if (send.isPending) return
     send.mutate(text, {
       onError: (err: any) => console.error('send failed', err),
     })
   }
+
+  useEffect(() => {
+    if (!pendingSend?.text) return
+    if (pendingConsumedId.current === pendingSend.id) return
+    if (send.isPending) return
+    pendingConsumedId.current = pendingSend.id
+    onPendingConsumed?.()
+    send.mutate(pendingSend.text, {
+      onError: (err: any) => console.error('send failed', err),
+    })
+  }, [pendingSend])
+
+  const streamingWithNoText = messages.some(
+    (m: any) => m.status === 'streaming' && !m.text,
+  )
 
   return (
     <div className="relative flex h-dvh flex-1 min-h-0 overflow-hidden">
@@ -72,20 +136,24 @@ export default function Chat() {
               </div>
               {isLoading && <div className="text-xs text-secondary">Loading…</div>}
               {messagesError && <div className="text-xs text-red-400">{String(messagesError)}</div>}
-              {send.isError && <div className="text-xs text-red-400">{String(send.error)}</div>}
-              {messages.map((m: any) => (
+              {send.isError && (
+                <div className="w-fit rounded-xl border border-red-400/40 bg-secondary px-2 py-1 text-xs text-red-400">
+                  {String((send.error as any)?.message ?? send.error)}
+                </div>
+              )}
+              {messages.map((m: any) =>
                 m.role === 'user' ? (
                   <UserBubble key={m.id} content={m.text} />
-                ) : (
-                  <AgentBubble key={m.id} content={m.text} />
-                )
-              ))}
-              {messages.some((m: any) => m.status === 'streaming') && <ThinkingIndicator />}
+                ) : m.status === 'streaming' && !m.text ? null : (
+                  <AgentBubble key={m.id} content={m.text} status={m.status} error={m.error_message} />
+                ),
+              )}
+              {streamingWithNoText && <ThinkingIndicator />}
             </div>
           </div>
         </div>
         <div className="shrink-0">
-          <ChatInput onSend={handleSend} />
+          <ChatInput onSend={handleSend} busy={send.isPending} />
         </div>
       </div>
       <AnimatePresence>
