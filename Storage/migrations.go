@@ -14,6 +14,7 @@ func (db *DB) migrate() error {
 	migrations := []func(*DB) error{
 		migration1,
 		migration2,
+		migration3,
 	}
 
 	for i := version; i < len(migrations); i++ {
@@ -145,6 +146,17 @@ func migration2(db *DB) error {
 			}
 			return err
 		}
+	}
+	return nil
+}
+
+func migration3(db *DB) error {
+	stmt := `ALTER TABLE messages ADD COLUMN error_message TEXT NOT NULL DEFAULT ''`
+	if _, err := db.conn.Exec(stmt); err != nil {
+		if strings.Contains(err.Error(), "duplicate column name") {
+			return nil
+		}
+		return err
 	}
 	return nil
 }

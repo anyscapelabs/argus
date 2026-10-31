@@ -15,43 +15,44 @@ function formatUsage(n: number): string {
 
 type ChatInputProps = {
   onSend?: (text: string, modelRef: string | null) => void
+  busy?: boolean
 }
 
-export default function ChatInput({ onSend }: ChatInputProps) {
+export default function ChatInput({ onSend, busy = false }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [modelOpen, setModelOpen] = useState(false)
   const [selectedRef, setSelectedRef] = useState<string | null>(null)
   const [text, setText] = useState('')
-  const { data: chatModels = [] } = useChatModels()
+  const { data: chatModelsData } = useChatModels()
   const { data: agentProfile } = useAgentProfile('default')
   const setAgentModel = useSetAgentModel()
   const { data: usage } = useUsage('default')
+  const chatModels = chatModelsData ?? []
 
   const initialized = useRef(false)
   useEffect(() => {
     if (initialized.current) return
-    if (agentProfile === undefined) return
+    if (agentProfile === undefined || chatModelsData === undefined) return
     if (agentProfile?.model_ref) {
       setSelectedRef(agentProfile.model_ref)
     } else if (chatModels.length > 0) {
       setSelectedRef(chatModels[0].ref)
+      setAgentModel.mutate({ id: 'default', modelRef: chatModels[0].ref })
     }
-    if (agentProfile !== undefined || chatModels.length > 0) {
-      initialized.current = true
-    }
-  }, [agentProfile, chatModels])
+    initialized.current = true
+  }, [agentProfile, chatModelsData])
 
   const selectedModel = chatModels.find((m) => m.ref === selectedRef)
   const displayName = selectedModel?.model?.name ?? selectedRef ?? 'Select model'
 
   const handleSelectModel = (ref: string) => {
-    initialized.current = true
     setSelectedRef(ref)
     setAgentModel.mutate({ id: 'default', modelRef: ref })
   }
 
   const handleSend = () => {
+    if (busy) return
     const value = text.trim()
     if (!value) return
     onSend?.(value, selectedRef)
@@ -106,7 +107,10 @@ export default function ChatInput({ onSend }: ChatInputProps) {
         <button
           type="button"
           onClick={handleSend}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-black transition-colors hover:bg-hover-accent"
+          disabled={busy}
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-black transition-colors hover:bg-hover-accent ${
+            busy ? 'opacity-50' : ''
+          }`}
         >
           <FaArrowUp size={12} />
         </button>

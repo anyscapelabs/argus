@@ -3,6 +3,7 @@ package Storage
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 type AgentProfile struct {
@@ -84,4 +85,40 @@ func (db *DB) DeleteAgentProfile(id string) error {
 		return fmt.Errorf("storage: agent profile delete failed: %w", err)
 	}
 	return nil
+}
+
+// ClearAgentModelsNotIn removes agent-profile model references that point into
+// providerID but are no longer part of the provider's selection. keep maps
+// model id -> true for references that survive; pass nil to drop every
+// reference into the provider. Returns the ids of the profiles it cleared.
+func (db *DB) ClearAgentModelsNotIn(providerID string, keep map[string]bool) ([]string, error) {
+	profiles, err := db.ListAgentProfiles()
+	if err != nil {
+		return nil, err
+	}
+	prefix := providerID + "/"
+	var cleared []string
+	for _, p := range profiles {
+		if !strings.HasPrefix(strings.ToLower(p.ModelRef), strings.ToLower(prefix)) {
+			continue
+		}
+		_, modelID := splitRef(p.ModelRef)
+		if keep[modelID] {
+			continue
+		}
+		p.ModelRef = ""
+		p.UpdatedAt = ""
+		if err := db.SaveAgentProfile(p); err != nil {
+			return cleared, err
+		}
+		cleared = append(cleared, p.ID)
+	}
+	return cleared, nil
+}
+
+func splitRef(ref string) (string, string) {
+	if i := strings.Index(ref, "/"); i >= 0 {
+		return ref[:i], ref[i+1:]
+	}
+	return ref, ""
 }

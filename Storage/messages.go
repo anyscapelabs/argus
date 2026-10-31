@@ -10,17 +10,18 @@ import (
 )
 
 type Message struct {
-	ID          string
-	AgentID     string
-	Seq         int
-	Role        string
-	BlocksJSON  string
-	Text        string
-	Status      string
-	StopReason  string
-	ModelRef    string
-	CreatedAt   int64
-	CompletedAt int64
+	ID           string
+	AgentID      string
+	Seq          int
+	Role         string
+	BlocksJSON   string
+	Text         string
+	Status       string
+	ErrorMessage string
+	StopReason   string
+	ModelRef     string
+	CreatedAt    int64
+	CompletedAt  int64
 }
 
 func (m Message) Blocks() []Protocol.Block {
@@ -59,7 +60,7 @@ func (db *DB) InsertMessage(m Message) error {
 	return nil
 }
 
-func (db *DB) FinalizeMessage(id string, blocks []Protocol.Block, text, status, stopReason, modelRef string, completedAt int64) error {
+func (db *DB) FinalizeMessage(id string, blocks []Protocol.Block, text, status, stopReason, modelRef, errorMessage string, completedAt int64) error {
 	blocksJSON, err := json.Marshal(blocks)
 	if err != nil {
 		return fmt.Errorf("storage: message marshal failed: %w", err)
@@ -68,9 +69,9 @@ func (db *DB) FinalizeMessage(id string, blocks []Protocol.Block, text, status, 
 		completedAt = nowUnixMs()
 	}
 	_, err = db.conn.Exec(
-		`UPDATE messages SET blocks_json = ?, text = ?, status = ?, stop_reason = ?, model_ref = ?, completed_at = ?
+		`UPDATE messages SET blocks_json = ?, text = ?, status = ?, stop_reason = ?, model_ref = ?, error_message = ?, completed_at = ?
 		 WHERE id = ?`,
-		string(blocksJSON), text, status, nullString(stopReason), nullString(modelRef), completedAt, id,
+		string(blocksJSON), text, status, nullString(stopReason), nullString(modelRef), errorMessage, completedAt, id,
 	)
 	if err != nil {
 		return fmt.Errorf("storage: message finalize failed: %w", err)
@@ -94,11 +95,11 @@ func (db *DB) ListMessages(agentID string, beforeSeq int, limit int) ([]Message,
 	var err error
 	if beforeSeq > 0 {
 		rows, err = db.conn.Query(
-			`SELECT id, agent_id, seq, role, blocks_json, text, status, stop_reason, model_ref, created_at, completed_at
+			`SELECT id, agent_id, seq, role, blocks_json, text, status, error_message, stop_reason, model_ref, created_at, completed_at
 			 FROM messages WHERE agent_id = ? AND seq < ? ORDER BY seq DESC LIMIT ?`, agentID, beforeSeq, limit)
 	} else {
 		rows, err = db.conn.Query(
-			`SELECT id, agent_id, seq, role, blocks_json, text, status, stop_reason, model_ref, created_at, completed_at
+			`SELECT id, agent_id, seq, role, blocks_json, text, status, error_message, stop_reason, model_ref, created_at, completed_at
 			 FROM messages WHERE agent_id = ? ORDER BY seq DESC LIMIT ?`, agentID, limit)
 	}
 	if err != nil {
@@ -108,11 +109,12 @@ func (db *DB) ListMessages(agentID string, beforeSeq int, limit int) ([]Message,
 	var out []Message
 	for rows.Next() {
 		var m Message
-		var stopReason, modelRef sql.NullString
+		var errorMessage, stopReason, modelRef sql.NullString
 		var completedAt sql.NullInt64
-		if err := rows.Scan(&m.ID, &m.AgentID, &m.Seq, &m.Role, &m.BlocksJSON, &m.Text, &m.Status, &stopReason, &modelRef, &m.CreatedAt, &completedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.AgentID, &m.Seq, &m.Role, &m.BlocksJSON, &m.Text, &m.Status, &errorMessage, &stopReason, &modelRef, &m.CreatedAt, &completedAt); err != nil {
 			return nil, fmt.Errorf("storage: message scan failed: %w", err)
 		}
+		m.ErrorMessage = errorMessage.String
 		m.StopReason = stopReason.String
 		m.ModelRef = modelRef.String
 		if completedAt.Valid {

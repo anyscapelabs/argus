@@ -3,18 +3,21 @@ package Chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/anyscapelabs/argus/Keyring"
 	"github.com/anyscapelabs/argus/Models"
 	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Router"
 	"github.com/anyscapelabs/argus/Services/Shared"
 	"github.com/anyscapelabs/argus/Storage"
+	"github.com/google/uuid"
 )
+
+const defaultMaxOutputTokens = int64(4096)
 
 func (s *Service) Send(agentID, text string) Shared.SendResult {
 	log.Printf("Send called agent=%s", agentID)
@@ -38,16 +41,70 @@ func (s *Service) Send(agentID, text string) Shared.SendResult {
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeBadInput, "Select a model before sending")}
 	}
 
+	// Reserve the agent's run slot up front so a double-click cannot start
+	// two runs. The empty value marks the reservation; it is filled with
+	// the real run id below or released on any failure.
 	s.mu.Lock()
 	if _, ok := s.agentRun[agentID]; ok {
 		s.mu.Unlock()
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeBusy, "The agent is busy")}
 	}
+	if s.agentRun == nil {
+		s.agentRun = map[string]string{}
+	}
+	s.agentRun[agentID] = ""
 	s.mu.Unlock()
+	release := func() {
+		s.mu.Lock()
+		if s.agentRun[agentID] == "" {
+			delete(s.agentRun, agentID)
+		}
+		s.mu.Unlock()
+	}
 
-	userSeq, err := s.Core.DB.NextSeq(agentID)
-	if err != nil {
-		return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+	// Validate the provider, key and routing target before any message or
+	// request row is written, so a rejected send never leaves artifacts
+	// behind in the chat.
+	providerID, modelID := Models.SplitRef(profile.ModelRef)
+	provider, ok := s.Core.Store.Get().Provider(providerID)
+	if !ok {
+		release()
+		return Shared.SendResult{Error: Shared.NewError(Shared.CodeUnknownProvider, "Unknown provider")}
+	}
+	if base := s.baseURLOverride(providerID); base != "" {
+		provider.BaseURL = base
+	}
+	overlayProvider, _ := s.Core.Overlay.Lookup(providerID)
+	key := ""
+	if !provider.NoAuth {
+		stored, kerr := getKey(providerID)
+		if kerr != nil {
+			release()
+			if errors.Is(kerr, Keyring.ErrNotFound) {
+				return Shared.SendResult{Error: Shared.NewError(Shared.CodeNotConfigured, "Connect "+providerID+" before sending")}
+			}
+			return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, "The secrets store is unreachable. Re-enter the key")}
+		}
+		if strings.TrimSpace(stored) == "" {
+			release()
+			return Shared.SendResult{Error: Shared.NewError(Shared.CodeNotConfigured, "Connect "+providerID+" before sending")}
+		}
+		key = stored
+	}
+	target, terr := Router.TargetFor(provider, modelID, key, Router.TargetOptions{
+		ExtraHeaders: overlayProvider.ExtraHeaders,
+		Quirks:       overlayProvider.Quirks,
+	})
+	if terr != nil {
+		release()
+		return Shared.SendResult{Error: Shared.NewError(Shared.CodeBadInput, terr.Error())}
+	}
+
+	// Everything above is now validated: write the message rows.
+	userSeq, serr := s.Core.DB.NextSeq(agentID)
+	if serr != nil {
+		release()
+		return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, serr.Error())}
 	}
 	assistantSeq := userSeq + 1
 
@@ -59,100 +116,77 @@ func (s *Service) Send(agentID, text string) Shared.SendResult {
 	runID := rid.String()
 
 	userMsg := Storage.Message{
-		ID:        userID,
-		AgentID:   agentID,
-		Seq:       userSeq,
-		Role:      "user",
-		BlocksJSON: mustMarshal([]Protocol.Block{{Type: Protocol.BlockText, Text: text}}),
-		Text:      text,
-		Status:    "complete",
-		CreatedAt: nowUnixMs(),
+		ID:          userID,
+		AgentID:     agentID,
+		Seq:         userSeq,
+		Role:        "user",
+		BlocksJSON:  mustMarshal([]Protocol.Block{{Type: Protocol.BlockText, Text: text}}),
+		Text:        text,
+		Status:      "complete",
+		CreatedAt:   nowUnixMs(),
 		CompletedAt: nowUnixMs(),
 	}
 	if err := s.Core.DB.InsertMessage(userMsg); err != nil {
+		release()
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
 
 	assistantMsg := Storage.Message{
-		ID:        assistantID,
-		AgentID:   agentID,
-		Seq:       assistantSeq,
-		Role:      "assistant",
+		ID:         assistantID,
+		AgentID:    agentID,
+		Seq:        assistantSeq,
+		Role:       "assistant",
 		BlocksJSON: "[]",
-		Text:      "",
-		Status:    "streaming",
-		ModelRef:  profile.ModelRef,
-		CreatedAt: nowUnixMs(),
+		Text:       "",
+		Status:     "streaming",
+		ModelRef:   profile.ModelRef,
+		CreatedAt:  nowUnixMs(),
 	}
 	if err := s.Core.DB.InsertMessage(assistantMsg); err != nil {
+		release()
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
 
-	providerID, modelID := Models.SplitRef(profile.ModelRef)
-	provider, ok := s.Core.Store.Get().Provider(providerID)
-	if !ok {
-		return Shared.SendResult{Error: Shared.NewError(Shared.CodeUnknownProvider, "Unknown provider")}
-	}
-	overlayProvider, _ := s.Core.Overlay.Lookup(providerID)
-	key := ""
-	if !provider.NoAuth {
-		stored, kerr := getKey(providerID)
-		if kerr != nil {
-			return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, "The secrets store is unreachable. Re-enter the key")}
-		}
-		if strings.TrimSpace(stored) == "" {
-			return Shared.SendResult{Error: Shared.NewError(Shared.CodeNotConfigured, "Connect "+providerID+" before streaming")}
-		}
-		key = stored
-	}
-	target, terr := Router.TargetFor(provider, modelID, key, Router.TargetOptions{
-		ExtraHeaders: overlayProvider.ExtraHeaders,
-		Quirks:       overlayProvider.Quirks,
-	})
-	if terr != nil {
-		return Shared.SendResult{Error: Shared.NewError(Shared.CodeBadInput, terr.Error())}
-	}
-
-	// context through userSeq
+	// context through userSeq (the user message was inserted above)
 	history, sysPrompt := s.buildHistory(agentID, userSeq, profile.SystemPrompt)
 
 	req := Protocol.Request{
 		Model:           modelID,
 		System:          sysPrompt,
 		Messages:        history,
-		MaxOutputTokens: 4096,
+		MaxOutputTokens: defaultMaxOutputTokens,
 	}
-	_ = req
+	// Keep the default output budget unless the model's own limit is tighter,
+	// so reasoning models aren't handed a field they reject.
+	clampToModel(s, profile.ModelRef, providerID, modelID, &target, &req.MaxOutputTokens)
 
 	mr := Storage.ModelRequest{
-		ID:                 runID,
-		AgentID:            agentID,
-		MessageID:          assistantID,
-		Attempt:            1,
-		ProviderID:         providerID,
-		ModelID:            modelID,
-		ModelRef:           profile.ModelRef,
-		AdapterFamily:      string(target.Family),
-		BaseHost:           hostOf(provider.BaseURL),
-		Slot:               "",
-		ReasoningLevel:     "",
-		MaxOutputTokens:    4096,
-		SystemPrompt:       sysPrompt,
-		ContextThroughSeq:  userSeq,
+		ID:                  runID,
+		AgentID:             agentID,
+		MessageID:           assistantID,
+		Attempt:             1,
+		ProviderID:          providerID,
+		ModelID:             modelID,
+		ModelRef:            profile.ModelRef,
+		AdapterFamily:       string(target.Family),
+		BaseHost:            hostOf(provider.BaseURL),
+		Slot:                "",
+		ReasoningLevel:      "",
+		MaxOutputTokens:     req.MaxOutputTokens,
+		SystemPrompt:        sysPrompt,
+		ContextThroughSeq:   userSeq,
 		ContextMessageCount: len(history),
-		Status:             "started",
-		StartedAt:          nowUnixMs(),
+		Status:              "started",
+		StartedAt:           nowUnixMs(),
 	}
 	if err := s.Core.DB.InsertModelRequest(mr); err != nil {
+		release()
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
 
 	s.mu.Lock()
 	if s.cancels == nil {
 		s.cancels = map[string]context.CancelFunc{}
-	}
-	if s.agentRun == nil {
-		s.agentRun = map[string]string{}
 	}
 	s.agentRun[agentID] = runID
 	ctx, cancel := context.WithCancel(context.Background())
@@ -169,19 +203,12 @@ func (s *Service) Send(agentID, text string) Shared.SendResult {
 
 func (s *Service) runTurn(runID string, ctx context.Context, cancel context.CancelFunc, agentID, assistantID, modelRef string, req Protocol.Request, target *Protocol.Target, profile Storage.AgentProfile, mr Storage.ModelRequest) {
 	defer cancel()
-	started := time.Now()
 	trace := &Router.Trace{}
 	events := []Protocol.Event{}
-	terminal := false
 	for ev := range Router.New().Run(ctx, &req, target, trace) {
 		s.Core.EmitEvent(Shared.EventModelStream, Shared.StreamEvent{RunID: runID, AgentID: agentID, MessageID: assistantID, Event: ev})
 		events = append(events, ev)
-		if ev.Type == Protocol.EventMessageStop || ev.Type == Protocol.EventError {
-			terminal = true
-		}
 	}
-	_ = started
-	_ = terminal
 
 	seq := func(yield func(Protocol.Event) bool) {
 		for _, ev := range events {
@@ -192,11 +219,17 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	}
 	result := Protocol.Collect(seq)
 
-	status := "complete"
+	// The message table and the model_requests table have different
+	// constraint sets: messages use 'complete' for a finished reply while
+	// model_requests use 'success'.
+	msgStatus := "complete"
+	reqStatus := "success"
 	if ctx.Err() != nil {
-		status = "cancelled"
+		msgStatus = "cancelled"
+		reqStatus = "cancelled"
 	} else if result.Error != nil {
-		status = "error"
+		msgStatus = "error"
+		reqStatus = "error"
 	}
 
 	blocks := result.Message.Blocks
@@ -205,18 +238,24 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	if result.Stop.Raw != "" {
 		stopReason = result.Stop.Raw
 	}
-	s.Core.DB.FinalizeMessage(assistantID, blocks, text, status, stopReason, modelRef, nowUnixMs())
+	errorMessage := ""
+	if result.Error != nil {
+		errorMessage = result.Error.Message
+	}
+	if err := s.Core.DB.FinalizeMessage(assistantID, blocks, text, msgStatus, stopReason, modelRef, errorMessage, nowUnixMs()); err != nil {
+		log.Printf("chat: could not finalize message %s: %v", assistantID, err)
+	}
 
 	// finalize request
 	finalMR := mr
-	finalMR.Status = status
-	if status == "cancelled" {
-		finalMR.Status = "cancelled"
-	}
+	finalMR.Status = reqStatus
 	if result.Error != nil {
 		finalMR.ErrorCode = result.Error.Code
 		finalMR.ErrorMessage = result.Error.Message
 		finalMR.ErrorRaw = result.Error.Raw
+		if result.Error.Retryable {
+			finalMR.ErrorRetryable = true
+		}
 	}
 	finalMR.StopReason = stopReason
 	finalMR.HTTPStatus = trace.HTTPStatus
@@ -253,7 +292,9 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	raw, _ := json.Marshal(usage)
 	finalMR.UsageRawJSON = string(raw)
 
-	s.Core.DB.FinalizeModelRequest(finalMR)
+	if err := s.Core.DB.FinalizeModelRequest(finalMR); err != nil {
+		log.Printf("chat: could not finalize model request %s: %v", finalMR.ID, err)
+	}
 
 	s.mu.Lock()
 	delete(s.agentRun, agentID)
@@ -261,8 +302,36 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	s.mu.Unlock()
 
 	s.Core.EmitEvent(Shared.EventChatMessage, map[string]any{"agent_id": agentID, "message_id": assistantID})
-	finalStatus := status
-	s.Core.EmitEvent(Shared.EventChatRunFinished, map[string]any{"agent_id": agentID, "run_id": runID, "status": finalStatus})
+	s.Core.EmitEvent(Shared.EventChatRunFinished, map[string]any{"agent_id": agentID, "run_id": runID, "status": reqStatus})
+}
+
+func clampToModel(s *Service, modelRef, providerID, modelID string, target *Protocol.Target, maxOut *int64) {
+	if maxOut == nil {
+		return
+	}
+	ad, aerr := Router.AdapterFor(target)
+	if aerr != nil {
+		return
+	}
+	info := Protocol.ModelInfo{ID: modelID}
+	if m, ok := s.Core.Store.Get().Get(modelRef); ok && m.Limits != nil {
+		info.ContextLen = m.Limits.Context
+		info.MaxOutput = m.Limits.Output
+	} else if rows, lerr := s.Core.DB.ListCustomModels(providerID); lerr == nil {
+		for _, cm := range rows {
+			if cm.ModelID == modelID {
+				info.ContextLen = cm.ContextWindow
+				info.MaxOutput = cm.MaxOutput
+				break
+			}
+		}
+	}
+	if info.MaxOutput <= 0 {
+		return
+	}
+	scratch := &Protocol.Request{MaxOutputTokens: *maxOut}
+	Protocol.ClampRequest(scratch, ad.Capabilities(info))
+	*maxOut = scratch.MaxOutputTokens
 }
 
 func (s *Service) buildHistory(agentID string, throughSeq int, systemPrompt string) ([]Protocol.Message, string) {
@@ -418,6 +487,14 @@ func hostOf(raw string) string {
 
 func nowUnixMs() int64 {
 	return time.Now().UnixMilli()
+}
+
+func (s *Service) baseURLOverride(providerID string) string {
+	cfg, found, err := s.Core.DB.GetProviderConfig(providerID)
+	if err != nil || !found {
+		return ""
+	}
+	return strings.TrimSpace(cfg.BaseURLOverride)
 }
 
 func getKey(providerID string) (string, error) {

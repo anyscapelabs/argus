@@ -81,10 +81,10 @@ func (w *wireUsage) Canonical() Protocol.Usage {
 		output = 0
 	}
 	return Protocol.Usage{
-		InputTokens:      input,
-		OutputTokens:     output,
-		CacheReadTokens:  cacheRead,
-		ReasoningTokens:  reasoning,
+		InputTokens:     input,
+		OutputTokens:    output,
+		CacheReadTokens: cacheRead,
+		ReasoningTokens: reasoning,
 	}
 }
 
@@ -99,6 +99,7 @@ type toolState struct {
 type streamState struct {
 	quirks     Quirks
 	msgStarted bool
+	sawDone    bool
 	nextBlock  int
 	textOpen   bool
 	textIdx    int
@@ -119,6 +120,14 @@ func (a *Adapter) ParseStream(body io.Reader) iter.Seq[Protocol.Event] {
 			frame, err := frames.Next()
 			if err != nil {
 				if errors.Is(err, io.EOF) {
+					// A stream that ran out of frames without a finish reason
+					// or the [DONE] sentinel was cut short mid-reply; saving
+					// it as a complete message would drop the tail.
+					if st.msgStarted && st.finish == "" && !st.sawDone {
+						st.closeAllPartial(g)
+						g.fail(Protocol.StreamEndingError(io.ErrUnexpectedEOF))
+						return
+					}
 					st.finalize(g)
 					return
 				}
@@ -126,6 +135,7 @@ func (a *Adapter) ParseStream(body io.Reader) iter.Seq[Protocol.Event] {
 				return
 			}
 			if frame.Data == Protocol.DataDone {
+				st.sawDone = true
 				st.finalize(g)
 				return
 			}
@@ -285,6 +295,16 @@ func (st *streamState) open(typ Protocol.BlockType, g *gateway) bool {
 	st.nextBlock++
 	st.thinkOpen = true
 	return g.emit(Protocol.BlockStartEvent(st.thinkIdx, Protocol.Block{Type: Protocol.BlockThinking}))
+}
+
+// closeAllPartial stops the open text/thinking/tool blocks without emitting
+// message-level terminal events, so collected text survives a truncated
+// stream instead of vanishing.
+func (st *streamState) closeAllPartial(g *gateway) {
+	if !g.ok {
+		return
+	}
+	_ = st.closeAll(g)
 }
 
 func (st *streamState) finalize(g *gateway) {

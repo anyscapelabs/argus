@@ -40,6 +40,7 @@ export interface ChatMessage {
     "role": string;
     "text": string;
     "status": string;
+    "error_message"?: string;
     "stop_reason"?: string;
     "model_ref"?: string;
     "created_at": number;

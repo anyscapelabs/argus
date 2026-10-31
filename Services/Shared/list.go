@@ -3,6 +3,7 @@ package Shared
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -347,7 +348,11 @@ func (c *Core) FetchLive(ctx context.Context, provider Provider.Provider, extraH
 	if !provider.NoAuth {
 		stored, kerr := Keyring.Get(provider.ID)
 		if kerr != nil {
-			e.err = NewError(CodeStorage, "The secrets store is unreachable. Re-enter the key")
+			if errors.Is(kerr, Keyring.ErrNotFound) {
+				e.err = NewError(CodeNotConfigured, "Connect "+provider.ID+" first. Paste the API key in Settings")
+			} else {
+				e.err = NewError(CodeStorage, "The secrets store is unreachable. Re-enter the key")
+			}
 			e.results = nil
 			e.stale = false
 			return nil

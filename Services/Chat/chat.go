@@ -2,6 +2,7 @@ package Chat
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 
@@ -48,11 +49,17 @@ func (s *Service) Stream(req Shared.StreamRequest) Shared.StreamStart {
 	if !ok {
 		return Shared.StreamStart{Error: Shared.NewError(Shared.CodeUnknownProvider, "Unknown provider")}
 	}
+	if cfg, found, _ := s.Core.DB.GetProviderConfig(providerID); found && strings.TrimSpace(cfg.BaseURLOverride) != "" {
+		provider.BaseURL = strings.TrimSpace(cfg.BaseURLOverride)
+	}
 	overlayProvider, _ := s.Core.Overlay.Lookup(providerID)
 	key := ""
 	if !provider.NoAuth {
 		stored, kerr := Keyring.Get(providerID)
 		if kerr != nil {
+			if errors.Is(kerr, Keyring.ErrNotFound) {
+				return Shared.StreamStart{Error: Shared.NewError(Shared.CodeNotConfigured, "Connect "+providerID+" before streaming")}
+			}
 			return Shared.StreamStart{Error: Shared.NewError(Shared.CodeStorage, "The secrets store is unreachable. Re-enter the key")}
 		}
 		if strings.TrimSpace(stored) == "" {

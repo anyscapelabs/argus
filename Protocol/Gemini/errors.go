@@ -15,12 +15,13 @@ func (a *Adapter) MapError(status int, body []byte, retryAfter time.Duration) *P
 		Message: statusMessage(status),
 		Status:  status,
 	}
-	var probe wireError
-	if err := json.Unmarshal(body, &probe); err == nil && probe.Message != "" {
-		e.Code = mapStatusCode(probe.Code, probe.Status)
-		e.Message = strings.TrimSpace(probe.Message)
-		if probe.Status != "" {
-			e.Raw = probe.Status
+	var probe wireErrorEnvelope
+	if err := json.Unmarshal(body, &probe); err == nil && probe.Error.Message != "" {
+		werr := probe.Error
+		e.Code = mapStatusCode(werr.Code, werr.Status)
+		e.Message = strings.TrimSpace(werr.Message)
+		if werr.Status != "" {
+			e.Raw = werr.Status
 		}
 		if e.Code == Protocol.CodeProviderError {
 			e.Code = mapStatus(status)
@@ -75,4 +76,8 @@ func statusMessage(status int) string {
 		return "The provider had an internal error. Try again shortly"
 	}
 	return "The provider returned an error"
+}
+
+type wireErrorEnvelope struct {
+	Error wireError `json:"error"`
 }

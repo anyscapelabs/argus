@@ -3,6 +3,7 @@ package Models
 import (
 	"strings"
 
+	"github.com/anyscapelabs/argus/Models"
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
 
@@ -49,8 +50,27 @@ func (s *Service) SetProviderSelection(providerID string, refs []string) Shared.
 	if err := s.Core.DB.SetProviderSelection(providerID, clean); err != nil {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
+	// Agents pointed at this provider can only keep references the user
+	// still selects.
+	cleared, err := s.Core.DB.ClearAgentModelsNotIn(providerID, keepIDs(clean))
+	if err != nil {
+		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+	}
 	s.Core.EmitEvent(Shared.EventSelectionsChanged, nil)
+	if len(cleared) > 0 {
+		s.Core.EmitEvent(Shared.EventSlotsChanged, nil)
+	}
 	return Shared.ActionResult{Ok: true}
+}
+
+func keepIDs(refs []string) map[string]bool {
+	keep := make(map[string]bool, len(refs))
+	for _, ref := range refs {
+		if _, id := Models.SplitRef(ref); id != "" {
+			keep[id] = true
+		}
+	}
+	return keep
 }
 
 func (s *Service) ChatModels() []Shared.ChatModel {

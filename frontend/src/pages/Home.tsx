@@ -14,7 +14,7 @@ function timeOfDay() {
 }
 
 type HomeProps = {
-  onSend?: () => void
+  onSend?: (text: string, modelRef: string | null) => void
 }
 
 export default function Home({ onSend }: HomeProps) {
