@@ -12,7 +12,7 @@ export default function CodeBlock({ children }: { children?: ReactNode }) {
     } catch {}
   }
   return (
-    <div className="group relative my-2 overflow-hidden rounded-lg border border-secondary bg-black/40">
+    <div className="group relative my-2 overflow-hidden rounded-xl border border-secondary bg-black/40">
       <pre ref={preRef} className="select-text overflow-x-auto p-3 text-xs leading-5">{children}</pre>
       <button
         type="button"
