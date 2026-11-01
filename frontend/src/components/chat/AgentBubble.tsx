@@ -108,7 +108,7 @@ export default function AgentBubble({
           pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
           table: ({ children }) => (
             <div className="my-2 w-full max-w-full overflow-hidden rounded-2xl">
-              <table className="w-full border-collapse text-left text-xs">{children}</table>
+              <table className="w-full border-separate border-spacing-0 text-left text-xs">{children}</table>
             </div>
           ),
           a: ({ href, children }) => {
