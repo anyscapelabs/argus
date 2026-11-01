@@ -136,6 +136,33 @@ export interface ModelView {
     "selected_for"?: string[] | null;
 }
 
+export interface NoticesResult {
+    "notices": PermissionNoticeView[] | null;
+    "error"?: ActionError | null;
+}
+
+export interface PermissionNoticeView {
+    "id": string;
+    "agent_id": string;
+    "agent_name": string;
+    "tool": string;
+    "command": string;
+    "decision": string;
+    "created_at": number;
+}
+
+export interface PermissionState {
+    "agent_id": string;
+    "tool": string;
+    "allowed": boolean;
+    "denied": boolean;
+}
+
+export interface PermissionStateResult {
+    "state": PermissionState;
+    "error"?: ActionError | null;
+}
+
 export interface Picker {
     "provider": ProviderView;
     "live_checked": boolean;

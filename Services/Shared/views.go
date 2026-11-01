@@ -243,3 +243,47 @@ type ModelRequestView struct {
 	StartedAt    int64   `json:"started_at"`
 	CompletedAt  int64   `json:"completed_at"`
 }
+
+type PermissionRequestView struct {
+	RequestID string `json:"request_id"`
+	AgentID   string `json:"agent_id"`
+	AgentName string `json:"agent_name"`
+	Tool      string `json:"tool"`
+	Command   string `json:"command"`
+}
+
+type PermissionDecisionView struct {
+	RequestID string `json:"request_id"`
+	AgentID   string `json:"agent_id"`
+	AgentName string `json:"agent_name,omitempty"`
+	Tool      string `json:"tool"`
+	Command   string `json:"command"`
+	Decision  string `json:"decision"`
+}
+
+type PermissionNoticeView struct {
+	ID        string `json:"id"`
+	AgentID   string `json:"agent_id"`
+	AgentName string `json:"agent_name"`
+	Tool      string `json:"tool"`
+	Command   string `json:"command"`
+	Decision  string `json:"decision"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+type NoticesResult struct {
+	Notices []PermissionNoticeView `json:"notices"`
+	Error   *ActionError           `json:"error,omitempty"`
+}
+
+type PermissionState struct {
+	AgentID string `json:"agent_id"`
+	Tool    string `json:"tool"`
+	Allowed bool   `json:"allowed"`
+	Denied  bool   `json:"denied"`
+}
+
+type PermissionStateResult struct {
+	State PermissionState `json:"state"`
+	Error *ActionError    `json:"error,omitempty"`
+}

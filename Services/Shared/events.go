@@ -1,14 +1,16 @@
 package Shared
 
 const (
-	EventCatalogUpdated    = "catalog:updated"
-	EventProvidersChanged  = "providers:changed"
-	EventSlotsChanged      = "slots:changed"
-	EventSelectionsChanged = "selections:changed"
-	EventModelStream       = "model:stream"
-	EventStreamCancelled   = "model:stream_cancelled"
-	EventChatMessage       = "chat:message"
-	EventChatRunFinished   = "chat:run_finished"
+	EventCatalogUpdated      = "catalog:updated"
+	EventProvidersChanged    = "providers:changed"
+	EventSlotsChanged        = "slots:changed"
+	EventSelectionsChanged   = "selections:changed"
+	EventModelStream         = "model:stream"
+	EventStreamCancelled     = "model:stream_cancelled"
+	EventChatMessage         = "chat:message"
+	EventChatRunFinished     = "chat:run_finished"
+	EventPermissionRequested = "permission:requested"
+	EventPermissionResolved  = "permission:resolved"
 )
 
 const (

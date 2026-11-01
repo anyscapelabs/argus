@@ -3,13 +3,17 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Events } from '@wailsio/runtime'
 import { useAgentProfile } from '../domains/models/hooks'
 import { useChatMessages, useSendMessage } from '../domains/chat/hooks'
+import { respondPermission, type PermissionRequestView, type PermissionDecision } from '../domains/permission/api'
+import { useLatestNoticeText } from '../domains/permission/hooks'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FiChevronRight } from 'react-icons/fi'
+import { FiChevronRight, FiTerminal } from 'react-icons/fi'
 import Toolbar from '../components/layout/Toolbar'
 import ChatInput from '../components/chat/ChatInput'
 import AgentBubble from '../components/chat/AgentBubble'
 import UserBubble from '../components/chat/UserBubble'
 import ThinkingIndicator from '../components/chat/ThinkingIndicator'
+import PermissionCard, { type Permission } from '../components/chat/PermissionCard'
+import Notifier from '../components/chat/Notifier'
 import RightPanel from '../components/layout/RightPanel'
 
 function timeTag() {
@@ -23,6 +27,7 @@ function timeTag() {
 
 const messagesKey = ['chat', 'default', 'messages']
 const usageKey = ['chat', 'default', 'usage']
+const noticesKey = ['chat', 'default', 'notices']
 
 type PendingSend = { id: number; text: string; modelRef: string | null }
 
@@ -46,16 +51,42 @@ export default function Chat({
   onPendingConsumed?: () => void
 }) {
   const [rightOpen, setRightOpen] = useState(false)
+  const [permission, setPermission] = useState<Permission | null>(null)
   const { data: agentProfile } = useAgentProfile('default')
   const qc = useQueryClient()
   const { data: messages = [], error: messagesError, isLoading } = useChatMessages('default')
   const send = useSendMessage('default')
+  const persistedNotice = useLatestNoticeText('default')
+  const [errorNotice, setErrorNotice] = useState<string | null>(null)
   const tag = useMemo(() => timeTag(), [])
   const pendingConsumedId = useRef<number | null>(null)
   const streamText = useRef(new Map<string, string>())
 
+  const decide = (decision: PermissionDecision) => {
+    if (!permission) return
+    const requestID = permission.request_id
+    setPermission(null)
+    respondPermission(requestID, decision).catch((err) => {
+      console.error('permission respond failed', err)
+      setErrorNotice('Could not save that decision, try again')
+      setTimeout(() => setErrorNotice(null), 6000)
+    })
+  }
+
   useEffect(() => {
     const unsubs = [
+      Events.On('permission:requested', (event: any) => {
+        const payload = (event?.data ?? event) as PermissionRequestView
+        if (!payload?.request_id) return
+        setPermission(payload)
+      }),
+      Events.On('permission:resolved', (event: any) => {
+        const payload = (event?.data ?? event) as { request_id?: string } | undefined
+        qc.invalidateQueries({ queryKey: noticesKey })
+        // The click that produced this decision already showed a notifier;
+        // only resolve the card when the decision arrived from elsewhere.
+        setPermission((cur) => (cur && payload?.request_id !== cur.request_id ? null : cur))
+      }),
       Events.On('chat:message', (event: any) => {
         if (event?.data?.message_id) {
           streamText.current.delete(event.data.message_id)
@@ -112,6 +143,21 @@ export default function Chat({
     (m: any) => m.status === 'streaming' && !m.text,
   )
 
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const pinnedRef = useRef(true)
+  const onScroll = () => {
+    const el = scrollRef.current
+    if (!el) return
+    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+  }
+  // Follow the stream: keep the latest message visible while the user is
+  // pinned near the bottom; scrolling up to read pauses the auto-follow.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || !pinnedRef.current) return
+    el.scrollTop = el.scrollHeight
+  }, [messages, permission, persistedNotice, errorNotice, streamingWithNoText])
+
   return (
     <div className="relative flex h-dvh flex-1 min-h-0 overflow-hidden">
       <div className="flex flex-1 flex-col min-h-0">
@@ -129,7 +175,7 @@ export default function Chat({
               <FiChevronRight size={14} className="w-0 overflow-hidden opacity-0 transition-all duration-300 ease-out group-hover:w-4 group-hover:translate-x-1 group-hover:opacity-100" />
             </motion.button>
           </div>
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6">
+          <div ref={scrollRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto px-6 pt-6 pb-24">
             <div className="mx-auto flex max-w-3xl flex-col gap-3">
               <div className="mx-auto w-fit rounded-md px-2 py-0.5 text-center text-xs text-secondary transition-colors hover:bg-secondary hover:text-primary">
                 {tag}
@@ -148,6 +194,17 @@ export default function Chat({
                   <AgentBubble key={m.id} content={m.text} status={m.status} error={m.error_message} />
                 ),
               )}
+              {permission && (
+                <PermissionCard
+                  permission={permission}
+                  agentName={agentProfile?.agent_name}
+                  onAllowAlways={() => decide('allow_always')}
+                  onAllowOnce={() => decide('allow_once')}
+                  onDeny={() => decide('deny')}
+                />
+              )}
+              {persistedNotice && <Notifier text={persistedNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary"><FiTerminal size={9} className="text-secondary" /></div>} />}
+              {errorNotice && <Notifier text={errorNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400"><FiTerminal size={9} className="text-red-400" /></div>} />}
               {streamingWithNoText && <ThinkingIndicator />}
             </div>
           </div>

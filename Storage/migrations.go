@@ -15,6 +15,8 @@ func (db *DB) migrate() error {
 		migration1,
 		migration2,
 		migration3,
+		migration4,
+		migration5,
 	}
 
 	for i := version; i < len(migrations); i++ {
@@ -157,6 +159,41 @@ func migration3(db *DB) error {
 			return nil
 		}
 		return err
+	}
+	return nil
+}
+
+func migration4(db *DB) error {
+	stmt := `CREATE TABLE IF NOT EXISTS permission_grants (
+		agent_id TEXT NOT NULL,
+		tool TEXT NOT NULL,
+		mode TEXT NOT NULL CHECK (mode IN ('allow','deny')),
+		created_at INTEGER NOT NULL,
+		PRIMARY KEY (agent_id, tool)
+	)`
+	if _, err := db.conn.Exec(stmt); err != nil {
+		return err
+	}
+	return nil
+}
+
+func migration5(db *DB) error {
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS permission_notices (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL,
+			agent_name TEXT NOT NULL DEFAULT '',
+			tool TEXT NOT NULL,
+			command TEXT NOT NULL DEFAULT '',
+			decision TEXT NOT NULL,
+			created_at INTEGER NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_notices_agent ON permission_notices(agent_id, created_at)`,
+	}
+	for _, q := range statements {
+		if _, err := db.conn.Exec(q); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -139,6 +139,70 @@ func (db *DB) SweepInterrupted() error {
 	return nil
 }
 
+// CleanUnresponded deletes user messages that never got an assistant reply:
+// either no assistant row follows them, or the following assistant row is
+// still 'streaming'/'interrupted' (a crashed run). A dangling reply row with
+// no content is removed together with its user message; an 'error' or
+// 'cancelled' reply counts as answered and is kept. Returns the number of
+// deleted rows.
+func (db *DB) CleanUnresponded(agentID string) (int, error) {
+	msgs, err := db.ListMessages(agentID, 0, 1000)
+	if err != nil {
+		return 0, err
+	}
+	bySeq := make(map[int]Message, len(msgs))
+	for _, m := range msgs {
+		bySeq[m.Seq] = m
+	}
+	var stale []string
+	for _, m := range msgs {
+		if m.Role != "user" {
+			continue
+		}
+		reply, found := bySeq[m.Seq+1]
+		if !found {
+			stale = append(stale, m.ID)
+			continue
+		}
+		if reply.Role == "assistant" && (reply.Status == "streaming" || reply.Status == "interrupted") {
+			stale = append(stale, m.ID, reply.ID)
+		}
+	}
+	for _, id := range stale {
+		if _, err := db.conn.Exec(`DELETE FROM messages WHERE id = ?`, id); err != nil {
+			return 0, fmt.Errorf("storage: clean unresponded failed: %w", err)
+		}
+	}
+	return len(stale), nil
+}
+
+// CleanUnrespondedAll runs the cleaner across every agent's chat. Called at
+// startup, right after SweepInterrupted.
+func (db *DB) CleanUnrespondedAll() (int, error) {
+	rows, err := db.conn.Query(`SELECT DISTINCT agent_id FROM messages`)
+	if err != nil {
+		return 0, fmt.Errorf("storage: clean unresponded failed: %w", err)
+	}
+	defer rows.Close()
+	var agents []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return 0, fmt.Errorf("storage: clean unresponded failed: %w", err)
+		}
+		agents = append(agents, id)
+	}
+	total := 0
+	for _, id := range agents {
+		n, err := db.CleanUnresponded(id)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, rows.Err()
+}
+
 func nullInt64(n int64) any {
 	if n == 0 {
 		return nil
