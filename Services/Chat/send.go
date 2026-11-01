@@ -266,7 +266,7 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 		req.Messages = append(req.Messages, result.Message)
 		roundResults := make([]Protocol.Block, 0, len(calls))
 		for _, call := range calls {
-			roundResults = append(roundResults, s.runTool(ctx, agentID, profile.AgentName, call))
+			roundResults = append(roundResults, s.runTool(ctx, runID, agentID, profile.AgentName, call))
 		}
 		req.Messages = append(req.Messages, Protocol.Message{Role: Protocol.RoleUser, Blocks: roundResults})
 	}

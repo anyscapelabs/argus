@@ -11,6 +11,7 @@ const (
 	EventChatRunFinished     = "chat:run_finished"
 	EventPermissionRequested = "permission:requested"
 	EventPermissionResolved  = "permission:resolved"
+	EventActivity            = "agent:activity"
 )
 
 const (
