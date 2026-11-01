@@ -41,7 +41,7 @@
     --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
 
     /* Background surfaces. */
-    --color-tertiary: #262626;
+    --color-tertiary: #363636;
 
     /* Sidebar surface, darker than the primary canvas. */
     --color-sidebar: #0a0a0b;
@@ -66,7 +66,7 @@
 /* `primary` is split by role: a dark surface for backgrounds and white for
    text, so it cannot live in a single `--color-primary` token. */
 @utility bg-primary {
-    background-color: #101010;
+    background-color: #141414;
 }
 
 @utility text-primary {
@@ -74,7 +74,7 @@
 }
 
 @utility bg-secondary {
-    background-color: #161616;
+    background-color: #262626;
 }
 
 @utility text-secondary {
@@ -82,15 +82,15 @@
 }
 
 @utility border-primary {
-    border-color: #161616;
+    border-color: #262626;
 }
 
 @utility border-secondary {
-    border-color: #262626;
+    border-color: #363636;
 }
 
 @utility border-tertiary {
-    border-color: #262626;
+    border-color: #444444;
 }
 
 /* ----- Base ----------------------------------------------------------------
@@ -98,7 +98,7 @@
    behaviours rather than demo styling: */
 @layer base {
     html {
-        background-color: #101010;
+        background-color: #141414;
         color-scheme: dark;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
@@ -110,7 +110,7 @@
         margin: 0;
         /* Painted with the primary surface at the document level so the canvas
            is already the right colour before React mounts — no flash. */
-        background-color: #101010;
+        background-color: #141414;
     }
 
     body {
