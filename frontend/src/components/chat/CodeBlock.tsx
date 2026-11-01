@@ -1,19 +1,46 @@
 import { useRef, useState, type ReactNode } from 'react'
 import { FiCheck, FiCopy } from 'react-icons/fi'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 
 export default function CodeBlock({ children }: { children?: ReactNode }) {
-  const preRef = useRef<HTMLPreElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
+  const child = (Array.isArray(children) ? children[0] : children) as any
+  const className = child?.props?.className || ''
+  const match = /language-([\w-]+)/.exec(className)
+  const language = match?.[1] || 'text'
+  const code = String(child?.props?.children ?? '').replace(/\n$/, '')
+
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText((preRef.current?.innerText ?? '').replace(/\n$/, ''))
+      await navigator.clipboard.writeText(code)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {}
   }
+
   return (
-    <div className="group relative my-2 overflow-hidden rounded-xl border border-secondary bg-black/40">
-      <pre ref={preRef} className="select-text overflow-x-auto p-3 text-xs leading-5">{children}</pre>
+    <div ref={containerRef} className="group relative my-2 overflow-hidden rounded-xl border border-secondary bg-[#1e1e1e]">
+      <SyntaxHighlighter
+        language={language}
+        style={vscDarkPlus}
+        customStyle={{
+          margin: 0,
+          padding: '0.75rem',
+          background: 'transparent',
+          fontSize: '0.75rem',
+          lineHeight: '1.25rem',
+        }}
+        codeTagProps={{
+          style: {
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+          },
+        }}
+        wrapLongLines={false}
+      >
+        {code}
+      </SyntaxHighlighter>
       <button
         type="button"
         onClick={copy}
