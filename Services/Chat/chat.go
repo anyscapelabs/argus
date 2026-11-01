@@ -15,6 +15,7 @@ import (
 	"github.com/anyscapelabs/argus/Models"
 	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Router"
+	"github.com/anyscapelabs/argus/Services/MCP"
 	"github.com/anyscapelabs/argus/Services/Permission"
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
@@ -23,6 +24,8 @@ type Service struct {
 	Core *Shared.Core
 	// Permissions is the permission gate every tool call must pass.
 	Permissions *Permission.Service
+	// MCP is the MCP manager service.
+	MCP *MCP.Service
 
 	mu       sync.Mutex
 	cancels  map[string]context.CancelFunc
