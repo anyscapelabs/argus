@@ -8,6 +8,7 @@ import (
 
 	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Router"
+	"github.com/anyscapelabs/argus/Services/MCPConnect"
 	"github.com/anyscapelabs/argus/Services/Permission"
 	"github.com/anyscapelabs/argus/Services/Shared"
 	"github.com/anyscapelabs/argus/Services/Terminal"
@@ -35,10 +36,37 @@ var terminalToolDef = Protocol.ToolDef{
 	}`),
 }
 
+var mcpConnectToolDef = Protocol.ToolDef{
+	Name: "connect_mcp",
+	Description: "Request the user to connect an MCP integration (e.g., Gmail). Use this when the user wants to connect an integration.",
+	Schema: json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"server_id": {
+				"type": "string",
+				"description": "Integration id like gmail, google-calendar, todoist"
+			},
+			"server_name": {
+				"type": "string",
+				"description": "Display name like Gmail"
+			},
+			"description": {
+				"type": "string",
+				"description": "Short description of what it does"
+			},
+			"icon": {
+				"type": "string",
+				"description": "Icon path like /gmail.png"
+			}
+		},
+		"required": ["server_id", "server_name"]
+	}`),
+}
+
 // attachTools turns on tool calling when the model supports it. Returns the
 // system prompt suffix describing the tools (empty when tools are off).
 func (s *Service) attachTools(req *Protocol.Request, target *Protocol.Target) bool {
-	tools := []Protocol.ToolDef{terminalToolDef}
+	tools := []Protocol.ToolDef{terminalToolDef, mcpConnectToolDef}
 	if !s.modelSupportsTools(target) {
 		return false
 	}
@@ -51,7 +79,7 @@ func (s *Service) modelSupportsTools(target *Protocol.Target) bool {
 	if err != nil {
 		return false
 	}
-	scratch := &Protocol.Request{Tools: []Protocol.ToolDef{terminalToolDef}}
+	scratch := &Protocol.Request{Tools: []Protocol.ToolDef{terminalToolDef, mcpConnectToolDef}}
 	Protocol.ClampRequest(scratch, ad.Capabilities(Protocol.ModelInfo{ID: target.ModelID}))
 	return len(scratch.Tools) > 0
 }
@@ -82,6 +110,41 @@ func (s *Service) runTool(ctx context.Context, runID, agentID, agentName string,
 	if !call.Valid {
 		return result("invalid tool call: the arguments were not valid JSON", true)
 	}
+
+	if call.Name == "connect_mcp" {
+		var input struct {
+			ServerID    string `json:"server_id"`
+			ServerName  string `json:"server_name"`
+			Description string `json:"description"`
+			Icon        string `json:"icon"`
+		}
+		if err := json.Unmarshal([]byte(call.Input), &input); err != nil {
+			return result("invalid tool input: could not parse the connect_mcp arguments", true)
+		}
+		serverID := strings.TrimSpace(input.ServerID)
+		serverName := strings.TrimSpace(input.ServerName)
+		if serverID == "" {
+			serverID = "gmail"
+		}
+		if serverName == "" {
+			serverName = "Gmail"
+		}
+		if input.Description == "" {
+			input.Description = "Let Argus send, read, and manage emails"
+		}
+		if input.Icon == "" && serverID == "gmail" {
+			input.Icon = "/gmail.png"
+		}
+		decision, err := MCPConnect.Request(ctx, s.MCPConnect, agentID, agentName, serverID, serverName, input.Description, input.Icon)
+		if err != nil {
+			return result("the connection request was cancelled", true)
+		}
+		if decision == MCPConnect.Deny {
+			return result("The user declined connecting this integration.", true)
+		}
+		return result("Connection request sent to the user. The user will approve or deny it in the chat.", false)
+	}
+
 	if call.Name != Permission.TerminalTool {
 		return result("unknown tool: "+call.Name, true)
 	}
