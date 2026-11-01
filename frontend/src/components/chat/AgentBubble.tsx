@@ -107,10 +107,11 @@ export default function AgentBubble({
         components={{
           pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
           table: ({ children }) => (
-            <div className="my-2 w-full max-w-full overflow-x-auto rounded-lg">
+            <div className="my-2 w-full max-w-full overflow-x-auto rounded-lg border border-secondary">
               <table className="w-full border-collapse text-left text-xs">{children}</table>
             </div>
           ),
+          thead: ({ children }) => <thead className="bg-tertiary">{children}</thead>,
           a: ({ href, children }) => {
             if (!href || !isHttpUrl(href)) {
               return (
