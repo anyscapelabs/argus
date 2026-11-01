@@ -205,3 +205,18 @@
     font-family: 'Geist Mono Variable', monospace;
     font-size: 0.85em;
 }
+.markdown th,
+.markdown td {
+    border-color: #333;
+    border-width: 1px;
+    border-style: solid;
+    padding: 0.25rem 0.5rem;
+    vertical-align: top;
+}
+.markdown th {
+    font-weight: 600;
+    background-color: #141414;
+}
+.markdown tr:last-child td {
+    border-color: #333;
+}

@@ -1,4 +1,7 @@
+import { isValidElement, type ReactNode } from 'react'
+import type { ReactElement } from 'react'
 import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import WebsiteCard, { isHttpUrl } from './WebsiteCard'
 
 type AgentBubbleProps = {
@@ -10,15 +13,16 @@ type AgentBubbleProps = {
   className?: string
 }
 
-// Wrap bare URLs in CommonMark autolinks so they render as website cards.
-// Code fences, inline code, images and existing links are stashed first so
-// their contents are never touched.
 function linkify(text: string): string {
+  const NUL = String.fromCharCode(0)
+  const placeholder = () => new RegExp(`${NUL}(\\d+)${NUL}`, 'g')
   const stash: string[] = []
   const keep = (value: string) => {
     stash.push(value)
-    return `\u0000${stash.length - 1}\u0000`
+    return `${NUL}${stash.length - 1}${NUL}`
   }
+  const resolve = (value: string): string =>
+    value.replace(placeholder(), (_m, i: string) => resolve(stash[Number(i)]))
   let out = text
   out = out.replace(/```[\s\S]*?```/g, keep)
   out = out.replace(/`[^`\n]+`/g, keep)
@@ -28,8 +32,34 @@ function linkify(text: string): string {
     const clean = url.replace(/[.,;:!?'"]+$/, '')
     return clean ? `${pre}<${clean}>` : m
   })
-  out = out.replace(/\u0000(\d+)\u0000/g, (_m, i: string) => stash[Number(i)])
-  return out
+  return out.replace(placeholder(), (_m, i: string) => resolve(stash[Number(i)]))
+}
+
+function linkLabel(children: ReactNode): string | null {
+  let label = ''
+  let image = false
+  const walk = (node: ReactNode) => {
+    if (node == null || typeof node === 'boolean') return
+    if (typeof node === 'string' || typeof node === 'number') {
+      label += String(node)
+      return
+    }
+    if (Array.isArray(node)) {
+      node.forEach(walk)
+      return
+    }
+    if (isValidElement(node)) {
+      const el = node as ReactElement<{ src?: string; children?: ReactNode }>
+      if (el.type === 'img') {
+        image = true
+        return
+      }
+      walk(el.props.children)
+    }
+  }
+  walk(children)
+  if (image) return null
+  return label
 }
 
 export default function AgentBubble({
@@ -64,15 +94,31 @@ export default function AgentBubble({
       className={`markdown w-fit max-w-xl rounded-xl border border-primary bg-secondary px-2 py-1 text-sm font-medium ${className}`}
     >
       <Markdown
+        remarkPlugins={[remarkGfm]}
         components={{
-          a: ({ href, children }) =>
-            href && isHttpUrl(href) && typeof children === 'string' ? (
-              <WebsiteCard url={href}>{children}</WebsiteCard>
-            ) : (
-              <a href={href} target="_blank" rel="noreferrer">
-                {children}
-              </a>
-            ),
+          table: ({ children }) => (
+            <div className="my-2 w-full max-w-full overflow-x-auto rounded-lg">
+              <table className="w-full border-collapse text-left text-xs">{children}</table>
+            </div>
+          ),
+          a: ({ href, children }) => {
+            if (!href || !isHttpUrl(href)) {
+              return (
+                <a href={href} target="_blank" rel="noreferrer">
+                  {children}
+                </a>
+              )
+            }
+            const label = linkLabel(children)
+            if (label === null) {
+              return (
+                <a href={href} target="_blank" rel="noreferrer">
+                  {children}
+                </a>
+              )
+            }
+            return <WebsiteCard url={href}>{label}</WebsiteCard>
+          },
         }}
       >
         {linkify(text)}
