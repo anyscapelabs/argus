@@ -100,7 +100,7 @@ export default function AgentBubble({
   }
   return (
     <div
-      className={`markdown w-fit max-w-2xl select-text break-words rounded-xl border border-primary bg-secondary px-3 py-2 text-sm ${className}`}
+      className={`markdown w-fit max-w-xl select-text break-words rounded-xl border border-primary bg-secondary px-3 py-2 text-sm ${className}`}
     >
       <Markdown
         remarkPlugins={[remarkGfm]}
