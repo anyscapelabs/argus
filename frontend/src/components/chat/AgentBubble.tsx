@@ -3,6 +3,7 @@ import type { ReactElement } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import WebsiteCard, { isHttpUrl } from './WebsiteCard'
+import CodeBlock from './CodeBlock'
 
 type AgentBubbleProps = {
   content?: string
@@ -99,11 +100,12 @@ export default function AgentBubble({
   }
   return (
     <div
-      className={`markdown w-fit max-w-xl rounded-xl border border-primary bg-secondary p-2 text-sm font-medium ${className}`}
+      className={`markdown w-fit max-w-2xl select-text break-words rounded-xl border border-primary bg-secondary px-3 py-2 text-sm ${className}`}
     >
       <Markdown
         remarkPlugins={[remarkGfm]}
         components={{
+          pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
           table: ({ children }) => (
             <div className="my-2 w-full max-w-full overflow-x-auto rounded-lg">
               <table className="w-full border-collapse text-left text-xs">{children}</table>
