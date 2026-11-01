@@ -3,6 +3,7 @@ package MCP
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -137,9 +138,36 @@ func (s *Service) ListTools() []Tool {
 	return m.ListTools()
 }
 
+func readGoogleCreds() (string, string) {
+	if id := os.Getenv("ARGUS_GOOGLE_CLIENT_ID"); id != "" {
+		return id, os.Getenv("ARGUS_GOOGLE_CLIENT_SECRET")
+	}
+	if googleClientID != "" {
+		return googleClientID, googleClientSecret
+	}
+	// Try common config files
+	for _, p := range []string{
+		"config/google.json",
+		"google.json",
+		"Services/MCP/google.json",
+		".config/argus/google.json",
+	} {
+		if b, err := os.ReadFile(p); err == nil {
+			var m map[string]string
+			if json.Unmarshal(b, &m) == nil {
+				id := cmp.Or(m["client_id"], m["clientId"], m["ARGUS_GOOGLE_CLIENT_ID"])
+				sec := cmp.Or(m["client_secret"], m["clientSecret"], m["ARGUS_GOOGLE_CLIENT_SECRET"])
+				if id != "" {
+					return id, sec
+				}
+			}
+		}
+	}
+	return "", ""
+}
+
 func googleClient() (*oauthex.ClientCredentials, error) {
-	id := cmp.Or(os.Getenv("ARGUS_GOOGLE_CLIENT_ID"), googleClientID)
-	sec := cmp.Or(os.Getenv("ARGUS_GOOGLE_CLIENT_SECRET"), googleClientSecret)
+	id, sec := readGoogleCreds()
 	if id == "" {
 		return nil, errors.New("google sign-in is not configured in this build")
 	}
