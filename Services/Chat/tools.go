@@ -8,7 +8,6 @@ import (
 
 	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Router"
-	"github.com/anyscapelabs/argus/Services/MCPConnect"
 	"github.com/anyscapelabs/argus/Services/Permission"
 	"github.com/anyscapelabs/argus/Services/Shared"
 	"github.com/anyscapelabs/argus/Services/Terminal"
@@ -45,28 +44,40 @@ var mcpConnectToolDef = Protocol.ToolDef{
 			"server_id": {
 				"type": "string",
 				"description": "Integration id like gmail, google-calendar, todoist"
-			},
-			"server_name": {
-				"type": "string",
-				"description": "Display name like Gmail"
-			},
-			"description": {
-				"type": "string",
-				"description": "Short description of what it does"
-			},
-			"icon": {
-				"type": "string",
-				"description": "Icon path like /gmail.png"
 			}
 		},
-		"required": ["server_id", "server_name"]
+		"required": ["server_id"]
 	}`),
+}
+
+func mcpToolName(serverID, tool string) string {
+	n := strings.NewReplacer("-", "_", ".", "_").Replace(serverID) + "__" + tool
+	if len(n) > 64 {
+		n = n[:64]
+	}
+	return n
+}
+
+func (s *Service) mcpToolDefs() []Protocol.ToolDef {
+	var defs []Protocol.ToolDef
+	if s.MCP == nil {
+		return defs
+	}
+	for _, t := range s.MCP.ListTools() {
+		schema, _ := json.Marshal(t.InputSchema)
+		defs = append(defs, Protocol.ToolDef{
+			Name:        mcpToolName(t.ServerID, t.Name),
+			Description: "[" + t.ServerName + "] " + t.Description,
+			Schema:      schema,
+		})
+	}
+	return defs
 }
 
 // attachTools turns on tool calling when the model supports it. Returns the
 // system prompt suffix describing the tools (empty when tools are off).
 func (s *Service) attachTools(req *Protocol.Request, target *Protocol.Target) bool {
-	tools := []Protocol.ToolDef{terminalToolDef, mcpConnectToolDef}
+	tools := append([]Protocol.ToolDef{terminalToolDef, mcpConnectToolDef}, s.mcpToolDefs()...)
 	if !s.modelSupportsTools(target) {
 		return false
 	}
@@ -79,7 +90,7 @@ func (s *Service) modelSupportsTools(target *Protocol.Target) bool {
 	if err != nil {
 		return false
 	}
-	scratch := &Protocol.Request{Tools: []Protocol.ToolDef{terminalToolDef, mcpConnectToolDef}}
+	scratch := &Protocol.Request{Tools: append([]Protocol.ToolDef{terminalToolDef, mcpConnectToolDef}, s.mcpToolDefs()...)}
 	Protocol.ClampRequest(scratch, ad.Capabilities(Protocol.ModelInfo{ID: target.ModelID}))
 	return len(scratch.Tools) > 0
 }
@@ -113,33 +124,41 @@ func (s *Service) runTool(ctx context.Context, runID, agentID, agentName string,
 
 	if call.Name == "connect_mcp" {
 		var input struct {
-			ServerID    string `json:"server_id"`
-			ServerName  string `json:"server_name"`
-			Description string `json:"description"`
-			Icon        string `json:"icon"`
+			ServerID string `json:"server_id"`
 		}
 		if err := json.Unmarshal([]byte(call.Input), &input); err != nil {
 			return result("invalid tool input: could not parse the connect_mcp arguments", true)
 		}
-		serverID := strings.TrimSpace(input.ServerID)
-		serverName := strings.TrimSpace(input.ServerName)
-		if serverID == "" {
-			serverID = "gmail"
+		switch s.MCPConnect.Register(agentID, agentName, strings.TrimSpace(input.ServerID)) {
+		case "shown":
+			return result("A connection card is on screen. The user must press Connect and finish sign-in in their browser. Do not say it is connected; stop and wait.", false)
+		case "pending":
+			return result("A connection card is already waiting for the user. Do not request another.", false)
+		case "connected":
+			return result("That integration is already connected. Use its tools.", false)
+		default:
+			return result("Unknown integration id. Valid ids: gmail, google-calendar, todoist.", true)
 		}
-		if serverName == "" {
-			serverName = "Gmail"
+	}
+
+	if s.MCP != nil {
+		for _, t := range s.MCP.ListTools() {
+			if mcpToolName(t.ServerID, t.Name) == call.Name {
+				var args map[string]interface{}
+				if strings.TrimSpace(call.Input) != "" {
+					_ = json.Unmarshal([]byte(call.Input), &args)
+				}
+				argsJSON, _ := json.Marshal(args)
+				out, err := s.MCP.CallTool(t.ServerID, t.Name, string(argsJSON))
+				if err != nil {
+					return result("integration call failed: "+err.Error(), true)
+				}
+				if out == "" {
+					out = "{}"
+				}
+				return result(out, false)
+			}
 		}
-		if input.Description == "" {
-			input.Description = "Let Argus send, read, and manage emails"
-		}
-		if input.Icon == "" && serverID == "gmail" {
-			input.Icon = "/gmail.png"
-		}
-		// Non-blocking: fire the card event and return immediately so the run
-		// closes and the thinking indicator clears. The user's Connect/Deny
-		// click is handled independently via MCPConnect.Respond.
-		MCPConnect.Register(s.MCPConnect, agentID, agentName, serverID, serverName, input.Description, input.Icon, mcpAuthURL(serverID))
-		return result("Connection card shown to the user. End your response here.", false)
 	}
 
 	if call.Name != Permission.TerminalTool {

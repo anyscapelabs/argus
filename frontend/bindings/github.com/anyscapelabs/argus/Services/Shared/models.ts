@@ -97,6 +97,16 @@ export interface LiveResults {
     "Stale": boolean;
 }
 
+export interface MCPConnectRequestView {
+    "request_id": string;
+    "agent_id": string;
+    "agent_name": string;
+    "server_id": string;
+    "server_name": string;
+    "description": string;
+    "icon": string;
+}
+
 export interface ModelRequestView {
     "id": string;
     "status": string;

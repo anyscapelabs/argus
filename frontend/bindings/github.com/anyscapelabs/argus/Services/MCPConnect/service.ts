@@ -9,6 +9,20 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 // @ts-ignore: Unused imports
 import * as Shared$0 from "../Shared/models.js";
 
+/**
+ * Pending lets the frontend restore the card after a remount or reload.
+ */
+export function Pending(agentID: string): $CancellablePromise<Shared$0.MCPConnectRequestView[] | null> {
+    return $Call.ByID(2472120113, agentID);
+}
+
+/**
+ * Register returns shown | pending | connected | unknown.
+ */
+export function Register(agentID: string, agentName: string, serverID: string): $CancellablePromise<string> {
+    return $Call.ByID(1379753735, agentID, agentName, serverID);
+}
+
 export function Respond(requestID: string, decision: string): $CancellablePromise<Shared$0.ActionResult> {
     return $Call.ByID(343225399, requestID, decision);
 }

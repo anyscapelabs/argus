@@ -10,10 +10,13 @@ const (
 	EventChatMessage         = "chat:message"
 	EventChatTyping          = "chat:typing"
 	EventChatRunFinished     = "chat:run_finished"
+	EventChatRunStarted      = "chat:run_started"
+	EventChatPhase           = "chat:phase"
 	EventPermissionRequested = "permission:requested"
 	EventPermissionResolved  = "permission:resolved"
 	EventMCPConnectRequested = "mcp:connect:requested"
 	EventMCPConnectResolved  = "mcp:connect:resolved"
+	EventMCPConnectStatus    = "mcp:connect:status"
 	EventActivity            = "agent:activity"
 )
 
