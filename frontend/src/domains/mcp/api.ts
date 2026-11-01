@@ -11,6 +11,8 @@ export type MCPConnectRequestView = {
   server_name: string
   description?: string
   icon?: string
+  /** Browser URL to open for OAuth / setup before confirming the connection. Empty = no browser step. */
+  auth_url?: string
 }
 
 export type MCPConnectDecisionView = {

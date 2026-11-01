@@ -1,3 +1,4 @@
+import { Browser } from '@wailsio/runtime'
 import type { MCPConnectRequestView } from '../../domains/mcp/api'
 
 type MCPConnectCardProps = {
@@ -7,6 +8,13 @@ type MCPConnectCardProps = {
 }
 
 export default function MCPConnectCard({ request, onConnect, onDeny }: MCPConnectCardProps) {
+  const handleConnect = () => {
+    if (request.auth_url) {
+      Browser.OpenURL(request.auth_url).catch(() => {})
+    }
+    onConnect()
+  }
+
   return (
     <div className="w-full max-w-sm min-h-10 p-2 rounded-xl border border-secondary bg-secondary flex items-center gap-3">
       <div className="h-10 w-10 rounded-lg border border-secondary overflow-hidden">
@@ -18,7 +26,7 @@ export default function MCPConnectCard({ request, onConnect, onDeny }: MCPConnec
       </div>
       <div className="flex items-center gap-2">
         <button onClick={onDeny} className="px-3 py-1 rounded-full text-sm font-medium text-secondary hover:text-primary cursor-pointer">Deny</button>
-        <button onClick={onConnect} className="px-3 py-1 rounded-full bg-accent text-black text-sm font-medium hover:bg-hover-accent cursor-pointer">Connect</button>
+        <button onClick={handleConnect} className="px-3 py-1 rounded-full bg-accent text-black text-sm font-medium hover:bg-hover-accent cursor-pointer">Connect</button>
       </div>
     </div>
   )
