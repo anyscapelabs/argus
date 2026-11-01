@@ -10,6 +10,7 @@ import (
 	servicecatalog "github.com/anyscapelabs/argus/Services/Catalog"
 	servicechat "github.com/anyscapelabs/argus/Services/Chat"
 	servicemcp "github.com/anyscapelabs/argus/Services/MCP"
+	servicemcpconnect "github.com/anyscapelabs/argus/Services/MCPConnect"
 	servicemodels "github.com/anyscapelabs/argus/Services/Models"
 	servicepermission "github.com/anyscapelabs/argus/Services/Permission"
 	serviceprovider "github.com/anyscapelabs/argus/Services/Provider"
@@ -45,7 +46,8 @@ func main() {
 	catalog := &servicecatalog.Service{Core: core}
 	permissions := &servicepermission.Service{Core: core}
 	mcp := &servicemcp.Service{Core: core}
-	chat := &servicechat.Service{Core: core, Permissions: permissions, MCP: mcp}
+	mcpConnect := &servicemcpconnect.Service{Core: core}
+	chat := &servicechat.Service{Core: core, Permissions: permissions, MCP: mcp, MCPConnect: mcpConnect}
 
 	app := application.New(application.Options{
 		Name:        "argus",
@@ -57,6 +59,7 @@ func main() {
 			application.NewService(catalog),
 			application.NewService(permissions),
 			application.NewService(mcp),
+			application.NewService(mcpConnect),
 			application.NewService(chat),
 		},
 		Assets: application.AssetOptions{
