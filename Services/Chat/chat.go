@@ -3,6 +3,7 @@ package Chat
 import (
 	"context"
 	"errors"
+	"log"
 	"strings"
 	"sync"
 
@@ -14,11 +15,14 @@ import (
 	"github.com/anyscapelabs/argus/Models"
 	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Router"
+	"github.com/anyscapelabs/argus/Services/Permission"
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
 
 type Service struct {
 	Core *Shared.Core
+	// Permissions is the permission gate every tool call must pass.
+	Permissions *Permission.Service
 
 	mu       sync.Mutex
 	cancels  map[string]context.CancelFunc
@@ -29,7 +33,19 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 	if err := s.Core.Bootstrap(ctx); err != nil {
 		return err
 	}
-	return s.Core.DB.SweepInterrupted()
+	if err := s.Core.DB.SweepInterrupted(); err != nil {
+		return err
+	}
+	// Remove user messages that never received an assistant reply (crashed
+	// or cancelled runs) so the chat never shows dangling questions.
+	removed, err := s.Core.DB.CleanUnrespondedAll()
+	if err != nil {
+		return err
+	}
+	if removed > 0 {
+		log.Printf("chat: cleaned %d unresponded messages at startup", removed)
+	}
+	return nil
 }
 
 func (s *Service) ServiceShutdown(ctx context.Context) error {

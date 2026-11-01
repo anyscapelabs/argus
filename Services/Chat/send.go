@@ -19,6 +19,20 @@ import (
 
 const defaultMaxOutputTokens = int64(4096)
 
+// maxToolRounds bounds the agent loop: model turn + tool execution pairs.
+const maxToolRounds = 12
+
+// toolCalls collects the completed tool_use blocks of a collected turn.
+func toolCalls(msg Protocol.Message) []Protocol.ToolCall {
+	var calls []Protocol.ToolCall
+	for _, b := range msg.Blocks {
+		if b.Type == Protocol.BlockToolUse && b.ToolCall != nil && b.ToolCall.Name != "" {
+			calls = append(calls, *b.ToolCall)
+		}
+	}
+	return calls
+}
+
 func (s *Service) Send(agentID, text string) Shared.SendResult {
 	log.Printf("Send called agent=%s", agentID)
 	if aerr := s.Core.Ready(); aerr != nil {
@@ -148,14 +162,20 @@ func (s *Service) Send(agentID, text string) Shared.SendResult {
 	}
 
 	// context through userSeq (the user message was inserted above)
-	history, sysPrompt := s.buildHistory(agentID, userSeq, profile.SystemPrompt)
+	history := s.buildHistory(agentID, userSeq)
 
 	req := Protocol.Request{
 		Model:           modelID,
-		System:          sysPrompt,
 		Messages:        history,
 		MaxOutputTokens: defaultMaxOutputTokens,
 	}
+	// Terminal tool calling, gated by the capability check inside
+	// attachTools; the system prompt tells the model about it only when the
+	// tool is actually attached.
+	withTools := s.attachTools(&req, &target)
+	sysPrompt := systemPromptFor(profile, withTools)
+	req.System = sysPrompt
+
 	// Keep the default output budget unless the model's own limit is tighter,
 	// so reasoning models aren't handed a field they reject.
 	clampToModel(s, profile.ModelRef, providerID, modelID, &target, &req.MaxOutputTokens)
@@ -204,20 +224,59 @@ func (s *Service) Send(agentID, text string) Shared.SendResult {
 func (s *Service) runTurn(runID string, ctx context.Context, cancel context.CancelFunc, agentID, assistantID, modelRef string, req Protocol.Request, target *Protocol.Target, profile Storage.AgentProfile, mr Storage.ModelRequest) {
 	defer cancel()
 	trace := &Router.Trace{}
-	events := []Protocol.Event{}
-	for ev := range Router.New().Run(ctx, &req, target, trace) {
-		s.Core.EmitEvent(Shared.EventModelStream, Shared.StreamEvent{RunID: runID, AgentID: agentID, MessageID: assistantID, Event: ev})
-		events = append(events, ev)
-	}
+	total := Protocol.Usage{}
+	var result Protocol.Result
+	reachedEnd := false
 
-	seq := func(yield func(Protocol.Event) bool) {
-		for _, ev := range events {
-			if !yield(ev) {
-				return
+	// Agent loop: stream a model turn, collect it, and while the model keeps
+	// asking for tools, execute them (through the permission gate) and feed
+	// the results back as a new model turn. The final turn without tool calls
+	// is the one persisted as the assistant message.
+	for round := 0; round < maxToolRounds && !reachedEnd; round++ {
+		events := []Protocol.Event{}
+		for ev := range Router.New().Run(ctx, &req, target, trace) {
+			s.Core.EmitEvent(Shared.EventModelStream, Shared.StreamEvent{RunID: runID, AgentID: agentID, MessageID: assistantID, Event: ev})
+			events = append(events, ev)
+		}
+
+		seq := func(yield func(Protocol.Event) bool) {
+			for _, ev := range events {
+				if !yield(ev) {
+					return
+				}
 			}
 		}
+		result = Protocol.Collect(seq)
+		total.Merge(&result.Usage)
+
+		if ctx.Err() != nil || result.Error != nil {
+			reachedEnd = true
+			break
+		}
+
+		calls := toolCalls(result.Message)
+		if len(calls) == 0 {
+			reachedEnd = true
+			break
+		}
+
+		// Replaying the assistant turn, then appending one user message
+		// carrying every tool_result block, is the shape all three adapter
+		// families translate back into their own wire format.
+		req.Messages = append(req.Messages, result.Message)
+		roundResults := make([]Protocol.Block, 0, len(calls))
+		for _, call := range calls {
+			roundResults = append(roundResults, s.runTool(ctx, agentID, profile.AgentName, call))
+		}
+		req.Messages = append(req.Messages, Protocol.Message{Role: Protocol.RoleUser, Blocks: roundResults})
 	}
-	result := Protocol.Collect(seq)
+	if !reachedEnd {
+		// Tool round budget exhausted: tell the model to stop trying.
+		result.Message.Blocks = append(result.Message.Blocks, Protocol.Block{
+			Type: Protocol.BlockText,
+			Text: "Tool round limit reached; the command was not executed.",
+		})
+	}
 
 	// The message table and the model_requests table have different
 	// constraint sets: messages use 'complete' for a finished reply while
@@ -269,7 +328,7 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	finalMR.CompletedAt = nowUnixMs()
 
 	// usage
-	usage := result.Usage
+	usage := total
 	hasUsage := usage.InputTokens != 0 || usage.OutputTokens != 0 || usage.CacheReadTokens != 0 || usage.CacheWriteTokens != 0 || usage.ReasoningTokens != 0
 	if hasUsage {
 		finalMR.UsageSource = "provider"
@@ -334,10 +393,10 @@ func clampToModel(s *Service, modelRef, providerID, modelID string, target *Prot
 	*maxOut = scratch.MaxOutputTokens
 }
 
-func (s *Service) buildHistory(agentID string, throughSeq int, systemPrompt string) ([]Protocol.Message, string) {
+func (s *Service) buildHistory(agentID string, throughSeq int) []Protocol.Message {
 	msgs, err := s.Core.DB.ListMessages(agentID, 0, 1000)
 	if err != nil {
-		return nil, systemPrompt
+		return nil
 	}
 	var out []Protocol.Message
 	for _, m := range msgs {
@@ -366,7 +425,7 @@ func (s *Service) buildHistory(agentID string, throughSeq int, systemPrompt stri
 	if len(out) > 40 {
 		out = out[len(out)-40:]
 	}
-	return out, systemPrompt
+	return out
 }
 
 func (s *Service) ensureAgent(agentID string) (Storage.AgentProfile, error) {
