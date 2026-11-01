@@ -14,7 +14,6 @@ import UserBubble from '../components/chat/UserBubble'
 import ThinkingIndicator from '../components/chat/ThinkingIndicator'
 import { StatusLine } from '../components/chat/statusLine'
 import PermissionCard, { type Permission } from '../components/chat/PermissionCard'
-import MCPConnectionCard from '../components/mcp/MCPConnectionCard'
 import Notifier from '../components/chat/Notifier'
 import RightPanel from '../components/layout/RightPanel'
 
@@ -193,7 +192,6 @@ export default function Chat({
                   {String((send.error as any)?.message ?? send.error)}
                 </div>
               )}
-              <MCPConnectionCard />
               {messages.map((m: any) =>
                 m.role === 'user' ? (
                   <UserBubble key={m.id} content={m.text} />
