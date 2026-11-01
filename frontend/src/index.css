@@ -232,8 +232,8 @@
   white-space: pre;
 }
 
-.markdown thead {
-  background-color: var(--color-tertiary);
+.markdown table {
+  background-color: var(--color-secondary);
 }
 
 .markdown thead tr th {
