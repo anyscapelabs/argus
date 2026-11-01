@@ -37,10 +37,10 @@ func Load(path string) (*Catalog, error) {
 
 // LoadFromDefault loads from the default locations.
 func LoadFromDefault() (*Catalog, error) {
-	// Try relative to cwd
 	candidates := []string{
-		"frontend/public/integrations/catalog.json",
+		"Services/Integrations/data/catalog.json",
 		"integrations/catalog.json",
+		"data/integrations/catalog.json",
 	}
 	for _, c := range candidates {
 		if _, err := os.Stat(c); err == nil {
