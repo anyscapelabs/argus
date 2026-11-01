@@ -15,18 +15,23 @@ func (s *Service) GetChat(agentID string, beforeSeq, limit int) Shared.GetChatRe
 	if agentID == "" {
 		agentID = "default"
 	}
+	agentName := agentDisplayName(s, agentID)
 	msgs, err := s.Core.DB.ListMessages(agentID, beforeSeq, limit)
 	if err != nil {
 		return Shared.GetChatResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
 	out := make([]Shared.ChatMessage, 0, len(msgs))
 	for _, m := range msgs {
+		text := m.Text
+		if m.Role == "assistant" && text != "" {
+			text = StripLeadingTitle(text, agentName, "display")
+		}
 		out = append(out, Shared.ChatMessage{
 			ID:           m.ID,
 			AgentID:      m.AgentID,
 			Seq:          m.Seq,
 			Role:         m.Role,
-			Text:         m.Text,
+			Text:         text,
 			Status:       m.Status,
 			ErrorMessage: m.ErrorMessage,
 			StopReason:   m.StopReason,
@@ -37,6 +42,15 @@ func (s *Service) GetChat(agentID string, beforeSeq, limit int) Shared.GetChatRe
 		})
 	}
 	return Shared.GetChatResult{Messages: out}
+}
+
+// agentDisplayName resolves the current name of an agent, falling back to
+// the default when the profile is missing or unnamed.
+func agentDisplayName(s *Service, agentID string) string {
+	if profile, found, err := s.Core.DB.GetAgentProfile(agentID); err == nil && found && strings.TrimSpace(profile.AgentName) != "" {
+		return strings.TrimSpace(profile.AgentName)
+	}
+	return defaultAgentName
 }
 
 func (s *Service) Usage(agentID string) Shared.UsageResult {

@@ -63,6 +63,7 @@ export default function Chat({
   const streamText = useRef(new Map<string, string>())
   const streamThinking = useRef(new Map<string, string>())
   const [activity, setActivity] = useState<string | null>(null)
+  const [runActive, setRunActive] = useState(false)
 
   // The thinking stream arrives as one growing block; show its newest
   // sentence as the live status the user sees while the answer streams.
@@ -121,6 +122,7 @@ export default function Chat({
           streamText.current.delete(event.data.message_id)
           streamThinking.current.delete(event.data.message_id)
         }
+        setRunActive(true)
         qc.invalidateQueries({ queryKey: messagesKey })
         qc.invalidateQueries({ queryKey: usageKey })
       }),
@@ -128,6 +130,7 @@ export default function Chat({
         streamText.current.clear()
         streamThinking.current.clear()
         setActivity(null)
+        setRunActive(false)
         qc.invalidateQueries({ queryKey: messagesKey })
         qc.invalidateQueries({ queryKey: usageKey })
       }),
@@ -135,8 +138,22 @@ export default function Chat({
         const payload = (event?.data ?? event) as StreamPayload | undefined
         if (!payload?.message_id || !payload?.event) return
         const ev = payload.event
+        if (ev.type === 'message_start') {
+          const muid = payload.message_id
+          streamText.current.delete(muid)
+          streamThinking.current.delete(muid)
+          qc.setQueryData<unknown[] | undefined>(messagesKey, (old) => {
+            if (!old) return old
+            const idx = old.findIndex((m: any) => m.id === muid)
+            if (idx < 0) return old
+            const next = old.slice()
+            next[idx] = { ...(next[idx] as Record<string, unknown>), text: '' }
+            return next
+          })
+          return
+        }
         if (ev.type === 'block_delta' && ev.delta?.kind === 'text' && ev.delta.text) {
-          setActivity(null)
+          setActivity((cur) => (cur && cur.startsWith('Running ') ? cur : null))
           const muid = payload.message_id
           const accumulated = (streamText.current.get(muid) ?? '') + ev.delta.text
           streamText.current.set(muid, accumulated)
@@ -178,7 +195,7 @@ export default function Chat({
     })
   }, [pendingSend])
 
-  const streamingWithNoText = messages.some(
+  const streamingWithNoText = runActive && messages.some(
     (m: any) => m.status === 'streaming' && !m.text,
   )
 
@@ -244,7 +261,7 @@ export default function Chat({
               )}
               {persistedNotice && <Notifier text={persistedNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary"><FiTerminal size={9} className="text-secondary" /></div>} />}
               {errorNotice && <Notifier text={errorNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400"><FiTerminal size={9} className="text-red-400" /></div>} />}
-              {streamingWithNoText && <ThinkingIndicator text={activity} />}
+              {(streamingWithNoText || (runActive && activity)) && <ThinkingIndicator text={activity || 'Thinking…'} />}
             </div>
           </div>
         </div>

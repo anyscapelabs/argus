@@ -3,9 +3,11 @@ package Terminal
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -47,6 +49,19 @@ func Run(ctx context.Context, command string, timeoutSeconds int) Result {
 		cmd = exec.CommandContext(runCtx, "cmd", "/C", command)
 	} else {
 		cmd = exec.CommandContext(runCtx, "sh", "-c", command)
+		// Own process group so a timeout kills the whole tree (for example
+		// "sleep" and its grandchildren) instead of waiting for them to exit.
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		cmd.Cancel = func() error {
+			if cmd.Process != nil {
+				sigErr := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+				if sigErr == syscall.ESRCH {
+					return os.ErrProcessDone
+				}
+				return sigErr
+			}
+			return os.ErrProcessDone
+		}
 	}
 
 	start := time.Now()

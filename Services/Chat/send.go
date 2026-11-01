@@ -232,11 +232,19 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	// asking for tools, execute them (through the permission gate) and feed
 	// the results back as a new model turn. The final turn without tool calls
 	// is the one persisted as the assistant message.
+	// The displayed stream passes through the title filter; Collect keeps the
+	// raw events so the stored record stays exactly what the model produced.
+	filter := NewTitleFilter(profile.AgentName, modelRef+" "+string(target.Family))
 	for round := 0; round < maxToolRounds && !reachedEnd; round++ {
 		events := []Protocol.Event{}
 		for ev := range Router.New().Run(ctx, &req, target, trace) {
-			s.Core.EmitEvent(Shared.EventModelStream, Shared.StreamEvent{RunID: runID, AgentID: agentID, MessageID: assistantID, Event: ev})
 			events = append(events, ev)
+			for _, shown := range filter.Emit(ev) {
+				s.Core.EmitEvent(Shared.EventModelStream, Shared.StreamEvent{RunID: runID, AgentID: agentID, MessageID: assistantID, Event: shown})
+			}
+		}
+		for _, shown := range filter.End() {
+			s.Core.EmitEvent(Shared.EventModelStream, Shared.StreamEvent{RunID: runID, AgentID: agentID, MessageID: assistantID, Event: shown})
 		}
 
 		seq := func(yield func(Protocol.Event) bool) {
@@ -398,6 +406,7 @@ func (s *Service) buildHistory(agentID string, throughSeq int) []Protocol.Messag
 	if err != nil {
 		return nil
 	}
+	agentName := agentDisplayName(s, agentID)
 	var out []Protocol.Message
 	for _, m := range msgs {
 		if m.Seq > throughSeq {
@@ -406,15 +415,44 @@ func (s *Service) buildHistory(agentID string, throughSeq int) []Protocol.Messag
 		if m.Status != "complete" {
 			continue
 		}
+		if m.Role != "assistant" {
+			// User rows replay exactly what was stored.
+			var textBlocks []Protocol.Block
+			for _, b := range m.Blocks() {
+				if b.Type == Protocol.BlockText {
+					textBlocks = append(textBlocks, Protocol.Block{Type: Protocol.BlockText, Text: b.Text})
+				}
+			}
+			if len(textBlocks) == 0 && m.Text != "" {
+				textBlocks = []Protocol.Block{{Type: Protocol.BlockText, Text: m.Text}}
+			}
+			if len(textBlocks) == 0 {
+				continue
+			}
+			out = append(out, Protocol.Message{Role: Protocol.Role(m.Role), Blocks: textBlocks})
+			continue
+		}
 		blocks := m.Blocks()
 		var textBlocks []Protocol.Block
+		firstText := true
 		for _, b := range blocks {
-			if b.Type == Protocol.BlockText {
-				textBlocks = append(textBlocks, Protocol.Block{Type: Protocol.BlockText, Text: b.Text})
+			if b.Type != Protocol.BlockText {
+				continue
 			}
+			text := b.Text
+			if firstText {
+				// Cleaned history stops old titled replies from priming
+				// the model into repeating the pattern.
+				text = StripLeadingTitle(text, agentName, "history")
+				firstText = false
+			}
+			if text == "" && m.Text != "" {
+				text = m.Text
+			}
+			textBlocks = append(textBlocks, Protocol.Block{Type: Protocol.BlockText, Text: text})
 		}
 		if len(textBlocks) == 0 && m.Text != "" {
-			textBlocks = []Protocol.Block{{Type: Protocol.BlockText, Text: m.Text}}
+			textBlocks = []Protocol.Block{{Type: Protocol.BlockText, Text: StripLeadingTitle(m.Text, agentName, "history")}}
 		}
 		if len(textBlocks) == 0 {
 			continue
