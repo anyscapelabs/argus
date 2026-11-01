@@ -1,6 +1,7 @@
 package MCP
 
 import (
+	"bufio"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -138,7 +139,33 @@ func (s *Service) ListTools() []Tool {
 	return m.ListTools()
 }
 
+func loadDotEnv() {
+	for _, p := range []string{".env", ".env.local", "config/.env", "../.env"} {
+		f, err := os.Open(p)
+		if err != nil {
+			continue
+		}
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			if i := strings.Index(line, "="); i > 0 {
+				k := strings.TrimSpace(line[:i])
+				v := strings.TrimSpace(line[i+1:])
+				v = strings.Trim(v, `"'`)
+				if os.Getenv(k) == "" {
+					os.Setenv(k, v)
+				}
+			}
+		}
+		f.Close()
+	}
+}
+
 func readGoogleCreds() (string, string) {
+	loadDotEnv()
 	if id := os.Getenv("ARGUS_GOOGLE_CLIENT_ID"); id != "" {
 		return id, os.Getenv("ARGUS_GOOGLE_CLIENT_SECRET")
 	}
@@ -151,12 +178,20 @@ func readGoogleCreds() (string, string) {
 		"google.json",
 		"Services/MCP/google.json",
 		".config/argus/google.json",
+		"$HOME/.config/argus/google.json",
 	} {
+		if p == "$HOME/.config/argus/google.json" {
+			if home, err := os.UserHomeDir(); err == nil {
+				p = home + "/.config/argus/google.json"
+			} else {
+				continue
+			}
+		}
 		if b, err := os.ReadFile(p); err == nil {
 			var m map[string]string
 			if json.Unmarshal(b, &m) == nil {
-				id := cmp.Or(m["client_id"], m["clientId"], m["ARGUS_GOOGLE_CLIENT_ID"])
-				sec := cmp.Or(m["client_secret"], m["clientSecret"], m["ARGUS_GOOGLE_CLIENT_SECRET"])
+				id := cmp.Or(m["client_id"], m["clientId"], m["ARGUS_GOOGLE_CLIENT_ID"], m["google_client_id"])
+				sec := cmp.Or(m["client_secret"], m["clientSecret"], m["ARGUS_GOOGLE_CLIENT_SECRET"], m["google_client_secret"])
 				if id != "" {
 					return id, sec
 				}
