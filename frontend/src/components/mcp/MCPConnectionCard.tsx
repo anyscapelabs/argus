@@ -6,7 +6,7 @@ export default function MCPConnectionCard() {
       </div>
       <div className="flex flex-col">
         <span className="text-sm font-medium text-primary">Gmail</span>
-        <span className="text-xs text-secondary">MCP</span>
+        <span className="text-xs text-secondary">MCP • Send, read, and manage emails</span>
       </div>
     </div>
   )
