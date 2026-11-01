@@ -8,7 +8,7 @@ export default function MCPConnectionCard() {
         <span className="text-sm font-medium text-primary">Gmail</span>
         <span className="text-xs text-secondary">Let Argus send, read, and manage emails</span>
       </div>
-      <button className="px-3 py-1 rounded-lg bg-accent text-black text-sm font-medium">Connect</button>
+      <button className="px-3 py-1 rounded-full bg-accent text-black text-sm font-medium hover:bg-hover-accent">Connect</button>
     </div>
   )
 }
