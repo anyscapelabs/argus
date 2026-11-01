@@ -101,8 +101,13 @@ export default function Chat({
         setMcpConnect(payload)
       }),
       Events.On('mcp:connect:resolved', (event: any) => {
-        const payload = (event?.data ?? event) as { request_id?: string } | undefined
+        const payload = (event?.data ?? event) as { request_id?: string; decision?: string; server_name?: string } | undefined
         setMcpConnect((cur) => (cur && payload?.request_id !== cur.request_id ? null : cur))
+        if (payload?.decision === 'connect') {
+          const name = payload?.server_name || 'Integration'
+          setErrorNotice(`${name} connected`)
+          setTimeout(() => setErrorNotice(null), 4000)
+        }
       }),
       Events.On('agent:activity', (event: any) => {
         const payload = (event?.data ?? event) as
