@@ -46,7 +46,7 @@ func main() {
 	catalog := &servicecatalog.Service{Core: core}
 	permissions := &servicepermission.Service{Core: core}
 	mcp := &servicemcp.Service{Core: core}
-	mcpConnect := &servicemcpconnect.Service{Core: core}
+	mcpConnect := &servicemcpconnect.Service{Core: core, MCP: mcp}
 	chat := &servicechat.Service{Core: core, Permissions: permissions, MCP: mcp, MCPConnect: mcpConnect}
 
 	app := application.New(application.Options{
