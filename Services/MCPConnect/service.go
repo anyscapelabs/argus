@@ -60,11 +60,12 @@ func (s *Service) Respond(requestID, decision string) Shared.ActionResult {
 	if !ok {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeNotFound, "That request is no longer active")}
 	}
-	s.Core.EmitEvent(Shared.EventMCPConnectResolved, Shared.MCPConnectDecisionView{
-		RequestID: requestID,
-		AgentID:   w.AgentID,
-		Decision:  decision,
-		ServerID:  w.ServerID,
+	s.Core.EmitEvent(Shared.EventMCPConnectResolved, map[string]any{
+		"request_id":  requestID,
+		"agent_id":    w.AgentID,
+		"decision":    decision,
+		"server_id":   w.ServerID,
+		"server_name": w.ServerName,
 	})
 	w.ch <- decision
 	return Shared.ActionResult{Ok: true}
