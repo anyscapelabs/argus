@@ -12,7 +12,7 @@ import ChatInput from '../components/chat/ChatInput'
 import AgentBubble from '../components/chat/AgentBubble'
 import UserBubble from '../components/chat/UserBubble'
 import ThinkingIndicator from '../components/chat/ThinkingIndicator'
-import { StatusLine, latestSentence } from '../components/chat/statusLine'
+import { StatusLine } from '../components/chat/statusLine'
 import PermissionCard, { type Permission } from '../components/chat/PermissionCard'
 import Notifier from '../components/chat/Notifier'
 import RightPanel from '../components/layout/RightPanel'
@@ -31,18 +31,6 @@ const usageKey = ['chat', 'default', 'usage']
 const noticesKey = ['chat', 'default', 'notices']
 
 type PendingSend = { id: number; text: string; modelRef: string | null }
-
-type StreamPayload = {
-  run_id?: string
-  agent_id?: string
-  message_id?: string
-  event?: {
-    type?: string
-    index?: number
-    delta?: { kind?: string; text?: string; signature?: string }
-    error?: { code?: string; message?: string }
-  }
-}
 
 export default function Chat({
   pendingSend,
