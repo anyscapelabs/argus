@@ -39,15 +39,6 @@ export function useSendMessage(agentID: string) {
           status: 'complete',
           created_at: stamp,
         },
-        {
-          id: `pending-assistant-${stamp}`,
-          agent_id: agentID,
-          seq: 0,
-          role: 'assistant',
-          text: '',
-          status: 'streaming',
-          created_at: stamp,
-        },
       ])
       return { previous }
     },

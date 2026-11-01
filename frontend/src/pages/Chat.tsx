@@ -61,11 +61,10 @@ export default function Chat({
   const [errorNotice, setErrorNotice] = useState<string | null>(null)
   const tag = useMemo(() => timeTag(), [])
   const pendingConsumedId = useRef<number | null>(null)
-  const streamText = useRef(new Map<string, string>())
-  const streamThinking = useRef(new Map<string, string>())
   // What the indicator shows, paced by StatusLine so it stays readable.
   const [status, setStatus] = useState<string | null>(null)
   const [runActive, setRunActive] = useState(false)
+  const statusLineRef = useRef<StatusLine | null>(null)
 
   const decide = (decision: PermissionDecision) => {
     if (!permission) return
@@ -80,6 +79,7 @@ export default function Chat({
 
   useEffect(() => {
     const line = new StatusLine(setStatus)
+    statusLineRef.current = line
     const unsubs = [
       Events.On('permission:requested', (event: any) => {
         const payload = (event?.data ?? event) as PermissionRequestView
@@ -111,88 +111,52 @@ export default function Chat({
         }
       }),
       Events.On('chat:message', (event: any) => {
-        if (event?.data?.message_id) {
-          streamText.current.delete(event.data.message_id)
-          streamThinking.current.delete(event.data.message_id)
-        }
         setRunActive(true)
         line.set('Thinking…', 'label')
         qc.invalidateQueries({ queryKey: messagesKey })
         qc.invalidateQueries({ queryKey: usageKey })
       }),
       Events.On('chat:run_finished', () => {
-        streamText.current.clear()
-        streamThinking.current.clear()
         line.reset()
         setRunActive(false)
         qc.invalidateQueries({ queryKey: messagesKey })
         qc.invalidateQueries({ queryKey: usageKey })
       }),
-      Events.On('model:stream', (event: any) => {
-        const payload = (event?.data ?? event) as StreamPayload | undefined
-        if (!payload?.message_id || !payload?.event) return
-        const ev = payload.event
-        if (ev.type === 'message_start') {
-          const muid = payload.message_id
-          streamText.current.delete(muid)
-          streamThinking.current.delete(muid)
-          line.set('Thinking…', 'label')
-          qc.setQueryData<unknown[] | undefined>(messagesKey, (old) => {
-            if (!old) return old
-            const idx = old.findIndex((m: any) => m.id === muid)
-            if (idx < 0) return old
-            const next = old.slice()
-            next[idx] = { ...(next[idx] as Record<string, unknown>), text: '' }
-            return next
-          })
-          return
-        }
-        if (ev.type === 'block_delta' && ev.delta?.kind === 'text' && ev.delta.text) {
-          line.endThinking()
-          const muid = payload.message_id
-          const accumulated = (streamText.current.get(muid) ?? '') + ev.delta.text
-          streamText.current.set(muid, accumulated)
-          qc.setQueryData<unknown[] | undefined>(messagesKey, (old) => {
-            if (!old) return old
-            const idx = old.findIndex((m: any) => m.id === muid)
-            if (idx < 0) return old
-            const next = old.slice()
-            next[idx] = { ...(next[idx] as Record<string, unknown>), text: accumulated }
-            return next
-          })
-        }
-        if (ev.type === 'block_delta' && ev.delta?.kind === 'thinking' && ev.delta.text) {
-          const muid = payload.message_id
-          const acc = (streamThinking.current.get(muid) ?? '') + ev.delta.text
-          streamThinking.current.set(muid, acc)
-          if (/[.!?\n]/.test(ev.delta.text)) {
-            const sentence = latestSentence(acc)
-            if (sentence) line.set(sentence, 'thought')
-          }
-        }
-      }),
     ]
     return () => {
       unsubs.forEach((u) => u && u())
       line.dispose()
+      if (statusLineRef.current === line) {
+        statusLineRef.current = null
+      }
     }
   }, [qc])
 
   const handleSend = (text: string, _modelRef: string | null) => {
-    if (send.isPending) return
+    if (send.isPending || runActive) return
+    setRunActive(true)
+    statusLineRef.current?.set('Thinking…', 'label')
     send.mutate(text, {
-      onError: (err: any) => console.error('send failed', err),
+      onError: (err: any) => {
+        console.error('send failed', err)
+        setRunActive(false)
+      },
     })
   }
 
   useEffect(() => {
     if (!pendingSend?.text) return
     if (pendingConsumedId.current === pendingSend.id) return
-    if (send.isPending) return
+    if (send.isPending || runActive) return
     pendingConsumedId.current = pendingSend.id
     onPendingConsumed?.()
+    setRunActive(true)
+    statusLineRef.current?.set('Thinking…', 'label')
     send.mutate(pendingSend.text, {
-      onError: (err: any) => console.error('send failed', err),
+      onError: (err: any) => {
+        console.error('send failed', err)
+        setRunActive(false)
+      },
     })
   }, [pendingSend])
 
@@ -243,7 +207,7 @@ export default function Chat({
               {messages.map((m: any) =>
                 m.role === 'user' ? (
                   <UserBubble key={m.id} content={m.text} />
-                ) : m.status === 'streaming' && !m.text ? null : (
+                ) : m.status === 'streaming' ? null : (
                   <AgentBubble key={m.id} content={m.text} status={m.status} error={m.error_message} />
                 ),
               )}

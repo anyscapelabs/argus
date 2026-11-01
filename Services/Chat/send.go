@@ -228,33 +228,10 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	var result Protocol.Result
 	reachedEnd := false
 
-	// Agent loop: stream a model turn, collect it, and while the model keeps
-	// asking for tools, execute them (through the permission gate) and feed
-	// the results back as a new model turn. The final turn without tool calls
-	// is the one persisted as the assistant message.
-	// The displayed stream passes through the title filter; Collect keeps the
-	// raw events so the stored record stays exactly what the model produced.
-	filter := NewTitleFilter(profile.AgentName, modelRef+" "+string(target.Family))
+	// Agent loop: run model turns and execute tools until the model stops
+	// requesting tools. The final turn without tool calls is persisted.
 	for round := 0; round < maxToolRounds && !reachedEnd; round++ {
-		events := []Protocol.Event{}
-		for ev := range Router.New().Run(ctx, &req, target, trace) {
-			events = append(events, ev)
-			for _, shown := range filter.Emit(ev) {
-				s.Core.EmitEvent(Shared.EventModelStream, Shared.StreamEvent{RunID: runID, AgentID: agentID, MessageID: assistantID, Event: shown})
-			}
-		}
-		for _, shown := range filter.End() {
-			s.Core.EmitEvent(Shared.EventModelStream, Shared.StreamEvent{RunID: runID, AgentID: agentID, MessageID: assistantID, Event: shown})
-		}
-
-		seq := func(yield func(Protocol.Event) bool) {
-			for _, ev := range events {
-				if !yield(ev) {
-					return
-				}
-			}
-		}
-		result = Protocol.Collect(seq)
+		result = Protocol.Collect(Router.New().Run(ctx, &req, target, trace))
 		total.Merge(&result.Usage)
 
 		if ctx.Err() != nil || result.Error != nil {
