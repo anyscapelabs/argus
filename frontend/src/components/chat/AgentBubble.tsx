@@ -28,9 +28,17 @@ function linkify(text: string): string {
   out = out.replace(/`[^`\n]+`/g, keep)
   out = out.replace(/!\[[^\]]*\]\([^)]*\)/g, keep)
   out = out.replace(/\[[^\]]+\]\([^)]+\)/g, keep)
-  out = out.replace(/(^|[\s>])(https?:\/\/[^\s<]+)/g, (m, pre: string, url: string) => {
+  out = out.replace(/(^|[\s(>])(https?:\/\/[^\s<]+)/g, (m, pre: string, url: string, offset: number, string: string) => {
     const clean = url.replace(/[.,;:!?'"]+$/, '')
-    return clean ? `${pre}<${clean}>` : m
+    if (!clean) return m
+    const after = string.slice(offset + m.length)
+    if (after === '') {
+      return `${pre}<${clean}>`
+    }
+    if (/^[\s)\],;.!?\n\r]/.test(after)) {
+      return `${pre}<${clean}>`
+    }
+    return m
   })
   return out.replace(placeholder(), (_m, i: string) => resolve(stash[Number(i)]))
 }
