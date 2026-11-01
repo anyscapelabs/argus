@@ -237,7 +237,7 @@
 }
 
 .markdown thead tr th {
-  background-color: #1f1f1f;
+  background-color: var(--color-hover-primary);
 }
 
 .markdown thead tr:first-child th:first-child {
