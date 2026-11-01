@@ -4,6 +4,7 @@ import { Events } from '@wailsio/runtime'
 import { useAgentProfile } from '../domains/models/hooks'
 import { useChatMessages, useSendMessage } from '../domains/chat/hooks'
 import { respondPermission, type PermissionRequestView, type PermissionDecision } from '../domains/permission/api'
+import { respondMCPConnect, type MCPConnectRequestView } from '../domains/mcp/api'
 import { useLatestNoticeText } from '../domains/permission/hooks'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiChevronRight, FiTerminal } from 'react-icons/fi'
@@ -14,6 +15,7 @@ import UserBubble from '../components/chat/UserBubble'
 import ThinkingIndicator from '../components/chat/ThinkingIndicator'
 import { StatusLine } from '../components/chat/statusLine'
 import PermissionCard, { type Permission } from '../components/chat/PermissionCard'
+import MCPConnectCard from '../components/mcp/MCPConnectCard'
 import Notifier from '../components/chat/Notifier'
 import RightPanel from '../components/layout/RightPanel'
 
@@ -41,6 +43,7 @@ export default function Chat({
 }) {
   const [rightOpen, setRightOpen] = useState(false)
   const [permission, setPermission] = useState<Permission | null>(null)
+  const [mcpConnect, setMcpConnect] = useState<MCPConnectRequestView | null>(null)
   const { data: agentProfile } = useAgentProfile('default')
   const qc = useQueryClient()
   const { data: messages = [], error: messagesError, isLoading } = useChatMessages('default')
@@ -65,6 +68,17 @@ export default function Chat({
     })
   }
 
+  const decideMCP = (decision: 'connect' | 'deny') => {
+    if (!mcpConnect) return
+    const requestID = mcpConnect.request_id
+    setMcpConnect(null)
+    respondMCPConnect(requestID, decision).catch((err) => {
+      console.error('mcp connect respond failed', err)
+      setErrorNotice('Could not save that decision, try again')
+      setTimeout(() => setErrorNotice(null), 6000)
+    })
+  }
+
   useEffect(() => {
     const line = new StatusLine(setStatus)
     statusLineRef.current = line
@@ -80,6 +94,15 @@ export default function Chat({
         // The click that produced this decision already showed a notifier;
         // only resolve the card when the decision arrived from elsewhere.
         setPermission((cur) => (cur && payload?.request_id !== cur.request_id ? null : cur))
+      }),
+      Events.On('mcp:connect:requested', (event: any) => {
+        const payload = (event?.data ?? event) as MCPConnectRequestView | undefined
+        if (!payload?.request_id) return
+        setMcpConnect(payload)
+      }),
+      Events.On('mcp:connect:resolved', (event: any) => {
+        const payload = (event?.data ?? event) as { request_id?: string } | undefined
+        setMcpConnect((cur) => (cur && payload?.request_id !== cur.request_id ? null : cur))
       }),
       Events.On('agent:activity', (event: any) => {
         const payload = (event?.data ?? event) as
@@ -208,6 +231,7 @@ export default function Chat({
                   onDeny={() => decide('deny')}
                 />
               )}
+              {mcpConnect && <MCPConnectCard request={mcpConnect} onConnect={() => decideMCP('connect')} onDeny={() => decideMCP('deny')} />}
               {persistedNotice && <Notifier text={persistedNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary"><FiTerminal size={9} className="text-secondary" /></div>} />}
               {errorNotice && <Notifier text={errorNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400"><FiTerminal size={9} className="text-red-400" /></div>} />}
               {runActive && status && <ThinkingIndicator text={status} />}
