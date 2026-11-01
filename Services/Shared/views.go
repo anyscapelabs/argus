@@ -252,6 +252,16 @@ type PermissionRequestView struct {
 	Command   string `json:"command"`
 }
 
+// ActivityView tells the frontend what the agent is live-doing
+// (for example running a terminal command) while no text streams.
+type ActivityView struct {
+	AgentID string `json:"agent_id"`
+	RunID   string `json:"run_id,omitempty"`
+	Kind    string `json:"kind"` // tool_started | tool_finished
+	Tool    string `json:"tool"`
+	Command string `json:"command,omitempty"`
+}
+
 type PermissionDecisionView struct {
 	RequestID string `json:"request_id"`
 	AgentID   string `json:"agent_id"`

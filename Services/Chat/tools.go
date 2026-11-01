@@ -9,6 +9,7 @@ import (
 	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Router"
 	"github.com/anyscapelabs/argus/Services/Permission"
+	"github.com/anyscapelabs/argus/Services/Shared"
 	"github.com/anyscapelabs/argus/Services/Terminal"
 )
 
@@ -57,7 +58,7 @@ func (s *Service) modelSupportsTools(target *Protocol.Target) bool {
 
 // runTool executes one tool_use block and returns the tool_result block the
 // model should see. Permission gating happens before anything executes.
-func (s *Service) runTool(ctx context.Context, agentID, agentName string, call Protocol.ToolCall) Protocol.Block {
+func (s *Service) runTool(ctx context.Context, runID, agentID, agentName string, call Protocol.ToolCall) Protocol.Block {
 	result := func(text string, isError bool) Protocol.Block {
 		return Protocol.Block{
 			Type:      Protocol.BlockToolResult,
@@ -66,6 +67,16 @@ func (s *Service) runTool(ctx context.Context, agentID, agentName string, call P
 			Text:      text,
 			IsError:   isError,
 		}
+	}
+	// activity emits a live status the chat shows while nothing else streams.
+	activity := func(kind, command string) {
+		s.Core.EmitEvent(Shared.EventActivity, Shared.ActivityView{
+			AgentID: agentID,
+			RunID:   runID,
+			Kind:    kind,
+			Tool:    call.Name,
+			Command: command,
+		})
 	}
 
 	if !call.Valid {
@@ -95,7 +106,9 @@ func (s *Service) runTool(ctx context.Context, agentID, agentName string, call P
 		return result("The user declined terminal access for this command. Do not retry it; continue without running commands.", true)
 	}
 
+	activity("tool_started", command)
 	res := Terminal.Run(ctx, command, input.TimeoutSeconds)
+	activity("tool_finished", command)
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("exit code: %d\n", res.ExitCode))
 	if res.DurationMs > 0 {

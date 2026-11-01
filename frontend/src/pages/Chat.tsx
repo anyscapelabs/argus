@@ -61,6 +61,23 @@ export default function Chat({
   const tag = useMemo(() => timeTag(), [])
   const pendingConsumedId = useRef<number | null>(null)
   const streamText = useRef(new Map<string, string>())
+  const streamThinking = useRef(new Map<string, string>())
+  const [activity, setActivity] = useState<string | null>(null)
+
+  // The thinking stream arrives as one growing block; show its newest
+  // sentence as the live status the user sees while the answer streams.
+  const thoughtStatus = (acc: string): string => {
+    const clean = acc.replace(/\s+/g, ' ').trim()
+    if (!clean) return 'Thinking…'
+    const sentences = clean.split(/(?<=[.!?])\s+/)
+    let last = sentences[sentences.length - 1] ?? clean
+    if (last.length > 90) {
+      last = last.slice(-90)
+      const cut = last.indexOf(' ')
+      if (cut > 0) last = last.slice(cut)
+    }
+    return last.length > 0 ? last + '…' : 'Thinking…'
+  }
 
   const decide = (decision: PermissionDecision) => {
     if (!permission) return
@@ -87,15 +104,30 @@ export default function Chat({
         // only resolve the card when the decision arrived from elsewhere.
         setPermission((cur) => (cur && payload?.request_id !== cur.request_id ? null : cur))
       }),
+      Events.On('agent:activity', (event: any) => {
+        const payload = (event?.data ?? event) as
+          | { kind?: string; command?: string; tool?: string }
+          | undefined
+        if (!payload?.kind) return
+        if (payload.kind === 'tool_started') {
+          const cmd = (payload.command ?? '').trim()
+          setActivity(cmd.length > 0 ? `Running ${cmd.length > 60 ? cmd.slice(0, 60) + '…' : cmd} in the terminal` : 'Running a command in the terminal')
+        } else {
+          setActivity(null)
+        }
+      }),
       Events.On('chat:message', (event: any) => {
         if (event?.data?.message_id) {
           streamText.current.delete(event.data.message_id)
+          streamThinking.current.delete(event.data.message_id)
         }
         qc.invalidateQueries({ queryKey: messagesKey })
         qc.invalidateQueries({ queryKey: usageKey })
       }),
       Events.On('chat:run_finished', () => {
         streamText.current.clear()
+        streamThinking.current.clear()
+        setActivity(null)
         qc.invalidateQueries({ queryKey: messagesKey })
         qc.invalidateQueries({ queryKey: usageKey })
       }),
@@ -104,6 +136,7 @@ export default function Chat({
         if (!payload?.message_id || !payload?.event) return
         const ev = payload.event
         if (ev.type === 'block_delta' && ev.delta?.kind === 'text' && ev.delta.text) {
+          setActivity(null)
           const muid = payload.message_id
           const accumulated = (streamText.current.get(muid) ?? '') + ev.delta.text
           streamText.current.set(muid, accumulated)
@@ -115,6 +148,12 @@ export default function Chat({
             next[idx] = { ...(next[idx] as Record<string, unknown>), text: accumulated }
             return next
           })
+        }
+        if (ev.type === 'block_delta' && ev.delta?.kind === 'thinking' && ev.delta.text) {
+          const muid = payload.message_id
+          const acc = (streamThinking.current.get(muid) ?? '') + ev.delta.text
+          streamThinking.current.set(muid, acc)
+          setActivity(thoughtStatus(acc))
         }
       }),
     ]
@@ -156,7 +195,7 @@ export default function Chat({
     const el = scrollRef.current
     if (!el || !pinnedRef.current) return
     el.scrollTop = el.scrollHeight
-  }, [messages, permission, persistedNotice, errorNotice, streamingWithNoText])
+  }, [messages, permission, persistedNotice, errorNotice, streamingWithNoText, activity])
 
   return (
     <div className="relative flex h-dvh flex-1 min-h-0 overflow-hidden">
@@ -205,7 +244,7 @@ export default function Chat({
               )}
               {persistedNotice && <Notifier text={persistedNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary"><FiTerminal size={9} className="text-secondary" /></div>} />}
               {errorNotice && <Notifier text={errorNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400"><FiTerminal size={9} className="text-red-400" /></div>} />}
-              {streamingWithNoText && <ThinkingIndicator />}
+              {streamingWithNoText && <ThinkingIndicator text={activity} />}
             </div>
           </div>
         </div>
