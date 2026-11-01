@@ -4,8 +4,6 @@ import { FiCheck, FiCopy } from 'react-icons/fi'
 export default function CodeBlock({ children }: { children?: ReactNode }) {
   const preRef = useRef<HTMLPreElement>(null)
   const [copied, setCopied] = useState(false)
-  const child = (Array.isArray(children) ? children[0] : children) as any
-  const lang = /language-([\w-]+)/.exec(child?.props?.className ?? '')?.[1]
   const copy = async () => {
     try {
       await navigator.clipboard.writeText((preRef.current?.innerText ?? '').replace(/\n$/, ''))
@@ -14,15 +12,16 @@ export default function CodeBlock({ children }: { children?: ReactNode }) {
     } catch {}
   }
   return (
-    <div className="my-2 overflow-hidden rounded-lg border border-secondary bg-black/40">
-      <div className="flex items-center justify-between border-b border-secondary px-3 py-1 text-xs text-secondary">
-        <span>{lang ?? 'text'}</span>
-        <button type="button" onClick={copy} className="flex cursor-pointer items-center gap-1 hover:text-primary">
-          {copied ? <FiCheck size={12} /> : <FiCopy size={12} />}
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      </div>
+    <div className="group relative my-2 overflow-hidden rounded-lg border border-secondary bg-black/40">
       <pre ref={preRef} className="select-text overflow-x-auto p-3 text-xs leading-5">{children}</pre>
+      <button
+        type="button"
+        onClick={copy}
+        className="absolute right-2 top-2 flex cursor-pointer items-center gap-1 rounded bg-secondary/80 px-1.5 py-0.5 text-xs text-secondary opacity-0 transition-opacity hover:text-primary group-hover:opacity-100"
+      >
+        {copied ? <FiCheck size={12} /> : <FiCopy size={12} />}
+        {copied ? 'Copied' : 'Copy'}
+      </button>
     </div>
   )
 }
