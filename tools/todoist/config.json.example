@@ -1,0 +1,11 @@
+{
+  "serverId": "todoist",
+  "name": "Todoist",
+  "type": "stdio",
+  "command": "npx",
+  "args": ["-y", "@abhiz123/todoist-mcp-server"],
+  "env": {
+    "TODOIST_API_TOKEN": ""
+  },
+  "enabled": false
+}
