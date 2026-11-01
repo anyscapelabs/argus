@@ -236,14 +236,16 @@
   background-color: var(--color-tertiary);
 }
 
+.markdown thead tr th {
+  background-color: var(--color-tertiary);
+}
+
 .markdown thead tr:first-child th:first-child {
   border-top-left-radius: 1rem;
-  background-color: var(--color-tertiary);
 }
 
 .markdown thead tr:first-child th:last-child {
   border-top-right-radius: 1rem;
-  background-color: var(--color-tertiary);
 }
 
 .markdown th {
