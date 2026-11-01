@@ -17,10 +17,13 @@ const (
 )
 
 type waitingRequest struct {
-	ch        chan string
-	AgentID   string
-	AgentName string
-	ServerID  string
+	// ch is a size-1 buffer. Respond writes the decision here; nothing reads
+	// it in the non-blocking path — that's intentional. The write never blocks
+	// because only one decision ever arrives per request.
+	ch         chan string
+	AgentID    string
+	AgentName  string
+	ServerID   string
 	ServerName string
 }
 
@@ -67,11 +70,54 @@ func (s *Service) Respond(requestID, decision string) Shared.ActionResult {
 		"server_id":   w.ServerID,
 		"server_name": w.ServerName,
 	})
-	w.ch <- decision
+	// Non-blocking write — the buffered channel absorbs it. Nobody reads from
+	// it in the fire-and-forget path but the slot is always free because only
+	// one decision is ever written per request.
+	select {
+	case w.ch <- decision:
+	default:
+	}
 	return Shared.ActionResult{Ok: true}
 }
 
-func Request(ctx context.Context, svc *Service, agentID, agentName, serverID, serverName, description, icon string) (string, error) {
+// Register shows the connection card to the user without blocking the caller.
+// The agent loop can finish its turn immediately; when the user clicks Connect
+// or Deny the frontend calls Respond which fires mcp:connect:resolved.
+func Register(svc *Service, agentID, agentName, serverID, serverName, description, icon, authURL string) {
+	svc.mu.Lock()
+	// Only one pending request per agent at a time.
+	if _, ok := svc.byAgent[agentID]; ok {
+		svc.mu.Unlock()
+		return
+	}
+	rid, _ := uuid.NewV7()
+	id := rid.String()
+	w := &waitingRequest{
+		ch:         make(chan string, 1),
+		AgentID:    agentID,
+		AgentName:  agentName,
+		ServerID:   serverID,
+		ServerName: serverName,
+	}
+	svc.waiting[id] = w
+	svc.byAgent[agentID] = id
+	svc.mu.Unlock()
+
+	svc.Core.EmitEvent(Shared.EventMCPConnectRequested, Shared.MCPConnectRequestView{
+		RequestID:   id,
+		AgentID:     agentID,
+		AgentName:   agentName,
+		ServerID:    serverID,
+		ServerName:  serverName,
+		Description: description,
+		Icon:        icon,
+		AuthURL:     authURL,
+	})
+}
+
+// Request is the legacy blocking path (kept for completeness). Prefer Register
+// for the chat agent loop so the run closes immediately.
+func Request(ctx context.Context, svc *Service, agentID, agentName, serverID, serverName, description, icon, authURL string) (string, error) {
 	svc.mu.Lock()
 	if rid, ok := svc.byAgent[agentID]; ok {
 		w := svc.waiting[rid]
@@ -99,6 +145,7 @@ func Request(ctx context.Context, svc *Service, agentID, agentName, serverID, se
 		ServerName:  serverName,
 		Description: description,
 		Icon:        icon,
+		AuthURL:     authURL,
 	})
 	return await(ctx, svc, w, id, agentID)
 }
@@ -125,3 +172,4 @@ func await(ctx context.Context, svc *Service, w *waitingRequest, rid, agentID st
 		return Deny, nil
 	}
 }
+

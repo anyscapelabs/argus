@@ -282,13 +282,17 @@ type PermissionNoticeView struct {
 }
 
 type MCPConnectRequestView struct {
-	RequestID string `json:"request_id"`
-	AgentID   string `json:"agent_id"`
-	AgentName string `json:"agent_name"`
-	ServerID  string `json:"server_id"`
-	ServerName string `json:"server_name"`
+	RequestID   string `json:"request_id"`
+	AgentID     string `json:"agent_id"`
+	AgentName   string `json:"agent_name"`
+	ServerID    string `json:"server_id"`
+	ServerName  string `json:"server_name"`
 	Description string `json:"description"`
-	Icon      string `json:"icon"`
+	Icon        string `json:"icon"`
+	// AuthURL is an optional URL the frontend should open in the browser
+	// before confirming the connection (e.g. an OAuth consent screen).
+	// Empty means no browser step is required.
+	AuthURL string `json:"auth_url,omitempty"`
 }
 
 type MCPConnectDecisionView struct {

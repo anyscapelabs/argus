@@ -18,7 +18,6 @@ import PermissionCard, { type Permission } from '../components/chat/PermissionCa
 import MCPConnectCard from '../components/mcp/MCPConnectCard'
 import Notifier from '../components/chat/Notifier'
 import RightPanel from '../components/layout/RightPanel'
-
 function timeTag() {
   const now = new Date()
   const h = now.getHours()
@@ -102,7 +101,8 @@ export default function Chat({
       }),
       Events.On('mcp:connect:resolved', (event: any) => {
         const payload = (event?.data ?? event) as { request_id?: string; decision?: string; server_name?: string } | undefined
-        setMcpConnect((cur) => (cur && payload?.request_id !== cur.request_id ? null : cur))
+        // Dismiss the card when its request_id matches
+        setMcpConnect((cur) => (cur && payload?.request_id === cur.request_id ? null : cur))
         if (payload?.decision === 'connect') {
           const name = payload?.server_name || 'Integration'
           setErrorNotice(`${name} connected`)
@@ -131,6 +131,19 @@ export default function Chat({
         line.set('Thinking…', 'label')
         qc.invalidateQueries({ queryKey: messagesKey })
         qc.invalidateQueries({ queryKey: usageKey })
+      }),
+      Events.On('model:stream', (event: any) => {
+        const ev = (event?.data ?? event) as { event?: { type?: string; delta?: { kind?: string } } } | undefined
+        const type = ev?.event?.type
+        const deltaKind = ev?.event?.delta?.kind
+        // First text token → switch indicator from Thinking… to Typing…
+        if (type === 'block_delta' && deltaKind === 'text') {
+          line.set('Typing…', 'label')
+        }
+      }),
+      // chat:typing fires from the Send path on the first text token
+      Events.On('chat:typing', () => {
+        line.set('Typing…', 'label')
       }),
       Events.On('chat:run_finished', () => {
         line.reset()
@@ -226,8 +239,7 @@ export default function Chat({
                 ) : m.status === 'streaming' ? null : (
                   <AgentBubble key={m.id} content={m.text} status={m.status} error={m.error_message} />
                 ),
-              )}
-              {permission && (
+              )}              {permission && (
                 <PermissionCard
                   permission={permission}
                   agentName={agentProfile?.agent_name}

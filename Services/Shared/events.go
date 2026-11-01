@@ -8,6 +8,7 @@ const (
 	EventModelStream         = "model:stream"
 	EventStreamCancelled     = "model:stream_cancelled"
 	EventChatMessage         = "chat:message"
+	EventChatTyping          = "chat:typing"
 	EventChatRunFinished     = "chat:run_finished"
 	EventPermissionRequested = "permission:requested"
 	EventPermissionResolved  = "permission:resolved"

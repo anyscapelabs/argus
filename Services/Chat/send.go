@@ -231,7 +231,7 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	// Agent loop: run model turns and execute tools until the model stops
 	// requesting tools. The final turn without tool calls is persisted.
 	for round := 0; round < maxToolRounds && !reachedEnd; round++ {
-		result = Protocol.Collect(Router.New().Run(ctx, &req, target, trace))
+		result = s.collectWithTyping(ctx, runID, agentID, &req, target, trace)
 		total.Merge(&result.Usage)
 
 		if ctx.Err() != nil || result.Error != nil {
@@ -393,48 +393,56 @@ func (s *Service) buildHistory(agentID string, throughSeq int) []Protocol.Messag
 			continue
 		}
 		if m.Role != "assistant" {
-			// User rows replay exactly what was stored.
-			var textBlocks []Protocol.Block
+			// User rows: replay text blocks plus any tool_result blocks from
+			// prior agentic turns so the model sees complete tool round-trips.
+			var userBlocks []Protocol.Block
 			for _, b := range m.Blocks() {
-				if b.Type == Protocol.BlockText {
-					textBlocks = append(textBlocks, Protocol.Block{Type: Protocol.BlockText, Text: b.Text})
+				switch b.Type {
+				case Protocol.BlockText:
+					userBlocks = append(userBlocks, Protocol.Block{Type: Protocol.BlockText, Text: b.Text})
+				case Protocol.BlockToolResult:
+					userBlocks = append(userBlocks, b)
 				}
 			}
-			if len(textBlocks) == 0 && m.Text != "" {
-				textBlocks = []Protocol.Block{{Type: Protocol.BlockText, Text: m.Text}}
+			if len(userBlocks) == 0 && m.Text != "" {
+				userBlocks = []Protocol.Block{{Type: Protocol.BlockText, Text: m.Text}}
 			}
-			if len(textBlocks) == 0 {
+			if len(userBlocks) == 0 {
 				continue
 			}
-			out = append(out, Protocol.Message{Role: Protocol.Role(m.Role), Blocks: textBlocks})
+			out = append(out, Protocol.Message{Role: Protocol.Role(m.Role), Blocks: userBlocks})
 			continue
 		}
+		// Assistant rows: replay text blocks and tool_use blocks so the model
+		// remembers which tools it called and can pair them with results.
 		blocks := m.Blocks()
-		var textBlocks []Protocol.Block
+		var assistantBlocks []Protocol.Block
 		firstText := true
 		for _, b := range blocks {
-			if b.Type != Protocol.BlockText {
-				continue
+			switch b.Type {
+			case Protocol.BlockText:
+				text := b.Text
+				if firstText {
+					// Cleaned history stops old titled replies from priming
+					// the model into repeating the pattern.
+					text = StripLeadingTitle(text, agentName, "history")
+					firstText = false
+				}
+				if text == "" && m.Text != "" {
+					text = m.Text
+				}
+				assistantBlocks = append(assistantBlocks, Protocol.Block{Type: Protocol.BlockText, Text: text})
+			case Protocol.BlockToolUse:
+				assistantBlocks = append(assistantBlocks, b)
 			}
-			text := b.Text
-			if firstText {
-				// Cleaned history stops old titled replies from priming
-				// the model into repeating the pattern.
-				text = StripLeadingTitle(text, agentName, "history")
-				firstText = false
-			}
-			if text == "" && m.Text != "" {
-				text = m.Text
-			}
-			textBlocks = append(textBlocks, Protocol.Block{Type: Protocol.BlockText, Text: text})
 		}
-		if len(textBlocks) == 0 && m.Text != "" {
-			textBlocks = []Protocol.Block{{Type: Protocol.BlockText, Text: StripLeadingTitle(m.Text, agentName, "history")}}
+		if len(assistantBlocks) == 0 && m.Text != "" {
+			assistantBlocks = []Protocol.Block{{Type: Protocol.BlockText, Text: StripLeadingTitle(m.Text, agentName, "history")}}
 		}
-		if len(textBlocks) == 0 {
+		if len(assistantBlocks) == 0 {
 			continue
 		}
-		out = append(out, Protocol.Message{Role: Protocol.Role(m.Role), Blocks: textBlocks})
+		out = append(out, Protocol.Message{Role: Protocol.Role(m.Role), Blocks: assistantBlocks})
 	}
 	// trim to last 40
 	if len(out) > 40 {
@@ -561,6 +569,25 @@ func hostOf(raw string) string {
 
 func nowUnixMs() int64 {
 	return time.Now().UnixMilli()
+}
+
+// collectWithTyping runs a model turn identically to Protocol.Collect, but
+// fires a single chat:typing event when the first text token arrives so the
+// frontend indicator can transition from "Thinking…" to "Typing…".
+func (s *Service) collectWithTyping(ctx context.Context, runID, agentID string, req *Protocol.Request, target *Protocol.Target, trace *Router.Trace) Protocol.Result {
+	src := Router.New().Run(ctx, req, target, trace)
+	typingFired := false
+	return Protocol.Collect(func(yield func(Protocol.Event) bool) {
+		for ev := range src {
+			if !typingFired && ev.Type == Protocol.EventBlockDelta && ev.Delta != nil && ev.Delta.Kind == Protocol.DeltaText {
+				typingFired = true
+				s.Core.EmitEvent(Shared.EventChatTyping, map[string]any{"agent_id": agentID, "run_id": runID})
+			}
+			if !yield(ev) {
+				return
+			}
+		}
+	})
 }
 
 func (s *Service) baseURLOverride(providerID string) string {

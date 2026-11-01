@@ -135,14 +135,11 @@ func (s *Service) runTool(ctx context.Context, runID, agentID, agentName string,
 		if input.Icon == "" && serverID == "gmail" {
 			input.Icon = "/gmail.png"
 		}
-		decision, err := MCPConnect.Request(ctx, s.MCPConnect, agentID, agentName, serverID, serverName, input.Description, input.Icon)
-		if err != nil {
-			return result("the connection request was cancelled", true)
-		}
-		if decision == MCPConnect.Deny {
-			return result("The user declined connecting this integration.", true)
-		}
-		return result("Connection request sent to the user. The user will approve or deny it in the chat.", false)
+		// Non-blocking: fire the card event and return immediately so the run
+		// closes and the thinking indicator clears. The user's Connect/Deny
+		// click is handled independently via MCPConnect.Respond.
+		MCPConnect.Register(s.MCPConnect, agentID, agentName, serverID, serverName, input.Description, input.Icon, mcpAuthURL(serverID))
+		return result("Connection card shown to the user. End your response here.", false)
 	}
 
 	if call.Name != Permission.TerminalTool {
