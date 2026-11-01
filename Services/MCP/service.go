@@ -66,6 +66,31 @@ func (s *Service) AddServer(cfg ServerConfig) {
 	m.AddConfig(cfg)
 }
 
+// LoadFromConfig loads a server config from JSON.
+func (s *Service) LoadFromConfig(configJSON string) error {
+	s.mu.RLock()
+	m := s.manager
+	s.mu.RUnlock()
+	if m == nil {
+		return nil
+	}
+	var cfg ServerConfig
+	if err := jsonUnmarshal(configJSON, &cfg); err != nil {
+		return err
+	}
+	m.AddConfig(cfg)
+	return nil
+}
+
+// LoadFromFile loads a server config from a file.
+func (s *Service) LoadFromFile(path string) error {
+	data, err := osReadFile(path)
+	if err != nil {
+		return err
+	}
+	return s.LoadFromConfig(string(data))
+}
+
 // RemoveServer removes a server configuration.
 func (s *Service) RemoveServer(id string) {
 	s.mu.RLock()
