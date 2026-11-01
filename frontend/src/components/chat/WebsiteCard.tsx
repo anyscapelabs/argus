@@ -28,8 +28,6 @@ function serviceIcon(host: string): string {
   return `https://www.google.com/s2/favicons?domain=${host}&sz=64`
 }
 
-// Inline, text-only link: favicon + underlined site title, flows inside the
-// agent's markdown paragraph rather than sitting in its own card.
 export default function WebsiteCard({ url, children }: WebsiteCardProps) {
   const host = useMemo(() => hostOf(url), [url])
   const [title, setTitle] = useState('')
@@ -76,7 +74,7 @@ export default function WebsiteCard({ url, children }: WebsiteCardProps) {
         e.preventDefault()
         Browser.OpenURL(url).catch(() => {})
       }}
-      className="no-drag inline-flex max-w-full items-center gap-1 align-baseline text-inherit"
+      className="no-drag inline-flex max-w-full items-center gap-1 align-middle text-inherit"
     >
       {icon && !iconExhausted ? (
         <img
@@ -95,7 +93,7 @@ export default function WebsiteCard({ url, children }: WebsiteCardProps) {
       ) : (
         <FiGlobe size={13} className="shrink-0 text-secondary" />
       )}
-      <span className="inline-block max-w-64 truncate align-baseline underline decoration-grey-500 underline-offset-2 hover:decoration-grey-100">
+      <span className="inline-block max-w-64 truncate underline decoration-grey-500 underline-offset-2 hover:decoration-grey-100">
         {label}
       </span>
     </a>
