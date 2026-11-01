@@ -12,6 +12,7 @@ import ChatInput from '../components/chat/ChatInput'
 import AgentBubble from '../components/chat/AgentBubble'
 import UserBubble from '../components/chat/UserBubble'
 import ThinkingIndicator from '../components/chat/ThinkingIndicator'
+import { StatusLine, latestSentence } from '../components/chat/statusLine'
 import PermissionCard, { type Permission } from '../components/chat/PermissionCard'
 import Notifier from '../components/chat/Notifier'
 import RightPanel from '../components/layout/RightPanel'
@@ -62,23 +63,9 @@ export default function Chat({
   const pendingConsumedId = useRef<number | null>(null)
   const streamText = useRef(new Map<string, string>())
   const streamThinking = useRef(new Map<string, string>())
-  const [activity, setActivity] = useState<string | null>(null)
+  // What the indicator shows, paced by StatusLine so it stays readable.
+  const [status, setStatus] = useState<string | null>(null)
   const [runActive, setRunActive] = useState(false)
-
-  // The thinking stream arrives as one growing block; show its newest
-  // sentence as the live status the user sees while the answer streams.
-  const thoughtStatus = (acc: string): string => {
-    const clean = acc.replace(/\s+/g, ' ').trim()
-    if (!clean) return 'Thinking…'
-    const sentences = clean.split(/(?<=[.!?])\s+/)
-    let last = sentences[sentences.length - 1] ?? clean
-    if (last.length > 90) {
-      last = last.slice(-90)
-      const cut = last.indexOf(' ')
-      if (cut > 0) last = last.slice(cut)
-    }
-    return last.length > 0 ? last + '…' : 'Thinking…'
-  }
 
   const decide = (decision: PermissionDecision) => {
     if (!permission) return
@@ -92,6 +79,7 @@ export default function Chat({
   }
 
   useEffect(() => {
+    const line = new StatusLine(setStatus)
     const unsubs = [
       Events.On('permission:requested', (event: any) => {
         const payload = (event?.data ?? event) as PermissionRequestView
@@ -112,9 +100,14 @@ export default function Chat({
         if (!payload?.kind) return
         if (payload.kind === 'tool_started') {
           const cmd = (payload.command ?? '').trim()
-          setActivity(cmd.length > 0 ? `Running ${cmd.length > 60 ? cmd.slice(0, 60) + '…' : cmd} in the terminal` : 'Running a command in the terminal')
+          line.set(
+            cmd.length > 0
+              ? `Running ${cmd.length > 60 ? cmd.slice(0, 60) + '…' : cmd} in the terminal`
+              : 'Running a command in the terminal',
+            'tool',
+          )
         } else {
-          setActivity(null)
+          line.clear()
         }
       }),
       Events.On('chat:message', (event: any) => {
@@ -123,13 +116,14 @@ export default function Chat({
           streamThinking.current.delete(event.data.message_id)
         }
         setRunActive(true)
+        line.set('Thinking…', 'label')
         qc.invalidateQueries({ queryKey: messagesKey })
         qc.invalidateQueries({ queryKey: usageKey })
       }),
       Events.On('chat:run_finished', () => {
         streamText.current.clear()
         streamThinking.current.clear()
-        setActivity(null)
+        line.reset()
         setRunActive(false)
         qc.invalidateQueries({ queryKey: messagesKey })
         qc.invalidateQueries({ queryKey: usageKey })
@@ -142,6 +136,7 @@ export default function Chat({
           const muid = payload.message_id
           streamText.current.delete(muid)
           streamThinking.current.delete(muid)
+          line.set('Thinking…', 'label')
           qc.setQueryData<unknown[] | undefined>(messagesKey, (old) => {
             if (!old) return old
             const idx = old.findIndex((m: any) => m.id === muid)
@@ -153,7 +148,7 @@ export default function Chat({
           return
         }
         if (ev.type === 'block_delta' && ev.delta?.kind === 'text' && ev.delta.text) {
-          setActivity((cur) => (cur && cur.startsWith('Running ') ? cur : null))
+          line.endThinking()
           const muid = payload.message_id
           const accumulated = (streamText.current.get(muid) ?? '') + ev.delta.text
           streamText.current.set(muid, accumulated)
@@ -170,11 +165,17 @@ export default function Chat({
           const muid = payload.message_id
           const acc = (streamThinking.current.get(muid) ?? '') + ev.delta.text
           streamThinking.current.set(muid, acc)
-          setActivity(thoughtStatus(acc))
+          if (/[.!?\n]/.test(ev.delta.text)) {
+            const sentence = latestSentence(acc)
+            if (sentence) line.set(sentence, 'thought')
+          }
         }
       }),
     ]
-    return () => unsubs.forEach((u) => u && u())
+    return () => {
+      unsubs.forEach((u) => u && u())
+      line.dispose()
+    }
   }, [qc])
 
   const handleSend = (text: string, _modelRef: string | null) => {
@@ -195,10 +196,6 @@ export default function Chat({
     })
   }, [pendingSend])
 
-  const streamingWithNoText = runActive && messages.some(
-    (m: any) => m.status === 'streaming' && !m.text,
-  )
-
   const scrollRef = useRef<HTMLDivElement>(null)
   const pinnedRef = useRef(true)
   const onScroll = () => {
@@ -212,7 +209,7 @@ export default function Chat({
     const el = scrollRef.current
     if (!el || !pinnedRef.current) return
     el.scrollTop = el.scrollHeight
-  }, [messages, permission, persistedNotice, errorNotice, streamingWithNoText, activity])
+  }, [messages, permission, persistedNotice, errorNotice, status])
 
   return (
     <div className="relative flex h-dvh flex-1 min-h-0 overflow-hidden">
@@ -261,7 +258,7 @@ export default function Chat({
               )}
               {persistedNotice && <Notifier text={persistedNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary"><FiTerminal size={9} className="text-secondary" /></div>} />}
               {errorNotice && <Notifier text={errorNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400"><FiTerminal size={9} className="text-red-400" /></div>} />}
-              {(streamingWithNoText || (runActive && activity)) && <ThinkingIndicator text={activity || 'Thinking…'} />}
+              {runActive && status && <ThinkingIndicator text={status} />}
             </div>
           </div>
         </div>
