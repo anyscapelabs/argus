@@ -1,0 +1,29 @@
+[
+  {
+    "id": "gmail",
+    "name": "Gmail",
+    "description": "Let Argus send, read, and manage emails",
+    "icon": "/gmail.png",
+    "type": "mcp",
+    "configPath": "tools/gmail/config.json.example",
+    "enabled": false
+  },
+  {
+    "id": "google-calendar",
+    "name": "Google Calendar",
+    "description": "Let Argus create, update, and manage events",
+    "icon": "/wails.png",
+    "type": "mcp",
+    "configPath": "tools/calendar/config.json.example",
+    "enabled": false
+  },
+  {
+    "id": "todoist",
+    "name": "Todoist",
+    "description": "Let Argus manage tasks and projects",
+    "icon": "/logo.png",
+    "type": "mcp",
+    "configPath": "tools/todoist/config.json.example",
+    "enabled": false
+  }
+]
