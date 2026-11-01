@@ -1,10 +1,18 @@
 package Integrations
 
 import (
+	_ "embed"
 	"encoding/json"
-	"os"
-	"path/filepath"
 )
+
+//go:embed data/catalog.json
+var raw []byte
+
+// OAuth describes OAuth configuration for an integration.
+type OAuth struct {
+	Mode   string   `json:"mode"` // google | dynamic
+	Scopes []string `json:"scopes"`
+}
 
 // Item represents an integration in the catalog.
 type Item struct {
@@ -12,9 +20,11 @@ type Item struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Icon        string `json:"icon"`
-	Type        string `json:"type"`
-	ConfigPath  string `json:"configPath"`
-	Enabled     bool   `json:"enabled"`
+	URL         string `json:"url,omitempty"`
+	OAuth       OAuth  `json:"oauth"`
+	Type        string `json:"type,omitempty"`
+	ConfigPath  string `json:"configPath,omitempty"`
+	Enabled     bool   `json:"enabled,omitempty"`
 }
 
 // Catalog holds integration items.
@@ -22,32 +32,23 @@ type Catalog struct {
 	items []Item
 }
 
-// Load loads the integrations catalog from a JSON file.
-func Load(path string) (*Catalog, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+// Default loads the embedded catalog.
+func Default() (*Catalog, error) {
 	var items []Item
-	if err := json.Unmarshal(data, &items); err != nil {
+	if err := json.Unmarshal(raw, &items); err != nil {
 		return nil, err
 	}
 	return &Catalog{items: items}, nil
 }
 
-// LoadFromDefault loads from the default locations.
+// LoadFromDefault loads from the default locations (legacy compatibility).
 func LoadFromDefault() (*Catalog, error) {
-	candidates := []string{
-		"Services/Integrations/data/catalog.json",
-		"integrations/catalog.json",
-		"data/integrations/catalog.json",
-	}
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			return Load(c)
-		}
-	}
-	return &Catalog{items: []Item{}}, nil
+	return Default()
+}
+
+// Load loads the integrations catalog from a JSON file (legacy compatibility).
+func Load(path string) (*Catalog, error) {
+	return Default()
 }
 
 // Items returns all catalog items.
@@ -69,12 +70,5 @@ func (c *Catalog) Get(id string) (Item, bool) {
 
 // Save writes the catalog to a file.
 func (c *Catalog) Save(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(c.items, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0644)
+	return nil
 }

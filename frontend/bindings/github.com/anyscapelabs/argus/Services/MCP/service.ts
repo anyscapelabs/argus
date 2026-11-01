@@ -36,6 +36,20 @@ export function Connect(): $CancellablePromise<void> {
 }
 
 /**
+ * ConnectRemote connects a remote MCP server with OAuth.
+ */
+export function ConnectRemote(serverID: string, interactive: boolean): $CancellablePromise<void> {
+    return $Call.ByID(1189156926, serverID, interactive);
+}
+
+/**
+ * DisconnectRemote disconnects a remote server.
+ */
+export function DisconnectRemote(serverID: string): $CancellablePromise<void> {
+    return $Call.ByID(968577770, serverID);
+}
+
+/**
  * GetToolsForChat returns MCP tools formatted for the chat system.
  */
 export function GetToolsForChat(): $CancellablePromise<$models.Tool[] | null> {

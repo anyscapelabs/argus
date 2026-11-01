@@ -4,7 +4,7 @@ import { Events } from '@wailsio/runtime'
 import { useAgentProfile } from '../domains/models/hooks'
 import { useChatMessages, useSendMessage } from '../domains/chat/hooks'
 import { respondPermission, type PermissionRequestView, type PermissionDecision } from '../domains/permission/api'
-import { respondMCPConnect, type MCPConnectRequestView } from '../domains/mcp/api'
+import { respondMCPConnect, pendingMCPConnects, type MCPConnectRequestView, type MCPConnectState } from '../domains/mcp/api'
 import { useLatestNoticeText } from '../domains/permission/hooks'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiChevronRight, FiTerminal } from 'react-icons/fi'
@@ -43,6 +43,9 @@ export default function Chat({
   const [rightOpen, setRightOpen] = useState(false)
   const [permission, setPermission] = useState<Permission | null>(null)
   const [mcpConnect, setMcpConnect] = useState<MCPConnectRequestView | null>(null)
+  const [mcpState, setMcpState] = useState<MCPConnectState>('requested')
+  const [mcpError, setMcpError] = useState<string>()
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { data: agentProfile } = useAgentProfile('default')
   const qc = useQueryClient()
   const { data: messages = [], error: messagesError, isLoading } = useChatMessages('default')
@@ -56,6 +59,12 @@ export default function Chat({
   const [runActive, setRunActive] = useState(false)
   const statusLineRef = useRef<StatusLine | null>(null)
 
+  const showToast = (text: string, _tone: 'ok' | 'error') => {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    setErrorNotice(text)
+    toastTimer.current = setTimeout(() => setErrorNotice(null), 4000)
+  }
+
   const decide = (decision: PermissionDecision) => {
     if (!permission) return
     const requestID = permission.request_id
@@ -67,18 +76,27 @@ export default function Chat({
     })
   }
 
-  const decideMCP = (decision: 'connect' | 'deny') => {
+  const decideMCP = (decision: 'connect' | 'deny' | 'cancel') => {
     if (!mcpConnect) return
-    const requestID = mcpConnect.request_id
-    setMcpConnect(null)
-    respondMCPConnect(requestID, decision).catch((err) => {
-      console.error('mcp connect respond failed', err)
-      setErrorNotice('Could not save that decision, try again')
-      setTimeout(() => setErrorNotice(null), 6000)
+    if (decision === 'deny') {
+      setMcpConnect(null)
+      setMcpState('requested')
+      setMcpError(undefined)
+    }
+    respondMCPConnect(mcpConnect.request_id, decision).catch((err) => {
+      setMcpState('failed')
+      setMcpError(err.message)
     })
   }
 
   useEffect(() => {
+    pendingMCPConnects('default').then((l) => {
+      if (l && l[0]) {
+        setMcpConnect(l[0])
+        setMcpState('requested')
+        setMcpError(undefined)
+      }
+    })
     const line = new StatusLine(setStatus)
     statusLineRef.current = line
     const unsubs = [
@@ -90,23 +108,29 @@ export default function Chat({
       Events.On('permission:resolved', (event: any) => {
         const payload = (event?.data ?? event) as { request_id?: string } | undefined
         qc.invalidateQueries({ queryKey: noticesKey })
-        // The click that produced this decision already showed a notifier;
-        // only resolve the card when the decision arrived from elsewhere.
         setPermission((cur) => (cur && payload?.request_id !== cur.request_id ? null : cur))
       }),
-      Events.On('mcp:connect:requested', (event: any) => {
-        const payload = (event?.data ?? event) as MCPConnectRequestView | undefined
+      Events.On('mcp:connect:status', (event: any) => {
+        const payload = (event?.data ?? event) as any
         if (!payload?.request_id) return
-        setMcpConnect(payload)
-      }),
-      Events.On('mcp:connect:resolved', (event: any) => {
-        const payload = (event?.data ?? event) as { request_id?: string; decision?: string; server_name?: string } | undefined
-        // Dismiss the card when its request_id matches
-        setMcpConnect((cur) => (cur && payload?.request_id === cur.request_id ? null : cur))
-        if (payload?.decision === 'connect') {
-          const name = payload?.server_name || 'Integration'
-          setErrorNotice(`${name} connected`)
-          setTimeout(() => setErrorNotice(null), 4000)
+        if (payload.state === 'requested') {
+          setMcpConnect({
+            request_id: payload.request_id,
+            agent_id: payload.agent_id,
+            server_id: payload.server_id,
+            server_name: payload.server_name,
+            description: payload.description,
+            icon: payload.icon,
+          })
+        }
+        setMcpState(payload.state)
+        setMcpError(payload.error)
+        if (payload.state === 'connected') {
+          setMcpConnect(null)
+          showToast(`${payload.server_name || 'Integration'} connected`, 'ok')
+        }
+        if (payload.state === 'denied' || payload.state === 'expired') {
+          setMcpConnect(null)
         }
       }),
       Events.On('agent:activity', (event: any) => {
@@ -248,7 +272,16 @@ export default function Chat({
                   onDeny={() => decide('deny')}
                 />
               )}
-              {mcpConnect && <MCPConnectCard request={mcpConnect} onConnect={() => decideMCP('connect')} onDeny={() => decideMCP('deny')} />}
+              {mcpConnect && (
+                <MCPConnectCard
+                  request={mcpConnect}
+                  state={mcpState}
+                  error={mcpError}
+                  onConnect={() => decideMCP('connect')}
+                  onDeny={() => decideMCP('deny')}
+                  onCancel={() => decideMCP('cancel')}
+                />
+              )}
               {persistedNotice && <Notifier text={persistedNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary"><FiTerminal size={9} className="text-secondary" /></div>} />}
               {errorNotice && <Notifier text={errorNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400"><FiTerminal size={9} className="text-red-400" /></div>} />}
               {runActive && status && <ThinkingIndicator text={status} />}

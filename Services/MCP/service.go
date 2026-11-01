@@ -1,21 +1,32 @@
 package MCP
 
 import (
+	"cmp"
 	"context"
+	"errors"
+	"os"
 	"strings"
 	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/modelcontextprotocol/go-sdk/oauthex"
 
+	"github.com/anyscapelabs/argus/Services/Integrations"
 	"github.com/anyscapelabs/argus/Services/Shared"
+)
+
+var (
+	googleClientID     string
+	googleClientSecret string
 )
 
 // Service exposes MCP management to the frontend.
 type Service struct {
 	Core *Shared.Core
 
-	mu      sync.RWMutex
-	manager *Manager
+	mu       sync.RWMutex
+	manager  *Manager
+	catalog  *Integrations.Catalog
 }
 
 // ServiceStartup initializes the MCP manager.
@@ -23,7 +34,9 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.manager = New()
-	// Load saved configs if needed in future
+	if cat, err := Integrations.Default(); err == nil {
+		s.catalog = cat
+	}
 	return nil
 }
 
@@ -122,6 +135,59 @@ func (s *Service) ListTools() []Tool {
 		return nil
 	}
 	return m.ListTools()
+}
+
+func googleClient() (*oauthex.ClientCredentials, error) {
+	id := cmp.Or(os.Getenv("ARGUS_GOOGLE_CLIENT_ID"), googleClientID)
+	sec := cmp.Or(os.Getenv("ARGUS_GOOGLE_CLIENT_SECRET"), googleClientSecret)
+	if id == "" {
+		return nil, errors.New("google sign-in is not configured in this build")
+	}
+	c := &oauthex.ClientCredentials{ClientID: id}
+	if sec != "" {
+		c.ClientSecretAuth = &oauthex.ClientSecretAuth{ClientSecret: sec}
+	}
+	return c, nil
+}
+
+// ConnectRemote connects a remote MCP server with OAuth.
+func (s *Service) ConnectRemote(ctx context.Context, serverID string, interactive bool) error {
+	s.mu.RLock()
+	cat := s.catalog
+	m := s.manager
+	s.mu.RUnlock()
+	if cat == nil {
+		cat, _ = Integrations.Default()
+	}
+	if m == nil {
+		return errors.New("mcp not initialized")
+	}
+	it, ok := cat.Get(serverID)
+	if !ok {
+		return errors.New("unknown integration")
+	}
+	spec := RemoteSpec{ID: it.ID, Name: it.Name, URL: it.URL, Scopes: it.OAuth.Scopes}
+	if it.OAuth.Mode == "google" {
+		c, err := googleClient()
+		if err != nil {
+			return err
+		}
+		spec.Client = c
+	}
+	return m.ConnectRemote(ctx, spec, interactive)
+}
+
+// DisconnectRemote disconnects a remote server.
+func (s *Service) DisconnectRemote(serverID string) {
+	s.mu.RLock()
+	m := s.manager
+	s.mu.RUnlock()
+	if m == nil {
+		return
+	}
+	m.DisconnectServer(serverID)
+	store := tokenStore{serverID: serverID}
+	store.clear()
 }
 
 // GetToolsForChat returns MCP tools formatted for the chat system.

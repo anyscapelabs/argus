@@ -14,6 +14,7 @@ export type {
     ListRequestsResult,
     LiveModel,
     LiveResults,
+    MCPConnectRequestView,
     ModelRequestView,
     ModelView,
     NoticesResult,
