@@ -281,6 +281,23 @@ type PermissionNoticeView struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
+type MCPConnectRequestView struct {
+	RequestID string `json:"request_id"`
+	AgentID   string `json:"agent_id"`
+	AgentName string `json:"agent_name"`
+	ServerID  string `json:"server_id"`
+	ServerName string `json:"server_name"`
+	Description string `json:"description"`
+	Icon      string `json:"icon"`
+}
+
+type MCPConnectDecisionView struct {
+	RequestID string `json:"request_id"`
+	AgentID   string `json:"agent_id"`
+	Decision  string `json:"decision"`
+	ServerID  string `json:"server_id"`
+}
+
 type NoticesResult struct {
 	Notices []PermissionNoticeView `json:"notices"`
 	Error   *ActionError           `json:"error,omitempty"`

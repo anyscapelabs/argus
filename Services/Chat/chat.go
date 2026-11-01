@@ -16,6 +16,7 @@ import (
 	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Router"
 	"github.com/anyscapelabs/argus/Services/MCP"
+	"github.com/anyscapelabs/argus/Services/MCPConnect"
 	"github.com/anyscapelabs/argus/Services/Permission"
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
@@ -26,6 +27,8 @@ type Service struct {
 	Permissions *Permission.Service
 	// MCP is the MCP manager service.
 	MCP *MCP.Service
+	// MCPConnect handles MCP connection approval flow.
+	MCPConnect *MCPConnect.Service
 
 	mu       sync.Mutex
 	cancels  map[string]context.CancelFunc
