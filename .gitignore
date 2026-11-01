@@ -14,3 +14,6 @@ build/ios/xcode/gen/
 build/android/overlay.json
 build/android/gen/tools/gmail/creds/
 tools/calendar/creds/
+.env
+config/google.json
+google.json
