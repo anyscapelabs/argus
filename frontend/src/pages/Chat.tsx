@@ -60,6 +60,10 @@ export default function Chat({
   const [status, setStatus] = useState<string | null>(null)
   const [runActive, setRunActive] = useState(false)
   const statusLineRef = useRef<StatusLine | null>(null)
+  // Sites a web search just returned: the indicator cycles favicon plus
+  // result title while the model works on the answer.
+  const [searchSources, setSearchSources] = useState<{ host: string; title: string }[]>([])
+  const [sourceIdx, setSourceIdx] = useState(0)
 
   // Only a failure the frontend caused itself: the Go side could not be
   // reached, so there is no notice row for the conversation to keep.
@@ -155,23 +159,31 @@ export default function Chat({
       }),
       Events.On('agent:activity', (event: any) => {
         const payload = (event?.data ?? event) as
-          | { kind?: string; command?: string; tool?: string }
+          | { kind?: string; command?: string; tool?: string; sources?: { host?: string; title?: string }[] }
           | undefined
         if (!payload?.kind) return
+        const isSearch = payload.tool === 'web_search'
         if (payload.kind === 'tool_started') {
           const cmd = (payload.command ?? '').trim()
-          const short = cmd.length > 60 ? cmd.slice(0, 60) + '…' : cmd
           if (payload.tool === 'web_search') {
-            line.set(
-              short.length > 0 ? `Searching the web: ${short}` : 'Searching the web',
-              'tool',
-            )
+            // The query itself is noise here; the found sites speak instead.
+            setSearchSources([])
+            line.set('Searching the web', 'tool')
           } else {
+            const short = cmd.length > 60 ? cmd.slice(0, 60) + '…' : cmd
             line.set(
               cmd.length > 0 ? `Running ${short} in the terminal` : 'Running a command in the terminal',
               'tool',
             )
           }
+        } else if (payload.kind === 'tool_results' && isSearch) {
+          // Show the found sites (favicon + title, cycling) while the model
+          // works on the answer, instead of dropping straight back to text.
+          const sites = (payload.sources ?? []).filter(
+            (s): s is { host: string; title: string } => !!s?.host && !!s?.title,
+          )
+          setSearchSources(sites)
+          setSourceIdx(0)
         } else {
           line.clear()
         }
@@ -193,9 +205,12 @@ export default function Chat({
       }),
       // chat:typing fires from the Send path on the first text token
       Events.On('chat:typing', () => {
+        // Text is streaming: the source cycle's job is done.
+        setSearchSources([])
         line.set('Typing…', 'label')
       }),
       Events.On('chat:run_finished', () => {
+        setSearchSources([])
         line.reset()
         setRunActive(false)
         qc.invalidateQueries({ queryKey: messagesKey })
@@ -211,8 +226,22 @@ export default function Chat({
     }
   }, [qc])
 
-  const handleSend = (text: string, _modelRef: string | null) => {
-    if (send.isPending || runActive) return
+  // Rotate the web-search sites every couple seconds so each result gets a
+  // beat on screen.
+  useEffect(() => {
+    if (searchSources.length < 2) return
+    const t = setInterval(() => setSourceIdx((i) => (i + 1) % searchSources.length), 2600)
+    return () => clearInterval(t)
+  }, [searchSources])
+
+  // Current chip for the indicator: favicon + title of the site shown now.
+  const chip = useMemo(() => {
+    if (searchSources.length === 0) return null
+    const s = searchSources[sourceIdx % searchSources.length]
+    return { favicon: `https://icons.duckduckgo.com/ip3/${s.host}.ico`, title: s.title }
+  }, [searchSources, sourceIdx])
+
+  const handleSend = (text: string, _modelRef: string | null) => {    if (send.isPending || runActive) return
     setRunActive(true)
     statusLineRef.current?.set('Thinking…', 'label')
     send.mutate(text, {
@@ -322,7 +351,9 @@ export default function Chat({
                 />
               ))}
               {errorNotice && <Notifier text={errorNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400"><FiTerminal size={9} className="text-red-400" /></div>} />}
-              {runActive && status && <ThinkingIndicator text={status} />}
+              {runActive && (chip || status) && (
+                <ThinkingIndicator chip={chip} text={chip ? undefined : status} />
+              )}
             </div>
           </div>
         </div>

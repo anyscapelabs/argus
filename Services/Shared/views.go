@@ -257,9 +257,18 @@ type PermissionRequestView struct {
 type ActivityView struct {
 	AgentID string `json:"agent_id"`
 	RunID   string `json:"run_id,omitempty"`
-	Kind    string `json:"kind"` // tool_started | tool_finished
+	Kind    string `json:"kind"` // tool_started | tool_results | tool_finished
 	Tool    string `json:"tool"`
 	Command string `json:"command,omitempty"`
+	// Sources carries the sites a web_search call found, so the live
+	// indicator can show favicon plus result titles instead of the query.
+	Sources []ActivitySource `json:"sources,omitempty"`
+}
+
+// ActivitySource is one site the agent's search surfaced.
+type ActivitySource struct {
+	Host  string `json:"host"`
+	Title string `json:"title"`
 }
 
 type PermissionDecisionView struct {

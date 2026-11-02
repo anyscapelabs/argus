@@ -114,6 +114,30 @@ func mcpToolName(serverID, tool string) string {
 	return n
 }
 
+// activitySources converts search hits into the compact view the live
+// indicator cycles through; host names matter more than full URLs there.
+func activitySources(results []Search.Result) []Shared.ActivitySource {
+	out := make([]Shared.ActivitySource, 0, 4)
+	for _, r := range results {
+		if len(out) == cap(out) {
+			break
+		}
+		title := r.Title
+		if i := strings.IndexRune(title, '\n'); i >= 0 {
+			title = title[:i]
+		}
+		if len(title) > 90 {
+			title = title[:90]
+		}
+		host := hostOf(r.URL)
+		if host == "" || title == "" {
+			continue
+		}
+		out = append(out, Shared.ActivitySource{Host: host, Title: title})
+	}
+	return out
+}
+
 func (s *Service) mcpToolDefs() []Protocol.ToolDef {
 	var defs []Protocol.ToolDef
 	if s.MCP == nil {
@@ -195,6 +219,15 @@ func (s *Service) runTool(ctx context.Context, runID, agentID, agentName string,
 
 		activity("tool_started", query)
 		answer := Search.Search(ctx, query, input.MaxResults)
+		// The indicator consumes the found sites right away (favicon plus
+		// result titles) instead of echoing the query back to the user.
+		s.Core.EmitEvent(Shared.EventActivity, Shared.ActivityView{
+			AgentID: agentID,
+			RunID:   runID,
+			Kind:    "tool_results",
+			Tool:    call.Name,
+			Sources: activitySources(answer.Results),
+		})
 		activity("tool_finished", query)
 		return result(answer.Render(), answer.Err != "")
 	}
