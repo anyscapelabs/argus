@@ -3,11 +3,11 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Events } from '@wailsio/runtime'
 import { useAgentProfile } from '../domains/models/hooks'
 import { useChatMessages, useSendMessage } from '../domains/chat/hooks'
-import { respondPermission, type PermissionRequestView, type PermissionDecision } from '../domains/permission/api'
+import { respondPermission, noticeText, type PermissionRequestView, type PermissionDecision } from '../domains/permission/api'
 import { respondMCPConnect, pendingMCPConnects, type MCPConnectRequestView, type MCPConnectState } from '../domains/mcp/api'
-import { useLatestNoticeText } from '../domains/permission/hooks'
+import { useNoticeLines } from '../domains/permission/hooks'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FiChevronRight, FiTerminal } from 'react-icons/fi'
+import { FiChevronRight, FiLink, FiTerminal } from 'react-icons/fi'
 import Toolbar from '../components/layout/Toolbar'
 import ChatInput from '../components/chat/ChatInput'
 import AgentBubble from '../components/chat/AgentBubble'
@@ -45,12 +45,14 @@ export default function Chat({
   const [mcpConnect, setMcpConnect] = useState<MCPConnectRequestView | null>(null)
   const [mcpState, setMcpState] = useState<MCPConnectState>('requested')
   const [mcpError, setMcpError] = useState<string>()
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { data: agentProfile } = useAgentProfile('default')
   const qc = useQueryClient()
   const { data: messages = [], error: messagesError, isLoading } = useChatMessages('default')
   const send = useSendMessage('default')
-  const persistedNotice = useLatestNoticeText('default')
+  // Notices come from the database, so every line the notifier is told about
+  // outlives the moment it happened, including a full restart.
+  const noticeLines = useNoticeLines('default')
+  const noticeKeyText = noticeLines.map((n) => noticeText(n)).join('|')
   const [errorNotice, setErrorNotice] = useState<string | null>(null)
   const tag = useMemo(() => timeTag(), [])
   const pendingConsumedId = useRef<number | null>(null)
@@ -59,10 +61,11 @@ export default function Chat({
   const [runActive, setRunActive] = useState(false)
   const statusLineRef = useRef<StatusLine | null>(null)
 
-  const showToast = (text: string, _tone: 'ok' | 'error') => {
-    if (toastTimer.current) clearTimeout(toastTimer.current)
+  // Only a failure the frontend caused itself: the Go side could not be
+  // reached, so there is no notice row for the conversation to keep.
+  const showLocalError = (text: string, ms = 6000) => {
     setErrorNotice(text)
-    toastTimer.current = setTimeout(() => setErrorNotice(null), 4000)
+    setTimeout(() => setErrorNotice(null), ms)
   }
 
   const decide = (decision: PermissionDecision) => {
@@ -71,8 +74,7 @@ export default function Chat({
     setPermission(null)
     respondPermission(requestID, decision).catch((err) => {
       console.error('permission respond failed', err)
-      setErrorNotice('Could not save that decision, try again')
-      setTimeout(() => setErrorNotice(null), 6000)
+      showLocalError('Could not save that decision, try again')
     })
   }
 
@@ -91,11 +93,11 @@ export default function Chat({
 
   useEffect(() => {
     pendingMCPConnects('default').then((l) => {
-      if (l && l[0]) {
-        setMcpConnect(l[0])
-        setMcpState('requested')
-        setMcpError(undefined)
-      }
+      const v = l && l[0]
+      if (!v) return
+      setMcpConnect(v)
+      setMcpState(v.state || 'requested')
+      setMcpError(undefined)
     })
     const line = new StatusLine(setStatus)
     statusLineRef.current = line
@@ -126,11 +128,29 @@ export default function Chat({
         setMcpState(payload.state)
         setMcpError(payload.error)
         if (payload.state === 'connected') {
-          setMcpConnect(null)
-          showToast(`${payload.server_name || 'Integration'} connected`, 'ok')
+          // Keep the card up: it is the only place that says this integration
+          // is connected, and it must not vanish the moment the sign-in works.
+          setMcpConnect((cur) => (
+            cur && cur.server_id === payload.server_id
+              ? cur
+              : {
+                request_id: payload.request_id,
+                agent_id: payload.agent_id,
+                server_id: payload.server_id,
+                server_name: payload.server_name,
+                description: payload.description,
+                icon: payload.icon,
+              }
+          ))
         }
         if (payload.state === 'denied' || payload.state === 'expired') {
           setMcpConnect(null)
+        }
+        // Every state the backend settles on is already a notice row, so the
+        // conversation picks it up from the database instead of a toast that
+        // disappears after a few seconds.
+        if (payload.state !== 'requested' && payload.state !== 'authorizing') {
+          qc.invalidateQueries({ queryKey: noticesKey })
         }
       }),
       Events.On('agent:activity', (event: any) => {
@@ -140,12 +160,18 @@ export default function Chat({
         if (!payload?.kind) return
         if (payload.kind === 'tool_started') {
           const cmd = (payload.command ?? '').trim()
-          line.set(
-            cmd.length > 0
-              ? `Running ${cmd.length > 60 ? cmd.slice(0, 60) + '…' : cmd} in the terminal`
-              : 'Running a command in the terminal',
-            'tool',
-          )
+          const short = cmd.length > 60 ? cmd.slice(0, 60) + '…' : cmd
+          if (payload.tool === 'web_search') {
+            line.set(
+              short.length > 0 ? `Searching the web: ${short}` : 'Searching the web',
+              'tool',
+            )
+          } else {
+            line.set(
+              cmd.length > 0 ? `Running ${short} in the terminal` : 'Running a command in the terminal',
+              'tool',
+            )
+          }
         } else {
           line.clear()
         }
@@ -226,7 +252,7 @@ export default function Chat({
     const el = scrollRef.current
     if (!el || !pinnedRef.current) return
     el.scrollTop = el.scrollHeight
-  }, [messages, permission, persistedNotice, errorNotice, status])
+  }, [messages, permission, noticeKeyText, errorNotice, status])
 
   return (
     <div className="relative flex h-dvh flex-1 min-h-0 overflow-hidden">
@@ -282,7 +308,19 @@ export default function Chat({
                   onCancel={() => decideMCP('cancel')}
                 />
               )}
-              {persistedNotice && <Notifier text={persistedNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary"><FiTerminal size={9} className="text-secondary" /></div>} />}
+              {noticeLines.map((n) => (
+                <Notifier
+                  key={n.id}
+                  text={noticeText(n)}
+                  icon={
+                    n.kind === 'mcp' ? (
+                      <div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary"><FiLink size={9} className="text-secondary" /></div>
+                    ) : (
+                      <div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary"><FiTerminal size={9} className="text-secondary" /></div>
+                    )
+                  }
+                />
+              ))}
               {errorNotice && <Notifier text={errorNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400"><FiTerminal size={9} className="text-red-400" /></div>} />}
               {runActive && status && <ThinkingIndicator text={status} />}
             </div>
