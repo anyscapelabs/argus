@@ -105,6 +105,13 @@ export interface MCPConnectRequestView {
     "server_name": string;
     "description": string;
     "icon": string;
+
+    /**
+     * State carries the card's last known state so a restored card shows what
+     * it did before the remount: without it a connected integration would come
+     * back offering Connect again. Empty means still waiting on the user.
+     */
+    "state": string;
 }
 
 export interface ModelRequestView {
@@ -158,6 +165,13 @@ export interface PermissionNoticeView {
     "tool": string;
     "command": string;
     "decision": string;
+
+    /**
+     * Kind separates a permission decision from any other notice, and Text
+     * carries the copy for the kinds the UI cannot compose itself.
+     */
+    "kind": string;
+    "text": string;
     "created_at": number;
 }
 

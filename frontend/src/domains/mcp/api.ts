@@ -13,6 +13,9 @@ export type MCPConnectRequestView = {
   server_name: string
   description?: string
   icon?: string
+  // Set once the card has settled, so a restored card shows its last state
+  // instead of offering Connect again.
+  state?: MCPConnectState
 }
 
 export type MCPConnectStatus = {

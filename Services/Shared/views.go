@@ -278,6 +278,10 @@ type PermissionNoticeView struct {
 	Tool      string `json:"tool"`
 	Command   string `json:"command"`
 	Decision  string `json:"decision"`
+	// Kind separates a permission decision from any other notice, and Text
+	// carries the copy for the kinds the UI cannot compose itself.
+	Kind      string `json:"kind"`
+	Text      string `json:"text"`
 	CreatedAt int64  `json:"created_at"`
 }
 
@@ -289,6 +293,10 @@ type MCPConnectRequestView struct {
 	ServerName  string `json:"server_name"`
 	Description string `json:"description"`
 	Icon        string `json:"icon"`
+	// State carries the card's last known state so a restored card shows what
+	// it did before the remount: without it a connected integration would come
+	// back offering Connect again. Empty means still waiting on the user.
+	State string `json:"state"`
 }
 
 type MCPConnectDecisionView struct {

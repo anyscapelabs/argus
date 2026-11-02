@@ -57,6 +57,17 @@ export function GetToolsForChat(): $CancellablePromise<$models.Tool[] | null> {
 }
 
 /**
+ * HasStoredSession reports whether an integration was signed in on this
+ * machine before, whether or not it is connected right now. The connect card
+ * uses it to rebuild a settled card after a restart; it is preferred over
+ * IsConnected because restoring sessions happens in the background and a card
+ * asked for during that window would otherwise disappear.
+ */
+export function HasStoredSession(serverID: string): $CancellablePromise<boolean> {
+    return $Call.ByID(775109015, serverID);
+}
+
+/**
  * ListServers returns all server configurations.
  */
 export function ListServers(): $CancellablePromise<$models.ServerConfig[] | null> {

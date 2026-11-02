@@ -34,10 +34,10 @@ type Tool struct {
 
 // Manager manages MCP server connections and discovered tools.
 type Manager struct {
-	mu       sync.RWMutex
-	servers  map[string]*serverConn
-	configs  map[string]ServerConfig
-	tools    []Tool
+	mu      sync.RWMutex
+	servers map[string]*serverConn
+	configs map[string]ServerConfig
+	tools   []Tool
 }
 
 type serverConn struct {

@@ -1,3 +1,4 @@
+import { FiCheck } from 'react-icons/fi'
 import type { MCPConnectRequestView, MCPConnectState } from '../../domains/mcp/api'
 
 type Props = {
@@ -12,6 +13,7 @@ type Props = {
 export default function MCPConnectCard({ request, state, error, onConnect, onDeny, onCancel }: Props) {
   const waiting = state === 'authorizing'
   const failed = state === 'failed'
+  const connected = state === 'connected'
   return (
     <div className="w-full max-w-sm min-h-10 p-2 rounded-xl border border-secondary bg-secondary flex items-center gap-3">
       <div className="h-10 w-10 rounded-lg border border-secondary overflow-hidden">
@@ -31,7 +33,14 @@ export default function MCPConnectCard({ request, state, error, onConnect, onDen
               : request.description || 'Connect this integration'}
         </span>
       </div>
-      {waiting ? (
+      {connected ? (
+        // The card stays on screen after a successful sign-in and the action
+        // pill keeps its place, so nothing shifts under the chat.
+        <span className="flex items-center gap-1 px-3 py-1 rounded-full bg-accent text-black text-sm font-medium">
+          <FiCheck size={12} />
+          Connected
+        </span>
+      ) : waiting ? (
         <button onClick={onCancel} className="px-3 py-1 rounded-full text-sm font-medium text-secondary hover:text-primary cursor-pointer">
           Cancel
         </button>

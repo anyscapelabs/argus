@@ -123,6 +123,8 @@ func (s *Service) Notices(agentID string, limit int) Shared.NoticesResult {
 			Tool:      n.Tool,
 			Command:   n.Command,
 			Decision:  n.Decision,
+			Kind:      n.Kind,
+			Text:      n.Body,
 			CreatedAt: n.CreatedAt,
 		})
 	}

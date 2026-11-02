@@ -30,6 +30,12 @@ export type PermissionNoticeView = {
   tool: string
   command: string
   decision: string
+  // "permission" for terminal decisions, "mcp" for a connector card that
+  // settled. Older rows have no kind and read as permissions.
+  kind?: string
+  // The finished sentence, present when a decision word cannot describe the
+  // row on its own, i.e. everything the notifier was told about.
+  text?: string
   created_at: number
 }
 
@@ -45,7 +51,10 @@ export async function getNotices(agentID: string, limit = 20): Promise<NoticesRe
   return res
 }
 
-export function noticeText(n: Pick<PermissionNoticeView, 'agent_name' | 'decision'>): string {
+export function noticeText(n: Pick<PermissionNoticeView, 'agent_name' | 'decision' | 'text'>): string {
+  // A row that carries its own sentence was written ready-made, so show it as
+  // is. Only the terminal-permission rows still have to be composed here.
+  if (n.text) return n.text
   const agent = n.agent_name || 'the agent'
   switch (n.decision) {
     case 'allow_always':
