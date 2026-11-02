@@ -17,6 +17,7 @@ func (db *DB) migrate() error {
 		migration3,
 		migration4,
 		migration5,
+		migration6,
 	}
 
 	for i := version; i < len(migrations); i++ {
@@ -192,6 +193,26 @@ func migration5(db *DB) error {
 	}
 	for _, q := range statements {
 		if _, err := db.conn.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migration6 turns the permission decision log into a general notice log: an
+// MCP sign-in that settled is the same kind of fact the user may want to see
+// again after a restart, and a restored card needs to know which row produced
+// it. Rows written before this migration read back as kind "permission".
+func migration6(db *DB) error {
+	statements := []string{
+		`ALTER TABLE permission_notices ADD COLUMN kind TEXT NOT NULL DEFAULT 'permission'`,
+		`ALTER TABLE permission_notices ADD COLUMN notice_text TEXT NOT NULL DEFAULT ''`,
+	}
+	for _, q := range statements {
+		if _, err := db.conn.Exec(q); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				continue
+			}
 			return err
 		}
 	}

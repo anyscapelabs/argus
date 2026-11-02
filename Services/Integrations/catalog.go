@@ -12,6 +12,11 @@ var raw []byte
 type OAuth struct {
 	Mode   string   `json:"mode"` // google | dynamic
 	Scopes []string `json:"scopes"`
+	// ProbeTool is a read-only tool with no required arguments. Remote Google
+	// MCP endpoints answer initialize and tools/list without credentials, so a
+	// tool call is the only request that returns the 401 challenge which starts
+	// the browser sign-in.
+	ProbeTool string `json:"probeTool,omitempty"`
 }
 
 // Item represents an integration in the catalog.
@@ -55,6 +60,15 @@ func Load(path string) (*Catalog, error) {
 func (c *Catalog) Items() []Item {
 	out := make([]Item, len(c.items))
 	copy(out, c.items)
+	return out
+}
+
+// IDs returns every integration id, in catalog order.
+func (c *Catalog) IDs() []string {
+	out := make([]string, 0, len(c.items))
+	for _, it := range c.items {
+		out = append(out, it.ID)
+	}
 	return out
 }
 
