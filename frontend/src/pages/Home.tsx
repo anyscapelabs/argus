@@ -15,9 +15,12 @@ function timeOfDay() {
 
 type HomeProps = {
   onSend?: (text: string, modelRef: string | null) => void
+  // The panel lists the agent's documents even on the landing page, so the same
+  // full-screen viewer has to open from here as it does from the chat.
+  onOpenArtifact?: (artifactID: string) => void
 }
 
-export default function Home({ onSend }: HomeProps) {
+export default function Home({ onSend, onOpenArtifact }: HomeProps) {
   const greeting = useMemo(() => `Good ${timeOfDay()}`, [])
   const [rightOpen, setRightOpen] = useState(false)
   const { data: agentProfile } = useAgentProfile('default')
@@ -49,7 +52,7 @@ export default function Home({ onSend }: HomeProps) {
         </div>
       </div>
       <AnimatePresence>
-        {rightOpen && <RightPanel key="right-panel" onClose={() => setRightOpen(false)} />}
+        {rightOpen && <RightPanel key="right-panel" onClose={() => setRightOpen(false)} onOpenArtifact={onOpenArtifact} />}
       </AnimatePresence>
     </div>
   )

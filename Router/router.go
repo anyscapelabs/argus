@@ -33,12 +33,13 @@ func New() *Router {
 }
 
 type FixedQuirks struct {
-	ChatPath       string `json:"chat_path,omitempty"`
-	MaxTokensField string `json:"max_tokens_field,omitempty"`
-	SystemRole     string `json:"system_role,omitempty"`
-	StreamUsage    bool   `json:"stream_usage,omitempty"`
-	ReasoningField string `json:"reasoning_field,omitempty"`
-	ParallelTools  bool   `json:"parallel_tools,omitempty"`
+	ChatPath               string `json:"chat_path,omitempty"`
+	MaxTokensField         string `json:"max_tokens_field,omitempty"`
+	SystemRole             string `json:"system_role,omitempty"`
+	StreamUsage            bool   `json:"stream_usage,omitempty"`
+	ReasoningField         string `json:"reasoning_field,omitempty"`
+	ParallelTools          bool   `json:"parallel_tools,omitempty"`
+	GeminiSchemaCleanup    bool   `json:"gemini_schema_cleanup,omitempty"`
 }
 
 type TargetOptions struct {
@@ -74,12 +75,13 @@ func QuirksRaw(q *Provider.Quirks) json.RawMessage {
 		return nil
 	}
 	fixed := FixedQuirks{
-		ChatPath:       q.ChatPath,
-		MaxTokensField: q.MaxTokensField,
-		SystemRole:     q.SystemRole,
-		StreamUsage:    q.HasStreamUsage(),
-		ReasoningField: q.ReasoningField,
-		ParallelTools:  q.AllowsParallelTools(),
+		ChatPath:            q.ChatPath,
+		MaxTokensField:      q.MaxTokensField,
+		SystemRole:          q.SystemRole,
+		StreamUsage:         q.HasStreamUsage(),
+		ReasoningField:      q.ReasoningField,
+		ParallelTools:       q.AllowsParallelTools(),
+		GeminiSchemaCleanup: q.GeminiSchemaCleanupEnabled(),
 	}
 	raw, err := json.Marshal(fixed)
 	if err != nil {

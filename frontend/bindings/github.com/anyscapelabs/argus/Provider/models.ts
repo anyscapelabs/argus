@@ -56,6 +56,13 @@ export interface Quirks {
     "stream_usage"?: boolean | null;
     "reasoning_field"?: string;
     "parallel_tools"?: boolean | null;
+
+    /**
+     * GeminiSchemaCleanup strips JSON Schema keywords Gemini's closed Schema
+     * type rejects ($defs, $ref, x-google-*, additionalProperties, ...).
+     * The OpenAI adapter needs it when it fronts a Gemini endpoint.
+     */
+    "gemini_schema_cleanup"?: boolean | null;
 }
 
 export interface Recommended {

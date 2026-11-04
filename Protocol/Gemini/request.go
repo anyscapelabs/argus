@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/anyscapelabs/argus/Protocol"
+	"github.com/anyscapelabs/argus/Protocol/Shared"
 )
 
 type Adapter struct{}
@@ -135,10 +136,10 @@ func buildBody(req *Protocol.Request) *wireBody {
 	if len(req.Tools) > 0 {
 		decls := make([]wireFunctionDeclaration, 0, len(req.Tools))
 		for _, t := range req.Tools {
-			schema := t.Schema
-			if len(schema) == 0 {
-				schema = json.RawMessage(`{"type":"object","properties":{}}`)
-			}
+			// A schema carrying a keyword Gemini has no field for is not a warning
+			// — it rejects the request and every tool in it. See Shared's
+			// schema.go.
+			schema := json.RawMessage(Shared.CleanSchemaForGemini(t.Schema))
 			decls = append(decls, wireFunctionDeclaration{Name: t.Name, Description: t.Description, Parameters: schema})
 		}
 		b.Tools = []wireToolSet{{FunctionDeclarations: decls}}

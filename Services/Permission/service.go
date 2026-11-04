@@ -3,6 +3,7 @@ package Permission
 import (
 	"context"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,8 +14,32 @@ import (
 	"github.com/google/uuid"
 )
 
-// TerminalTool is the single tool the permission gate currently guards.
-const TerminalTool = "execute_command"
+// The tool families the permission gate guards. A grant is stored per tool, so
+// "always allow terminal" says nothing about files and vice versa.
+const (
+	TerminalTool   = "execute_command"
+	FileAccessTool = "file_access"
+	// BrowserTool guards the irreversible half of browsing: buying, sending,
+	// posting, deleting. Reading is free and never reaches the gate.
+	BrowserTool = "browser_action"
+)
+
+// BrowserHostTool scopes a browsing grant to one site. "Always allow" then means
+// "on this site", which is what a user means when they click it on a card, and it
+// is the reason Revoke has to sweep the family by prefix.
+func BrowserHostTool(host string) string {
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return BrowserTool
+	}
+	return BrowserTool + ":" + host
+}
+
+// IsBrowserGrant reports whether a stored tool string belongs to the browsing
+// family, host-scoped or not.
+func IsBrowserGrant(tool string) bool {
+	return tool == BrowserTool || strings.HasPrefix(tool, BrowserTool+":")
+}
 
 // Decision values the gate and the frontend agree on.
 const (
@@ -152,12 +177,21 @@ func (s *Service) State(agentID string) Shared.PermissionStateResult {
 	return Shared.PermissionStateResult{State: state}
 }
 
-// Revoke removes the persisted grant for an agent and the terminal tool.
+// Revoke removes the persisted grants of an agent — terminal, file access and
+// every site-scoped browsing grant — so one revoke leaves nothing quietly still
+// permitted.
 func (s *Service) Revoke(agentID string) Shared.ActionResult {
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.ActionResult{Error: aerr}
 	}
-	if err := s.Core.DB.ClearGrant(agentID, TerminalTool); err != nil {
+	for _, tool := range []string{TerminalTool, FileAccessTool} {
+		if err := s.Core.DB.ClearGrant(agentID, tool); err != nil {
+			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+		}
+	}
+	// Browsing grants are per site, so the family is swept by prefix rather than
+	// listed; leaving one behind would keep the agent inside a user's inbox.
+	if err := s.Core.DB.ClearGrantPrefix(agentID, BrowserTool); err != nil {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
 	return Shared.ActionResult{Ok: true}
@@ -179,6 +213,29 @@ func Request(ctx context.Context, svc *Service, agentID, agentName, tool, comman
 		case string(Storage.GrantDeny):
 			return Deny, nil
 		}
+	}
+
+	// Nobody is watching an unattended run, so an interactive ask would hang
+	// the agent until the timeout. Refuse it instead and leave a notice the
+	// user can read afterwards; anything the routine needs has to be granted
+	// ahead of time.
+	if Shared.IsUnattended(ctx) {
+		if nid, uerr := uuid.NewV7(); uerr == nil {
+			if serr := svc.Core.DB.InsertPermissionNotice(Storage.PermissionNotice{
+				ID:        nid.String(),
+				AgentID:   agentID,
+				AgentName: agentName,
+				Tool:      tool,
+				Command:   command,
+				Decision:  Deny,
+				Kind:      "permission",
+				Body:      "Refused while unattended: the routine asked for a permission nobody was there to grant.",
+				CreatedAt: time.Now().UnixMilli(),
+			}); serr != nil {
+				log.Printf("permission: could not persist unattended denial: %v", serr)
+			}
+		}
+		return Deny, nil
 	}
 
 	// One pending ask per agent: if one is already on screen the caller

@@ -75,13 +75,18 @@
     {
       "id": "google",
       "display_name": "Google Gemini",
-      "adapter": "gemini",
-      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "adapter": "openai_compat",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
       "models_path": "/models",
       "key_hint": "AIza",
       "key_help_url": "https://aistudio.google.com/apikey",
       "doc_url": "https://ai.google.dev/gemini-api/docs",
-      "order": 6
+      "order": 6,
+      "quirks": {
+        "chat_path": "/chat/completions",
+        "stream_usage": true,
+        "gemini_schema_cleanup": true
+      }
     },
     {
       "id": "groq",

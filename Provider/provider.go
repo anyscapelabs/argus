@@ -16,12 +16,16 @@ type Recommended struct {
 }
 
 type Quirks struct {
-	ChatPath       string `json:"chat_path,omitempty"`
-	MaxTokensField string `json:"max_tokens_field,omitempty"`
-	SystemRole     string `json:"system_role,omitempty"`
-	StreamUsage    *bool  `json:"stream_usage,omitempty"`
-	ReasoningField string `json:"reasoning_field,omitempty"`
-	ParallelTools  *bool  `json:"parallel_tools,omitempty"`
+	ChatPath               string `json:"chat_path,omitempty"`
+	MaxTokensField         string `json:"max_tokens_field,omitempty"`
+	SystemRole             string `json:"system_role,omitempty"`
+	StreamUsage            *bool  `json:"stream_usage,omitempty"`
+	ReasoningField         string `json:"reasoning_field,omitempty"`
+	ParallelTools          *bool  `json:"parallel_tools,omitempty"`
+	// GeminiSchemaCleanup strips JSON Schema keywords Gemini's closed Schema
+	// type rejects ($defs, $ref, x-google-*, additionalProperties, ...).
+	// The OpenAI adapter needs it when it fronts a Gemini endpoint.
+	GeminiSchemaCleanup    *bool  `json:"gemini_schema_cleanup,omitempty"`
 }
 
 func (q *Quirks) HasStreamUsage() bool {
@@ -33,6 +37,10 @@ func (q *Quirks) HasStreamUsage() bool {
 
 func (q *Quirks) AllowsParallelTools() bool {
 	return q != nil && q.ParallelTools != nil && *q.ParallelTools
+}
+
+func (q *Quirks) GeminiSchemaCleanupEnabled() bool {
+	return q != nil && q.GeminiSchemaCleanup != nil && *q.GeminiSchemaCleanup
 }
 
 type OverlayProvider struct {

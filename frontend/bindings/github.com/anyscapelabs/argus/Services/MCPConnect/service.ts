@@ -19,6 +19,17 @@ export function Pending(agentID: string): $CancellablePromise<Shared$0.MCPConnec
 }
 
 /**
+ * PromptBlock says which connectors are live at this very moment. The chat
+ * rebuilds it into the system prompt on every run, so a sign-in that finished
+ * after the agent last looked is already in front of it: the user never has to
+ * announce that they connected. The tool names are spelled out because the
+ * model otherwise has to guess how a connector's tools are written.
+ */
+export function PromptBlock(withTools: boolean): $CancellablePromise<string> {
+    return $Call.ByID(297027405, withTools);
+}
+
+/**
  * Register returns shown | pending | connected | unknown.
  */
 export function Register(agentID: string, agentName: string, serverID: string): $CancellablePromise<string> {

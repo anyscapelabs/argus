@@ -16,12 +16,48 @@ func (s *Service) GetChat(agentID string, beforeSeq, limit int) Shared.GetChatRe
 		agentID = "default"
 	}
 	agentName := agentDisplayName(s, agentID)
-	msgs, err := s.Core.DB.ListMessages(agentID, beforeSeq, limit)
+	// The page comes back visibility-filtered from SQL, so `limit` counts real
+	// messages, not the tool-carrier rows between them. With no limit, ask for
+	// the default window.
+	if limit <= 0 {
+		limit = chatPageLimit
+	}
+	msgs, err := s.Core.DB.ListVisibleMessages(agentID, beforeSeq, limit)
 	if err != nil {
 		return Shared.GetChatResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
+	// The cursor: the smallest seq on the page (the list is ascending), stepped
+	// down by one so the next page is strictly older. A short page means the
+	// walk reached the conversation's first message and there is nothing older.
+	var nextBeforeSeq int
+	if len(msgs) > 0 {
+		nextBeforeSeq = msgs[0].Seq - 1
+	}
 	out := make([]Shared.ChatMessage, 0, len(msgs))
 	for _, m := range msgs {
+		// Steering rows are the app speaking on the user's behalf — an MCP
+		// connection settling, say. The model reads them as context; showing
+		// them here would put words in the user's mouth that they never typed.
+		if m.Kind != "" {
+			continue
+		}
+		// Tool round-trips are real message rows so buildHistory can replay
+		// them, but they are model context, not chat: a carrier row has no
+		// visible text, and a tool-only assistant turn may have none either.
+		if m.Role == "user" && strings.TrimSpace(m.Text) == "" {
+			continue
+		}
+		// A reply row that carries no text is storage, not chat: it is either a
+		// tool round (whose blocks are tool_use calls the model replays) or a run
+		// killed mid-flight. Hiding it here is the job the startup cleanser used
+		// to do by deleting the whole turn — the difference is that the question
+		// survives, and so does the history the next turn reads.
+		// Rows still 'streaming' stay in the list: the chat page measures the turn
+		// in flight off them, and an error row keeps its own message visible.
+		if m.Role == "assistant" && m.Status != "streaming" &&
+			strings.TrimSpace(m.Text) == "" && strings.TrimSpace(m.ErrorMessage) == "" {
+			continue
+		}
 		text := m.Text
 		if m.Role == "assistant" && text != "" {
 			text = StripLeadingTitle(text, agentName, "display")
@@ -41,8 +77,12 @@ func (s *Service) GetChat(agentID string, beforeSeq, limit int) Shared.GetChatRe
 			Blocks:       m.Blocks(),
 		})
 	}
-	return Shared.GetChatResult{Messages: out}
+	return Shared.GetChatResult{Messages: out, NextBeforeSeq: nextBeforeSeq}
 }
+
+// chatPageLimit is one history page. Big enough to fill a screen and then
+// some; small enough that every page loads instantly.
+const chatPageLimit = 100
 
 // agentDisplayName resolves the current name of an agent, falling back to
 // the default when the profile is missing or unnamed.

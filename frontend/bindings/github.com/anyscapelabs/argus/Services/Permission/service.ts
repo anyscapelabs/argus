@@ -26,7 +26,9 @@ export function Respond(requestID: string, decision: string): $CancellablePromis
 }
 
 /**
- * Revoke removes the persisted grant for an agent and the terminal tool.
+ * Revoke removes the persisted grants of an agent — terminal, file access and
+ * every site-scoped browsing grant — so one revoke leaves nothing quietly still
+ * permitted.
  */
 export function Revoke(agentID: string): $CancellablePromise<Shared$0.ActionResult> {
     return $Call.ByID(3779293251, agentID);

@@ -18,6 +18,12 @@ func (db *DB) migrate() error {
 		migration4,
 		migration5,
 		migration6,
+		migration7,
+		migration8,
+		migration9,
+		migration10,
+		migration11,
+		migration12,
 	}
 
 	for i := version; i < len(migrations); i++ {
@@ -215,6 +221,138 @@ func migration6(db *DB) error {
 			}
 			return err
 		}
+	}
+	return nil
+}
+
+// migration8 creates the durable-fact store. One row per key, upserted by the
+// agent's remember tool, so a changed preference overwrites the old one
+// instead of contradicting it later.
+func migration8(db *DB) error {
+	stmt := `CREATE TABLE IF NOT EXISTS user_memories (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL,
+		created_at INTEGER NOT NULL,
+		updated_at INTEGER NOT NULL
+	)`
+	if _, err := db.conn.Exec(stmt); err != nil {
+		return err
+	}
+	return nil
+}
+
+// migration9 creates the scheduler store. Routines and reminders the user
+// asks the agent for live here, with next_run_at as the single source of
+// truth: schedules survive restarts and missed fires catch up instead of
+// being lost with an in-memory timer. schedule_json is opaque to storage —
+// the Scheduler spec package owns its shape.
+func migration9(db *DB) error {
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS scheduled_tasks (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL,
+			kind TEXT NOT NULL CHECK (kind IN ('routine','reminder')),
+			title TEXT NOT NULL,
+			prompt TEXT NOT NULL,
+			schedule_json TEXT NOT NULL,
+			next_run_at INTEGER NOT NULL DEFAULT 0,
+			last_run_at INTEGER NOT NULL DEFAULT 0,
+			last_status TEXT NOT NULL DEFAULT '',
+			paused INTEGER NOT NULL DEFAULT 0,
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_scheduled_due ON scheduled_tasks(next_run_at)`,
+		`CREATE TABLE IF NOT EXISTS scheduled_runs (
+			id TEXT PRIMARY KEY,
+			task_id TEXT NOT NULL REFERENCES scheduled_tasks(id) ON DELETE CASCADE,
+			agent_id TEXT NOT NULL,
+			message_id TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL CHECK (status IN ('started','success','error')),
+			error TEXT NOT NULL DEFAULT '',
+			started_at INTEGER NOT NULL,
+			completed_at INTEGER
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_runs_task ON scheduled_runs(task_id, started_at)`,
+	}
+	for _, q := range statements {
+		if _, err := db.conn.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migration10 adds the message kind. An empty kind is an ordinary turn: the
+// user typed it or the agent wrote it, and it belongs in the transcript.
+// "steering" marks a row the app wrote on the user's behalf when something
+// out of band finished — an MCP connection settling, for example. The model
+// reads those rows so it knows what happened; the chat UI hides them.
+// SQLite cannot attach a CHECK to an added column, so the allowed values are
+// enforced by the Storage constants rather than by the schema.
+func migration10(db *DB) error {
+	stmt := `ALTER TABLE messages ADD COLUMN kind TEXT NOT NULL DEFAULT ''`
+	if _, err := db.conn.Exec(stmt); err != nil {
+		if strings.Contains(err.Error(), "duplicate column name") {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+// migration11 creates the artifacts tables. An artifact is one document the
+// agent wrote: the body is canonical Markdown, and every other file type the
+// user exports is derived from that body rather than authored separately.
+// artifact_versions holds the body an edit replaced, so a rewrite stays
+// undoable; the count is pruned by Storage.MaxArtifactVersions.
+func migration11(db *DB) error {
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS artifacts (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL,
+			title TEXT NOT NULL DEFAULT '',
+			format TEXT NOT NULL DEFAULT 'markdown',
+			body TEXT NOT NULL,
+			words INTEGER NOT NULL DEFAULT 0,
+			bytes INTEGER NOT NULL DEFAULT 0,
+			version INTEGER NOT NULL DEFAULT 1,
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_artifacts_agent ON artifacts(agent_id, updated_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS artifact_versions (
+			id TEXT PRIMARY KEY,
+			artifact_id TEXT NOT NULL,
+			version INTEGER NOT NULL,
+			title TEXT NOT NULL DEFAULT '',
+			body TEXT NOT NULL,
+			words INTEGER NOT NULL DEFAULT 0,
+			created_at INTEGER NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_artifact_versions ON artifact_versions(artifact_id, version DESC)`,
+	}
+	for _, q := range statements {
+		if _, err := db.conn.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migration12 gives artifacts their metadata column. The validator reads a
+// document's front matter and strips it from the body, so without somewhere to
+// keep it a "paper: a4" or "author:" line would be parsed, checked and then
+// thrown away — the worst possible outcome for a key the writer was told exists.
+// It holds a JSON object of the approved keys; an empty object means a document
+// with no metadata, which every exporter reads as its own default.
+func migration12(db *DB) error {
+	stmt := `ALTER TABLE artifacts ADD COLUMN meta TEXT NOT NULL DEFAULT '{}'`
+	if _, err := db.conn.Exec(stmt); err != nil {
+		if strings.Contains(err.Error(), "duplicate column name") {
+			return nil
+		}
+		return err
 	}
 	return nil
 }

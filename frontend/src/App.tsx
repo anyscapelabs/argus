@@ -8,6 +8,7 @@ import SettingsSidebar from './components/settings/SettingsSidebar'
 import Onboarding from './pages/Onboarding'
 import Home from './pages/Home'
 import Chat from './pages/Chat'
+import ArtifactViewer from './pages/ArtifactViewer'
 import { getChat } from './domains/chat/api'
 import Providers from './pages/settings/Providers'
 
@@ -27,6 +28,10 @@ export default function App() {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const qc = useQueryClient()
   const [page, setPage] = useState<'onboarding' | 'home' | 'chat' | 'settings'>('onboarding');
+  // Which document is open full screen, by id. Not a boolean: the chat card, the
+  // panel list and the viewer all need to agree on *which* document the user
+  // meant, and closing is naming none of them.
+  const [openArtifact, setOpenArtifact] = useState<string | null>(null);
   const [sidebarMode, setSidebarMode] = useState<'main' | 'settings'>('main');
   const [pendingSend, setPendingSend] = useState<{ id: number; text: string; modelRef: string | null } | null>(null);
 
@@ -64,6 +69,15 @@ export default function App() {
     return unsubscribe;
   }, []);
 
+  // One viewer, opened by id, laid over whichever page named it. Both the landing
+  // panel and the chat can reach a document, and neither should carry its own
+  // copy of this overlay.
+  const artifactOverlay = openArtifact ? (
+    <div className="fixed inset-0 z-50">
+      <ArtifactViewer artifactID={openArtifact} onBack={() => setOpenArtifact(null)} />
+    </div>
+  ) : null
+
   return (
     <div
       ref={canvasRef}
@@ -87,7 +101,8 @@ export default function App() {
           <Home onSend={(text: string, modelRef: string | null) => {
             setPendingSend({ id: Date.now(), text, modelRef });
             setPage('chat');
-          }} />
+          }} onOpenArtifact={(id) => setOpenArtifact(id)} />
+          {artifactOverlay}
         </div>
       ) : page === 'settings' ? (
         <div className="flex flex-1 min-h-0">
@@ -101,7 +116,7 @@ export default function App() {
           </div>
         </div>
       ) : (
-        <div className="flex flex-1 min-h-0">
+        <div className="relative flex flex-1 min-h-0">
           <Sidebar mode={sidebarMode} onToggleSettings={() => {
             if (sidebarMode === 'settings') {
               setSidebarMode('main')
@@ -110,7 +125,8 @@ export default function App() {
               setPage('settings')
             }
           }} />
-          <Chat pendingSend={pendingSend} onPendingConsumed={() => setPendingSend(null)} />
+          <Chat pendingSend={pendingSend} onPendingConsumed={() => setPendingSend(null)} onOpenArtifact={(id) => setOpenArtifact(id)} />
+          {artifactOverlay}
         </div>
       )}
     </div>

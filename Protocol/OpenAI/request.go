@@ -10,15 +10,17 @@ import (
 	"strings"
 
 	"github.com/anyscapelabs/argus/Protocol"
+	"github.com/anyscapelabs/argus/Protocol/Shared"
 )
 
 type Quirks struct {
-	ChatPath       string `json:"chat_path,omitempty"`
-	MaxTokensField string `json:"max_tokens_field,omitempty"`
-	SystemRole     string `json:"system_role,omitempty"`
-	StreamUsage    bool   `json:"stream_usage,omitempty"`
-	ReasoningField string `json:"reasoning_field,omitempty"`
-	ParallelTools  bool   `json:"parallel_tools,omitempty"`
+	ChatPath               string `json:"chat_path,omitempty"`
+	MaxTokensField         string `json:"max_tokens_field,omitempty"`
+	SystemRole             string `json:"system_role,omitempty"`
+	StreamUsage            bool   `json:"stream_usage,omitempty"`
+	ReasoningField         string `json:"reasoning_field,omitempty"`
+	ParallelTools          bool   `json:"parallel_tools,omitempty"`
+	GeminiSchemaCleanup    bool   `json:"gemini_schema_cleanup,omitempty"`
 }
 
 type Adapter struct {
@@ -173,6 +175,13 @@ func (a *Adapter) buildBody(req *Protocol.Request) *wireBody {
 			if len(schema) == 0 {
 				schema = json.RawMessage(`{"type":"object","properties":{}}`)
 			}
+			if a.quirks.GeminiSchemaCleanup {
+				// A schema carrying a keyword Gemini has no field for is
+				// not a warning — it rejects the request and every tool in
+				// it. See Protocol/Shared's schema.go; the logic is shared
+				// so the OpenAI adapter can front a Gemini endpoint.
+				schema = Shared.CleanSchemaForGemini(schema)
+			}
 			b.Tools = append(b.Tools, wireToolDef{
 				Type:     "function",
 				Function: wireToolFunctionDef{Name: t.Name, Description: t.Description, Parameters: schema},
@@ -205,6 +214,11 @@ func translateMessages(req *Protocol.Request, q Quirks) []wireMessage {
 	if req.System != "" {
 		out = append(out, wireMessage{Role: q.SystemRole, Content: req.System})
 	}
+	// Gemini's OpenAI endpoint has no thoughtSignature round-trip: it
+	// returns reasoning as reasoning_content, and replaying it must send
+	// it back the same way or the model re-thinks from scratch.
+	geminiEndpoint := q.GeminiSchemaCleanup
+
 	for _, m := range req.Messages {
 		switch m.Role {
 		case Protocol.RoleAssistant:
@@ -237,8 +251,12 @@ func translateMessages(req *Protocol.Request, q Quirks) []wireMessage {
 			if text.Len() > 0 || len(calls) == 0 {
 				msg.Content = text.String()
 			}
-			if q.ReasoningField != "" && reasoning != "" {
-				if q.ReasoningField == "reasoning" {
+			if reasoning != "" && (q.ReasoningField != "" || geminiEndpoint) {
+				field := q.ReasoningField
+				if geminiEndpoint {
+					field = "reasoning_content"
+				}
+				if field == "reasoning" {
 					msg.Reasoning = reasoning
 				} else {
 					msg.ReasoningContent = reasoning

@@ -33,6 +33,88 @@ export interface AgentProfileResult {
     "error"?: ActionError | null;
 }
 
+export interface AgentStatusResult {
+    "status": AgentStatusView;
+    "error"?: ActionError | null;
+}
+
+/**
+ * AgentStatusView is the small dashboard the right panel's Details tab renders.
+ * StartedAtMs is the app process start (uptime reads off it), LastActiveMs is
+ * the moment the agent last finished a turn (0 = never), Busy says a run is
+ * on right now so the row can read Working instead of Online.
+ */
+export interface AgentStatusView {
+    "started_at_ms": number;
+    "last_active_ms": number;
+    "busy": boolean;
+}
+
+/**
+ * ArtifactExportResult reports where the derived file landed. Path is absolute,
+ * because the panel offers to reveal it.
+ */
+export interface ArtifactExportResult {
+    "path": string;
+    "format": string;
+    "bytes": number;
+    "error"?: ActionError | null;
+}
+
+export interface ArtifactResult {
+    "artifact": ArtifactView;
+    "found": boolean;
+    "error"?: ActionError | null;
+}
+
+/**
+ * ArtifactView is one document the agent wrote. Body is the canonical Markdown
+ * and arrives only from Get: a panel listing thirty reports should not carry
+ * thirty documents over the bridge. Words and Bytes are stored, not recomputed,
+ * so the number the panel shows is the number the writer was told.
+ */
+export interface ArtifactView {
+    "id": string;
+    "agent_id": string;
+    "title": string;
+
+    /**
+     * Format is the authoring format, and there is only one: "markdown". It
+     * stays in the row because the export targets are formats a document can
+     * become, never formats it is written in.
+     */
+    "format": string;
+    "body"?: string;
+
+    /**
+     * Meta is the document's front matter — title, author, date, language,
+     * paper, orientation — the fields the exporters honour.
+     */
+    "meta"?: { [_ in string]?: string } | null;
+    "words": number;
+    "bytes": number;
+    "version": number;
+    "created_at": number;
+    "updated_at": number;
+}
+
+/**
+ * ArtifactWriteResult is the reply to a writer. A document that broke the rules
+ * is refused rather than stored, and Rejected plus Findings is how the agent
+ * hears that: Error stays nil, because the call worked and the answer was no.
+ */
+export interface ArtifactWriteResult {
+    "artifact": ArtifactView;
+    "rejected": boolean;
+    "findings": string;
+    "error"?: ActionError | null;
+}
+
+export interface ArtifactsResult {
+    "artifacts": ArtifactView[] | null;
+    "error"?: ActionError | null;
+}
+
 export interface ChatMessage {
     "id": string;
     "agent_id": string;
@@ -69,8 +151,35 @@ export interface CustomModelInput {
     "price_output"?: number | null;
 }
 
+/**
+ * ExportFormatView is one entry of the export menu. A format the machine cannot
+ * produce is still listed, disabled, with Required explaining what to install —
+ * hiding an option the user can fix by installing something is worse than
+ * showing it greyed out.
+ */
+export interface ExportFormatView {
+    "id": string;
+    "label": string;
+    "extension": string;
+    "available": boolean;
+    "hint": string;
+    "required"?: string;
+}
+
+export interface ExportFormatsResult {
+    "formats": ExportFormatView[] | null;
+    "error"?: ActionError | null;
+}
+
 export interface GetChatResult {
     "messages": ChatMessage[] | null;
+
+    /**
+     * NextBeforeSeq is the cursor the next older page is fetched with: seq
+     * strictly below it. Zero means there is no older page — the conversation
+     * has been read back to its first message.
+     */
+    "next_before_seq"?: number;
     "error"?: ActionError | null;
 }
 
@@ -112,6 +221,14 @@ export interface MCPConnectRequestView {
      * back offering Connect again. Empty means still waiting on the user.
      */
     "state": string;
+
+    /**
+     * CreatedAt is the instant the card entered the conversation, in unix
+     * milliseconds. The transcript weaves the card at that moment, the same way
+     * it weaves notices, so it stays where the sign-in was asked for instead of
+     * following every newer message to the bottom.
+     */
+    "created_at": number;
 }
 
 export interface ModelRequestView {
@@ -245,6 +362,40 @@ export interface SaveKeyResult {
     "picker"?: Picker | null;
 }
 
+/**
+ * ScheduledTaskView is one row of the routines panel. Times are unix
+ * milliseconds so the panel can render them in the user's own calendar
+ * ("Today at 8:00am") instead of a string the backend chose for them.
+ */
+export interface ScheduledTaskView {
+    "id": string;
+    "agent_id": string;
+
+    /**
+     * routine | reminder
+     */
+    "kind": string;
+    "title": string;
+    "prompt": string;
+    "summary": string;
+    "next_run_at": number;
+    "last_run_at": number;
+    "last_status"?: string;
+    "paused": boolean;
+
+    /**
+     * Retired means a one-off reminder already ran: it has no next fire and is
+     * history rather than a live schedule.
+     */
+    "retired": boolean;
+    "created_at": number;
+}
+
+export interface ScheduledTasksResult {
+    "tasks": ScheduledTaskView[] | null;
+    "error"?: ActionError | null;
+}
+
 export interface Section {
     "id": string;
     "title": string;
@@ -298,6 +449,42 @@ export interface StreamStart {
     "ok": boolean;
     "run_id"?: string;
     "error"?: ActionError | null;
+}
+
+/**
+ * TakeoverListResult is what the frontend reads on mount to restore cards.
+ */
+export interface TakeoverListResult {
+    "takeovers": TakeoverRequestView[] | null;
+    "error"?: ActionError | null;
+}
+
+/**
+ * TakeoverRequestView is the browser takeover card: what page the agent is on
+ * (its screenshot included) and where the handover stands. States ride the
+ * card itself so a restored card shows what happened before a remount:
+ * requested → active → done, or declined at any step.
+ */
+export interface TakeoverRequestView {
+    "request_id": string;
+    "agent_id": string;
+    "agent_name"?: string;
+
+    /**
+     * Reason is why the agent asked: a CAPTCHA it cannot solve, a step that
+     * needs something only the user can type (credentials, bank cards).
+     */
+    "reason"?: string;
+
+    /**
+     * Screenshot is a PNG data URL of the agent's viewport. Kept here rather
+     * than on disk-path because the webview cannot read the OS cache dir.
+     */
+    "screenshot"?: string;
+    "host"?: string;
+    "page_title"?: string;
+    "state": string;
+    "created_at": number;
 }
 
 export interface UsageResult {

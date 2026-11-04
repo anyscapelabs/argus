@@ -7,7 +7,13 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as spec$0 from "../Scheduler/spec/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as Shared$0 from "../Shared/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as Storage$0 from "../../Storage/models.js";
 
 export function Active(): $CancellablePromise<string[] | null> {
     return $Call.ByID(1626669752);
@@ -21,8 +27,90 @@ export function ListRequests(agentID: string, limit: number): $CancellablePromis
     return $Call.ByID(709374876, agentID, limit);
 }
 
+/**
+ * OnRunFinished registers a callback fired when any run reaches a final
+ * state. Register before the first send; handlers run off the run goroutine.
+ */
+export function OnRunFinished(fn: any): $CancellablePromise<void> {
+    return $Call.ByID(1076222558, fn);
+}
+
+/**
+ * PendingTakeover restores the card after a remount. A live card comes back
+ * with its current state; a settled one does not survive as UI — the notice
+ * row beside it carries what happened.
+ */
+export function PendingTakeover(agentID: string): $CancellablePromise<Shared$0.TakeoverListResult> {
+    return $Call.ByID(775883120, agentID);
+}
+
+/**
+ * RegisterTakeover raises the card: screenshot the page as it stands, park the
+ * request, and tell the UI. One live card per agent — a second register while
+ * the first is unanswered or in flight returns the existing card instead of
+ * stacking a second ask on top of the first.
+ */
+export function RegisterTakeover(agentID: string, agentName: string, reason: string): $CancellablePromise<Shared$0.TakeoverRequestView> {
+    return $Call.ByID(2719783494, agentID, agentName, reason);
+}
+
+/**
+ * RespondTakeover is the binding the card's buttons call. decisions:
+ * takeover | done | decline.
+ */
+export function RespondTakeover(requestID: string, decision: string): $CancellablePromise<Shared$0.ActionResult> {
+    return $Call.ByID(1172068374, requestID, decision);
+}
+
+/**
+ * RoutineAlreadySpoken looks for a live routine owned by agentID whose title
+ * reads the same ignoring case and punctuation and whose schedule would fire
+ * identically. Schedules, unlike instructions, cannot drift into ambiguity,
+ * so equality there is the honest signal the job already exists.
+ */
+export function RoutineAlreadySpoken(agentID: string, title: string, sp: spec$0.Schedule): $CancellablePromise<[Storage$0.ScheduledTask, boolean]> {
+    return $Call.ByID(514639628, agentID, title, sp);
+}
+
 export function Send(agentID: string, text: string): $CancellablePromise<Shared$0.SendResult> {
     return $Call.ByID(109026596, agentID, text);
+}
+
+/**
+ * SendScheduledWake starts the turn a scheduled task's fire produces. It is
+ * deliberately unlike Send: no user spoke. The row is written with kind
+ * 'scheduled' — invisible in the transcript, replayed in history like a
+ * steering row — and the run is unattended, so a routine at 7am on a desk with
+ * no one watching still works. The wake text the scheduler passes is
+ * phrased as the job description it is, not as something a person said.
+ */
+export function SendScheduledWake(agentID: string, text: string): $CancellablePromise<Shared$0.SendResult> {
+    return $Call.ByID(4182612855, agentID, text);
+}
+
+/**
+ * Status is the small dashboard the right panel's Details tab renders: when
+ * the app started (uptime), when the agent last finished a turn (last
+ * active), and whether a run is on right now (online vs working). One
+ * snapshot per call; the panel recomputes the relative wording locally.
+ */
+export function Status(agentID: string): $CancellablePromise<Shared$0.AgentStatusResult> {
+    return $Call.ByID(1735941344, agentID);
+}
+
+/**
+ * Steer starts a run on a row the person did not type. The connector uses it
+ * when an OAuth settle lands after the run that asked for the connection is
+ * already gone: without a turn of its own the agent has no way to learn the
+ * outcome, and the user has to say "I connected" to get the work moving again.
+ * The row is written with kind 'steering' so the model reads it as new
+ * information while the transcript keeps it out of the user's mouth.
+ * 
+ * It is deliberately not exposed to the frontend: nothing but the app's own
+ * services should be able to speak as the user.
+ */
+export function Steer(agentID: string, text: string): $CancellablePromise<Shared$0.SendResult> {
+    return $Call.ByID(1211140355, agentID, text);
 }
 
 export function Stop(runID: string): $CancellablePromise<Shared$0.ActionResult> {
