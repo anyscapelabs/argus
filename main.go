@@ -6,7 +6,10 @@ import (
 	"log"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	notifications "github.com/wailsapp/wails/v3/pkg/services/notifications"
 
+	serviceartifacts "github.com/anyscapelabs/argus/Services/Artifacts"
+	servicebrowser "github.com/anyscapelabs/argus/Services/Browser"
 	servicecatalog "github.com/anyscapelabs/argus/Services/Catalog"
 	servicechat "github.com/anyscapelabs/argus/Services/Chat"
 	servicemcp "github.com/anyscapelabs/argus/Services/MCP"
@@ -14,6 +17,7 @@ import (
 	servicemodels "github.com/anyscapelabs/argus/Services/Models"
 	servicepermission "github.com/anyscapelabs/argus/Services/Permission"
 	serviceprovider "github.com/anyscapelabs/argus/Services/Provider"
+	servicescheduler "github.com/anyscapelabs/argus/Services/Scheduler"
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
 
@@ -38,6 +42,22 @@ func init() {
 // main function serves as the application's entry point. It initializes the application, creates a window,
 // and starts a goroutine that emits a time-based event every second. It subsequently runs the application and
 // logs any error that might occur.
+// systemNotifier adapts Wails' notification service to the narrow sink the
+// scheduler uses; keeping it behind an interface means the engine never
+// depends on the notification library.
+type systemNotifier struct {
+	service *notifications.NotificationService
+}
+
+func (n systemNotifier) Notify(title, body string) {
+	if err := n.service.SendNotification(notifications.NotificationOptions{
+		Title: title,
+		Body:  body,
+	}); err != nil {
+		log.Printf("notifications: could not deliver %q: %v", title, err)
+	}
+}
+
 func main() {
 
 	core := Shared.NewCore()
@@ -47,7 +67,21 @@ func main() {
 	permissions := &servicepermission.Service{Core: core}
 	mcp := &servicemcp.Service{Core: core}
 	mcpConnect := &servicemcpconnect.Service{Core: core, MCP: mcp}
-	chat := &servicechat.Service{Core: core, Permissions: permissions, MCP: mcp, MCPConnect: mcpConnect}
+	artifacts := &serviceartifacts.Service{Core: core}
+	browser := &servicebrowser.Service{}
+	chat := &servicechat.Service{Core: core, Permissions: permissions, MCP: mcp, MCPConnect: mcpConnect, Artifacts: artifacts, Browser: browser}
+	// When a sign-in settles, the connector hands the turn back to the agent
+	// instead of waiting for the user to say "I connected". Chat is set here
+	// rather than constructed inside the connector because Chat imports
+	// MCPConnect — a field like this is the only direction that compiles.
+	mcpConnect.OnSettled = func(agentID, text string) {
+		res := chat.Steer(agentID, text)
+		if res.Error != nil {
+			log.Printf("mcpconnect: steering run for %s refused: %s", agentID, res.Error.Message)
+		}
+	}
+	notifier := notifications.New()
+	scheduler := &servicescheduler.Service{Core: core, Chat: chat, Notifier: systemNotifier{service: notifier}}
 
 	app := application.New(application.Options{
 		Name:        "argus",
@@ -60,7 +94,10 @@ func main() {
 			application.NewService(permissions),
 			application.NewService(mcp),
 			application.NewService(mcpConnect),
+			application.NewService(artifacts),
 			application.NewService(chat),
+			application.NewService(notifier),
+			application.NewService(scheduler),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

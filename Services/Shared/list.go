@@ -193,6 +193,11 @@ func fetchAnthropic(ctx context.Context, provider Provider.Provider, override st
 }
 
 func fetchGemini(ctx context.Context, provider Provider.Provider, override string, extraHeaders map[string]string, key string) ([]LiveModel, *ActionError) {
+	// The google provider now goes through the OpenAI-compatible endpoint
+	// (see Provider/overlay.json), which lists models in the OpenAI shape.
+	// fetchList routes AdapterGemini here only for backward compatibility
+	// with any other gemini-adapter providers that still use the native
+	// noun shape; keep both paths alive.
 	headers := listHeaders(extraHeaders)
 	headers.Set("x-goog-api-key", key)
 	base := listEndpoint(listBase(provider, override), provider.ModelsPath)
@@ -210,14 +215,21 @@ func fetchGemini(ctx context.Context, provider Provider.Provider, override strin
 		if aerr != nil {
 			return nil, aerr
 		}
-		if geminiInvalidKey(body) {
-			return nil, NewError(CodeInvalidKey, "The provider rejected this API key")
+		if err := json.Unmarshal(body, &struct{ Models []json.RawMessage `json:"models"` }{}); err != nil {
+			// Not the native Gemini shape; the OpenAI-compatible endpoint
+			// returns [{id,name}] instead.
+			var envelope struct {
+				Data []openAIModelPage `json:"data"`
+			}
+			if err := json.Unmarshal(body, &envelope); err != nil || envelope.Data == nil {
+				return nil, NewError(CodeBadResponse, "The provider response could not be parsed")
+			}
+			return keepChat(envelope.Data), nil
 		}
 		var response struct {
 			Models []struct {
 				Name        string   `json:"name"`
 				DisplayName string   `json:"displayName"`
-				Methods     []string `json:"supportedGenerationMethods"`
 				InputLimit  int64    `json:"inputTokenLimit"`
 				OutputLimit int64    `json:"outputTokenLimit"`
 			} `json:"models"`
@@ -227,9 +239,6 @@ func fetchGemini(ctx context.Context, provider Provider.Provider, override strin
 			return nil, NewError(CodeBadResponse, "The provider response could not be parsed")
 		}
 		for _, m := range response.Models {
-			if !hasGenerateContent(m.Methods) {
-				continue
-			}
 			out = append(out, LiveModel{
 				ID:         strings.TrimPrefix(m.Name, "models/"),
 				Name:       m.DisplayName,
@@ -245,20 +254,6 @@ func fetchGemini(ctx context.Context, provider Provider.Provider, override strin
 	return out, nil
 }
 
-func geminiInvalidKey(body []byte) bool {
-	var probe struct {
-		Error struct {
-			Status  string `json:"status"`
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(body, &probe); err != nil {
-		return false
-	}
-	msg := strings.ToLower(probe.Error.Message)
-	return strings.Contains(msg, "api key not valid") || strings.Contains(msg, "invalid api key")
-}
-
 func isChatType(t string) bool {
 	t = strings.ToLower(strings.TrimSpace(t))
 	if t == "" {
@@ -272,14 +267,6 @@ func isChatType(t string) bool {
 	return true
 }
 
-func hasGenerateContent(methods []string) bool {
-	for _, m := range methods {
-		if strings.EqualFold(m, "generateContent") {
-			return true
-		}
-	}
-	return false
-}
 
 func pickPositiveNumber(values ...float64) float64 {
 	for _, v := range values {

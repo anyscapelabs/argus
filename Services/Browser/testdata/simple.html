@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Simple shop</title>
+</head>
+<body>
+  <header><a href="/account">Sign in</a></header>
+  <main>
+    <h1>A lamp with a long name, for testing</h1>
+    <p>Price: 42 credits.</p>
+    <input type="quantity" id="qty" aria-label="Quantity" value="1">
+    <button type="button" id="buy">Buy now</button>
+    <button type="button" onclick="window.__added = (window.__added||0)+1">Add to basket</button>
+  </main>
+  <script>
+    document.getElementById('buy').addEventListener('click', () => {
+      window.__bought = (window.__bought || 0) + 1;
+    });
+  </script>
+</body>
+</html>

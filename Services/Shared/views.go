@@ -216,7 +216,11 @@ type ChatMessage struct {
 
 type GetChatResult struct {
 	Messages []ChatMessage `json:"messages"`
-	Error    *ActionError  `json:"error,omitempty"`
+	// NextBeforeSeq is the cursor the next older page is fetched with: seq
+	// strictly below it. Zero means there is no older page — the conversation
+	// has been read back to its first message.
+	NextBeforeSeq int         `json:"next_before_seq,omitempty"`
+	Error         *ActionError `json:"error,omitempty"`
 }
 
 type UsageResult struct {
@@ -263,6 +267,17 @@ type ActivityView struct {
 	// Sources carries the sites a web_search call found, so the live
 	// indicator can show favicon plus result titles instead of the query.
 	Sources []ActivitySource `json:"sources,omitempty"`
+	// Page carries where a browser action left the agent, so the live indicator
+	// can name the site instead of the verb.
+	Page *ActivityPage `json:"page,omitempty"`
+}
+
+// ActivityPage is the state of the agent's browser at one moment.
+type ActivityPage struct {
+	Host   string `json:"host"`
+	Title  string `json:"title"`
+	Action string `json:"action"`
+	Tab    int    `json:"tab"`
 }
 
 // ActivitySource is one site the agent's search surfaced.
@@ -306,6 +321,11 @@ type MCPConnectRequestView struct {
 	// it did before the remount: without it a connected integration would come
 	// back offering Connect again. Empty means still waiting on the user.
 	State string `json:"state"`
+	// CreatedAt is the instant the card entered the conversation, in unix
+	// milliseconds. The transcript weaves the card at that moment, the same way
+	// it weaves notices, so it stays where the sign-in was asked for instead of
+	// following every newer message to the bottom.
+	CreatedAt int64 `json:"created_at"`
 }
 
 type MCPConnectDecisionView struct {
@@ -313,6 +333,32 @@ type MCPConnectDecisionView struct {
 	AgentID   string `json:"agent_id"`
 	Decision  string `json:"decision"`
 	ServerID  string `json:"server_id"`
+}
+
+// TakeoverRequestView is the browser takeover card: what page the agent is on
+// (its screenshot included) and where the handover stands. States ride the
+// card itself so a restored card shows what happened before a remount:
+// requested → active → done, or declined at any step.
+type TakeoverRequestView struct {
+	RequestID string `json:"request_id"`
+	AgentID   string `json:"agent_id"`
+	AgentName string `json:"agent_name,omitempty"`
+	// Reason is why the agent asked: a CAPTCHA it cannot solve, a step that
+	// needs something only the user can type (credentials, bank cards).
+	Reason string `json:"reason,omitempty"`
+	// Screenshot is a PNG data URL of the agent's viewport. Kept here rather
+	// than on disk-path because the webview cannot read the OS cache dir.
+	Screenshot string `json:"screenshot,omitempty"`
+	Host       string `json:"host,omitempty"`
+	PageTitle  string `json:"page_title,omitempty"`
+	State      string `json:"state"`
+	CreatedAt  int64  `json:"created_at"`
+}
+
+// TakeoverListResult is what the frontend reads on mount to restore cards.
+type TakeoverListResult struct {
+	Takeovers []TakeoverRequestView `json:"takeovers"`
+	Error     *ActionError          `json:"error,omitempty"`
 }
 
 type NoticesResult struct {
@@ -330,4 +376,115 @@ type PermissionState struct {
 type PermissionStateResult struct {
 	State PermissionState `json:"state"`
 	Error *ActionError    `json:"error,omitempty"`
+}
+
+// ScheduledTaskView is one row of the routines panel. Times are unix
+// milliseconds so the panel can render them in the user's own calendar
+// ("Today at 8:00am") instead of a string the backend chose for them.
+type ScheduledTaskView struct {
+	ID         string `json:"id"`
+	AgentID    string `json:"agent_id"`
+	Kind       string `json:"kind"` // routine | reminder
+	Title      string `json:"title"`
+	Prompt     string `json:"prompt"`
+	Summary    string `json:"summary"`
+	NextRunAt  int64  `json:"next_run_at"`
+	LastRunAt  int64  `json:"last_run_at"`
+	LastStatus string `json:"last_status,omitempty"`
+	Paused     bool   `json:"paused"`
+	// Retired means a one-off reminder already ran: it has no next fire and is
+	// history rather than a live schedule.
+	Retired   bool  `json:"retired"`
+	CreatedAt int64 `json:"created_at"`
+}
+
+type ScheduledTasksResult struct {
+	Tasks []ScheduledTaskView `json:"tasks"`
+	Error *ActionError        `json:"error,omitempty"`
+}
+
+// AgentStatusView is the small dashboard the right panel's Details tab renders.
+// StartedAtMs is the app process start (uptime reads off it), LastActiveMs is
+// the moment the agent last finished a turn (0 = never), Busy says a run is
+// on right now so the row can read Working instead of Online.
+type AgentStatusView struct {
+	StartedAtMs  int64 `json:"started_at_ms"`
+	LastActiveMs int64 `json:"last_active_ms"`
+	Busy         bool  `json:"busy"`
+}
+
+type AgentStatusResult struct {
+	Status AgentStatusView `json:"status"`
+	Error  *ActionError    `json:"error,omitempty"`
+}
+
+// ArtifactView is one document the agent wrote. Body is the canonical Markdown
+// and arrives only from Get: a panel listing thirty reports should not carry
+// thirty documents over the bridge. Words and Bytes are stored, not recomputed,
+// so the number the panel shows is the number the writer was told.
+type ArtifactView struct {
+	ID      string `json:"id"`
+	AgentID string `json:"agent_id"`
+	Title   string `json:"title"`
+	// Format is the authoring format, and there is only one: "markdown". It
+	// stays in the row because the export targets are formats a document can
+	// become, never formats it is written in.
+	Format string `json:"format"`
+	Body   string `json:"body,omitempty"`
+	// Meta is the document's front matter — title, author, date, language,
+	// paper, orientation — the fields the exporters honour.
+	Meta      map[string]string `json:"meta,omitempty"`
+	Words     int               `json:"words"`
+	Bytes     int               `json:"bytes"`
+	Version   int               `json:"version"`
+	CreatedAt int64             `json:"created_at"`
+	UpdatedAt int64             `json:"updated_at"`
+}
+
+type ArtifactsResult struct {
+	Artifacts []ArtifactView `json:"artifacts"`
+	Error     *ActionError   `json:"error,omitempty"`
+}
+
+type ArtifactResult struct {
+	Artifact ArtifactView `json:"artifact"`
+	Found    bool         `json:"found"`
+	Error    *ActionError `json:"error,omitempty"`
+}
+
+// ArtifactWriteResult is the reply to a writer. A document that broke the rules
+// is refused rather than stored, and Rejected plus Findings is how the agent
+// hears that: Error stays nil, because the call worked and the answer was no.
+type ArtifactWriteResult struct {
+	Artifact ArtifactView `json:"artifact"`
+	Rejected bool         `json:"rejected"`
+	Findings string       `json:"findings"`
+	Error    *ActionError `json:"error,omitempty"`
+}
+
+// ExportFormatView is one entry of the export menu. A format the machine cannot
+// produce is still listed, disabled, with Required explaining what to install —
+// hiding an option the user can fix by installing something is worse than
+// showing it greyed out.
+type ExportFormatView struct {
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	Extension string `json:"extension"`
+	Available bool   `json:"available"`
+	Hint      string `json:"hint"`
+	Required  string `json:"required,omitempty"`
+}
+
+type ExportFormatsResult struct {
+	Formats []ExportFormatView `json:"formats"`
+	Error   *ActionError       `json:"error,omitempty"`
+}
+
+// ArtifactExportResult reports where the derived file landed. Path is absolute,
+// because the panel offers to reveal it.
+type ArtifactExportResult struct {
+	Path   string       `json:"path"`
+	Format string       `json:"format"`
+	Bytes  int          `json:"bytes"`
+	Error  *ActionError `json:"error,omitempty"`
 }

@@ -17,6 +17,38 @@
     font-display: swap;
 }
 
+@font-face {
+    font-family: 'Anthropic Serif';
+    src: url('/fonts/AnthropicSerif-Text-Regular-Static.otf') format('opentype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Anthropic Serif';
+    src: url('/fonts/AnthropicSerif-Text-RegularItalic-Static.otf') format('opentype');
+    font-weight: 400;
+    font-style: italic;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Anthropic Serif';
+    src: url('/fonts/AnthropicSerif-Text-Medium-Static.otf') format('opentype');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Anthropic Serif';
+    src: url('/fonts/AnthropicSerif-Text-Light-Static.otf') format('opentype');
+    font-weight: 300;
+    font-style: normal;
+    font-display: swap;
+}
+
 /* ----- Design tokens -------------------------------------------------------
    Argus is a black/grey palette. Per convention the tokens are declared here
    as Tailwind theme colours so they surface as real utilities (`bg-grey-800`,
@@ -37,6 +69,8 @@
 
     /* UI face: Geist (variable, self-hosted from the geist package). */
     --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+    /* Serif face for headings. */
+    --font-serif: "Anthropic Serif", Georgia, serif;
     /* Monospace face: Geist Mono (variable, self-hosted via @fontsource-variable). */
     --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
 
@@ -55,6 +89,9 @@
 
     /* Accent hover, a subtle step down from white. */
     --color-hover-accent: #e6e6e8;
+
+    /* Foreground for accent backgrounds. */
+    --color-foreground: #000000;
 
     /* Secondary accent (purple). */
     --color-accent-secondary: #7B61FF;
@@ -208,6 +245,39 @@
 }
 .markdown h4 {
   font-size: 0.9rem;
+}
+/* A stored document is read, not skimmed between messages, so it gets the serif
+   display face and a taller measure. Scoped on purpose: `.markdown` is also the
+   agent bubble's type, and a bubble set in a book face stops reading as the
+   agent talking. */
+.markdown.doc {
+  line-height: 1.7;
+  font-size: 15px;
+}
+.markdown.doc p,
+.markdown.doc li,
+.markdown.doc td,
+.markdown.doc th {
+  font-size: 15px;
+}
+.markdown.doc h1,
+.markdown.doc h2,
+.markdown.doc h3,
+.markdown.doc h4 {
+  font-family: var(--font-serif);
+  font-weight: 400;
+}
+.markdown.doc h1 {
+  font-size: 1.875rem;
+}
+.markdown.doc h2 {
+  font-size: 1.5rem;
+}
+.markdown.doc h3 {
+  font-size: 1.25rem;
+}
+.markdown.doc h4 {
+  font-size: 1.125rem;
 }
 .markdown hr {
   border: 0;

@@ -16,6 +16,10 @@ export type MCPConnectRequestView = {
   // Set once the card has settled, so a restored card shows its last state
   // instead of offering Connect again.
   state?: MCPConnectState
+  // Unix milliseconds, the instant the card joined the conversation. The
+  // transcript anchors the card here so it does not drift to the bottom as new
+  // messages arrive. 0 when the backend did not send one.
+  created_at: number
 }
 
 export type MCPConnectStatus = {
@@ -26,6 +30,7 @@ export type MCPConnectStatus = {
   state: MCPConnectState
   error?: string
   tool_count?: number
+  created_at?: number
 }
 
 export type MCPConnectDecisionView = {

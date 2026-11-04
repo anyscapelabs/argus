@@ -3,7 +3,9 @@ package MCPConnect
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,9 +30,15 @@ type Service struct {
 	Core    *Shared.Core
 	MCP     *MCP.Service
 	Catalog *Integrations.Catalog
-	mu      sync.Mutex
-	reqs    map[string]*request
-	byAgent map[string]string
+	// OnSettled hands a finished sign-in back to the agent as a steering turn.
+	// It is a plain function field, set in main.go, because Chat already
+	// imports this package — calling Chat directly would be an import cycle.
+	// The shape mirrors Scheduler's narrow chat runner: this service says what
+	// happened, something else decides how to run.
+	OnSettled func(agentID, text string)
+	mu        sync.Mutex
+	reqs      map[string]*request
+	byAgent   map[string]string
 	// last holds the card that settled per agent, so a reload can still show
 	// which integration is signed in rather than starting from nothing.
 	last map[string]Shared.MCPConnectRequestView
@@ -66,6 +74,7 @@ func (s *Service) emit(r *request, state, msg string) {
 		"server_name": r.view.ServerName,
 		"description": r.view.Description,
 		"icon":        r.view.Icon,
+		"created_at":  r.view.CreatedAt,
 		"state":       state,
 		"error":       msg,
 		"tool_count":  toolCount,
@@ -91,6 +100,67 @@ func (s *Service) ServerIDs() []string {
 		return nil
 	}
 	return cat.IDs()
+}
+
+// PromptBlock says which connectors are live at this very moment. The chat
+// rebuilds it into the system prompt on every run, so a sign-in that finished
+// after the agent last looked is already in front of it: the user never has to
+// announce that they connected. The tool names are spelled out because the
+// model otherwise has to guess how a connector's tools are written.
+func (s *Service) PromptBlock(withTools bool) string {
+	cat := s.catalog()
+	if cat == nil || s.MCP == nil {
+		return ""
+	}
+	tools := map[string]int{}
+	for _, t := range s.MCP.ListTools() {
+		tools[t.ServerID]++
+	}
+	var live, idle []string
+	for _, it := range cat.Items() {
+		if it.URL == "" {
+			continue
+		}
+		switch {
+		case tools[it.ID] > 0:
+			live = append(live, fmt.Sprintf("- %s (id %s): connected, %d tools", it.Name, it.ID, tools[it.ID]))
+		case s.MCP.Manager() != nil && s.MCP.Manager().IsConnected(it.ID):
+			// Signed in but published no tools: still a session, not a prompt.
+			live = append(live, fmt.Sprintf("- %s (id %s): connected", it.Name, it.ID))
+		default:
+			idle = append(idle, it.Name)
+		}
+	}
+	if len(live) == 0 && len(idle) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n## Integrations\n")
+	if len(live) > 0 {
+		b.WriteString("Connected now:\n")
+		for _, l := range live {
+			b.WriteString(l + "\n")
+		}
+		if withTools {
+			b.WriteString("Their tools are in your tool list, spelled <server_id>__<tool_name>, and ready to call.\n")
+		}
+		b.WriteString("This list is current as of this message. If the user signed into one of these after you last looked, it is connected: carry on, and do not ask them to confirm it or call connect_mcp again.\n")
+	}
+	if len(idle) > 0 {
+		fmt.Fprintf(&b, "Not connected: %s.\n", strings.Join(idle, ", "))
+		if withTools {
+			b.WriteString("Use connect_mcp with the server_id when the user needs one of these.\n")
+		}
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// toolPrefix is the server part of a connector tool name. Chat owns the full
+// spelling and truncates at the provider's 64-character limit; the id alone
+// never reaches that, so the replacement here is enough for the model to
+// recognise a name it is about to be told about.
+func toolPrefix(serverID string) string {
+	return strings.NewReplacer("-", "_", ".", "_").Replace(serverID)
 }
 
 // Register returns shown | pending | connected | unknown.
@@ -121,6 +191,10 @@ func (s *Service) Register(agentID, agentName, serverID string) string {
 			ServerName:  it.Name,
 			Description: it.Description,
 			Icon:        it.Icon,
+			// The instant the card joins the conversation. The frontend weaves it
+			// into the transcript here, so it stays at the point the agent asked
+			// for the sign-in rather than following newer messages to the bottom.
+			CreatedAt: time.Now().UnixMilli(),
 		},
 	}
 	r.expire = time.AfterFunc(requestTTL, func() { s.finish(r.view.RequestID, "expired", "") })
@@ -221,6 +295,56 @@ func (s *Service) finish(id, state, msg string) {
 	if ok {
 		s.persistNotice(r.view, state, msg)
 		s.emit(r, state, msg)
+		s.steer(r.view, state)
+	}
+}
+
+// steer tells the agent how the sign-in ended, in a turn it reads but the user
+// never sees. Without it the connection lands nowhere in the model's history:
+// the run that asked for it already finished, and the next run would only pick
+// up the new session by luck through the integrations block. The connect copy
+// also needs the server id, which is what the tool names are built from.
+//
+// Two settlements are left alone. A failed attempt is still on screen and
+// retryable, so steering would only make the agent talk about an error the user
+// can fix in one click. An expired card usually means nobody was there — the
+// timer runs whether or not the window is focused, and starting an unrequested
+// run ten minutes after someone walked away is worse than the agent learning
+// "not connected" from the next integrations block.
+func (s *Service) steer(v Shared.MCPConnectRequestView, state string) {
+	if s.OnSettled == nil || v.AgentID == "" {
+		return
+	}
+	text := s.steerText(v, state)
+	if text == "" {
+		return
+	}
+	s.OnSettled(v.AgentID, text)
+}
+
+func (s *Service) steerText(v Shared.MCPConnectRequestView, state string) string {
+	name := v.ServerName
+	if name == "" {
+		name = v.ServerID
+	}
+	switch state {
+	case "connected":
+		tools := 0
+		if s.MCP != nil {
+			for _, t := range s.MCP.ListTools() {
+				if t.ServerID == v.ServerID {
+					tools++
+				}
+			}
+		}
+		if tools > 0 {
+			return fmt.Sprintf("(%s just finished connecting. Its tools are available now, named %s__<tool_name>. Pick up where you stopped — do not ask the user to confirm it and do not call connect_mcp for it again.)", name, toolPrefix(v.ServerID))
+		}
+		return fmt.Sprintf("(%s just finished connecting. It published no tools, so treat it as a session only.)", name)
+	case "denied":
+		return fmt.Sprintf("(%s declined the %s connection. Continue without it and do not ask again in this turn.)", name, v.ServerID)
+	default:
+		return ""
 	}
 }
 
@@ -308,6 +432,10 @@ func (s *Service) settledFromStore(agentID string) (Shared.MCPConnectRequestView
 		Description: it.Description,
 		Icon:        it.Icon,
 		State:       "connected",
+		// The settled notice is the only surviving stamp, so the restored card
+		// anchors where the sign-in landed. It keeps its place in the transcript
+		// from there, which is what the notice beside it does too.
+		CreatedAt: n.CreatedAt,
 	}, true
 }
 

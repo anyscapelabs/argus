@@ -8,3 +8,23 @@ export interface ProviderConfig {
     "ValidatedAt": string;
     "BaseURLOverride": string;
 }
+
+/**
+ * ScheduledTask is one routine or reminder. ScheduleJSON is the spec-package
+ * encoding of the recurrence; NextRunAt is the wall-clock ms of the next
+ * fire, or 0 once a reminder has fired and retired.
+ */
+export interface ScheduledTask {
+    "ID": string;
+    "AgentID": string;
+    "Kind": string;
+    "Title": string;
+    "Prompt": string;
+    "ScheduleJSON": string;
+    "NextRunAt": number;
+    "LastRunAt": number;
+    "LastStatus": string;
+    "Paused": boolean;
+    "CreatedAt": number;
+    "UpdatedAt": number;
+}

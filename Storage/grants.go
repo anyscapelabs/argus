@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // GrantMode is the persisted decision for a grant row.
@@ -56,6 +57,24 @@ func (db *DB) ClearGrant(agentID, tool string) error {
 		`DELETE FROM permission_grants WHERE agent_id = ? AND tool = ?`,
 		agentID, tool,
 	); err != nil {
+		return fmt.Errorf("storage: grant delete failed: %w", err)
+	}
+	return nil
+}
+
+// ClearGrantPrefix removes every grant whose tool starts with prefix. Grants are
+// keyed by an opaque tool string, and the browser family is scoped per site
+// ("browser_action:github.com"), so revoking browser access has to sweep the
+// whole family rather than one row.
+func (db *DB) ClearGrantPrefix(agentID, prefix string) error {
+	// `_` and `%` are LIKE metacharacters and the family names contain both;
+	// escape them so the prefix means itself and not a pattern.
+	escaped := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(prefix)
+	_, err := db.conn.Exec(
+		`DELETE FROM permission_grants WHERE agent_id = ? AND tool LIKE ? ESCAPE '\'`,
+		agentID, escaped+`%`,
+	)
+	if err != nil {
 		return fmt.Errorf("storage: grant delete failed: %w", err)
 	}
 	return nil

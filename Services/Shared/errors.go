@@ -29,6 +29,10 @@ const (
 	CodeNotFound        Code = "not_found"
 	CodeBadInput        Code = "bad_input"
 	CodeBusy            Code = "busy"
+	// CodeExport marks a failure inside the derivation of a file — the document
+	// is fine and stored, but a converter (browser, LibreOffice) refused to turn
+	// it into the format that was asked for.
+	CodeExport Code = "export"
 )
 
 func NewError(code Code, message string) *ActionError {

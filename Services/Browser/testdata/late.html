@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Late shop</title>
+</head>
+<body>
+  <!-- The shape that fooled the agent: a product page whose first paint is only
+       its header, on a document so long the content is obviously still missing.
+       The buy box is injected 1.2s later, the way Amazon's arrives off an XHR. -->
+  <header>
+    <a href="/">Account</a>
+    <a href="/cart">Cart</a>
+  </header>
+  <main id="product">
+    <h1>Wireless keyboard</h1>
+  </main>
+  <div style="height: 4000px"></div>
+  <script>
+    setTimeout(function () {
+      var box = document.createElement('section');
+      box.id = 'buybox';
+      box.innerHTML =
+        '<label for="qty">Quantity</label>' +
+        '<input id="qty" type="number" value="1">' +
+        '<button id="add" type="button">Add to cart</button>' +
+        '<a id="checkout" href="/checkout">Proceed to checkout</a>';
+      document.getElementById('product').appendChild(box);
+      box.querySelector('#add').addEventListener('click', function () {
+        window.__added = (window.__added || 0) + 1;
+      });
+      window.__late = 1;
+    }, 1200);
+  </script>
+</body>
+</html>

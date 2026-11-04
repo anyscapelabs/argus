@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Empty shell</title>
+</head>
+<body>
+  <!-- A long document that never fills in: the other half of the page-shell test.
+       The agent must be told this read is not the finished page, not handed four
+       header links and an implied "there is nothing here". -->
+  <header>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/deals">Deals</a>
+      <a href="/account">Account</a>
+    </nav>
+  </header>
+  <main id="content"></main>
+  <div style="height: 4000px"></div>
+  <script>
+    // The content request this page would make never answers.
+    window.__pending = true;
+  </script>
+</body>
+</html>

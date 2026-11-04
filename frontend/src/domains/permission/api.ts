@@ -51,19 +51,34 @@ export async function getNotices(agentID: string, limit = 20): Promise<NoticesRe
   return res
 }
 
-export function noticeText(n: Pick<PermissionNoticeView, 'agent_name' | 'decision' | 'text'>): string {
-  // A row that carries its own sentence was written ready-made, so show it as
-  // is. Only the terminal-permission rows still have to be composed here.
+// Which gate a settled decision came through changes how it reads, and a
+// browsing grant is scoped to one site — so composing every row as "the terminal"
+// has been wrong since file access existed, and is more wrong with three families.
+const FAMILY_LABELS: Record<string, string> = {
+  execute_command: 'the terminal',
+  file_access: 'file access',
+  browser_action: 'the browser',
+}
+
+export function noticeText(
+  n: Pick<PermissionNoticeView, 'agent_name' | 'decision' | 'text' | 'tool'>,
+): string {
+  // A row that carries its own sentence was written ready-made, so show it as is.
   if (n.text) return n.text
   const agent = n.agent_name || 'the agent'
+  const tool = n.tool || 'execute_command'
+  const family = tool.split(':')[0]
+  const base = FAMILY_LABELS[family] ?? family
+  const host = tool.includes(':') ? tool.slice(tool.indexOf(':') + 1) : ''
+  const scope = host ? ` on ${host}` : ''
   switch (n.decision) {
     case 'allow_always':
-      return `Allowed ${agent} to use the terminal always`
+      return `Allowed ${agent} to use ${base}${scope} always`
     case 'allow_once':
-      return `Allowed ${agent} to use the terminal once`
+      return `Allowed ${agent} to use ${base}${scope} once`
     case 'deny':
-      return `Denied ${agent} access to the terminal`
+      return `Denied ${agent} access to ${base}${scope}`
     default:
-      return `${n.decision} ${agent} terminal`
+      return `${n.decision} ${agent} ${base}`
   }
 }

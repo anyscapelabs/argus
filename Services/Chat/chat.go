@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"log"
+	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -15,6 +17,8 @@ import (
 	"github.com/anyscapelabs/argus/Models"
 	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Router"
+	"github.com/anyscapelabs/argus/Services/Artifacts"
+	"github.com/anyscapelabs/argus/Services/Browser"
 	"github.com/anyscapelabs/argus/Services/MCP"
 	"github.com/anyscapelabs/argus/Services/MCPConnect"
 	"github.com/anyscapelabs/argus/Services/Permission"
@@ -29,33 +33,102 @@ type Service struct {
 	MCP *MCP.Service
 	// MCPConnect handles MCP connection approval flow.
 	MCPConnect *MCPConnect.Service
+	// Artifacts stores the documents the agent writes. Unattended-safe by
+	// design: unlike the file tools it needs no permission grant, which is what
+	// lets a routine produce a report on a machine nobody is sitting at.
+	Artifacts *Artifacts.Service
+	// Browser drives Chrome for the agent. Reading a page is free; the
+	// irreversible half of browsing goes through the permission gate, so an
+	// unattended routine can look but not submit. Nil means this build has no
+	// browser support, and the tool is not offered at all.
+	Browser *Browser.Service
 
 	mu       sync.Mutex
 	cancels  map[string]context.CancelFunc
 	agentRun map[string]string // agentID -> runID
+
+	// takeovers is the browser human-takeover card state: one live card per
+	// agent, plus when a captcha was last asked about. See takeover.go.
+	takeoverMu    sync.Mutex
+	takeovers     map[string]*userTakeover // requestID -> live card
+	takeoverOwner map[string]string        // agentID -> requestID
+	captchaAskAt  map[string]time.Time
+
+	// startedAtMs is when the app booted; the right panel reads uptime off
+	// it instead of the backend ticking a timer.
+	startedAtMs int64
+
+	doneMu       sync.Mutex
+	doneHandlers []func(RunOutcome)
+}
+
+// RunOutcome is the summary of a finished agent run. The scheduler subscribes
+// to these to close the loop on scheduled fires.
+type RunOutcome struct {
+	RunID              string
+	AgentID            string
+	AssistantMessageID string
+	Status             string // success | error | cancelled
+}
+
+// OnRunFinished registers a callback fired when any run reaches a final
+// state. Register before the first send; handlers run off the run goroutine.
+func (s *Service) OnRunFinished(fn func(RunOutcome)) {
+	s.doneMu.Lock()
+	s.doneHandlers = append(s.doneHandlers, fn)
+	s.doneMu.Unlock()
+}
+
+func (s *Service) runFinished(out RunOutcome) {
+	s.doneMu.Lock()
+	handlers := append([]func(RunOutcome){}, s.doneHandlers...)
+	s.doneMu.Unlock()
+	for _, fn := range handlers {
+		fn(out)
+	}
 }
 
 func (s *Service) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+	s.startedAtMs = time.Now().UnixMilli()
 	if err := s.Core.Bootstrap(ctx); err != nil {
 		return err
+	}
+	// The browser is the agent's, not the UI's, so it is started here rather than
+	// registered as a bound service. It opens nothing until the first tool call.
+	if s.Browser != nil {
+		if cacheDir, err := Shared.CacheDir(); err == nil {
+			_ = s.Browser.Start(filepath.Join(cacheDir, "browser-captures"))
+		}
 	}
 	if err := s.Core.DB.SweepInterrupted(); err != nil {
 		return err
 	}
-	// Remove user messages that never received an assistant reply (crashed
-	// or cancelled runs) so the chat never shows dangling questions.
-	removed, err := s.Core.DB.CleanUnrespondedAll()
+	// A turn that never got its reply stays exactly as it was written. This used
+	// to be a DELETE of "unresponded" user messages, and because it identified
+	// them by the row sitting at seq+1 — a seq the send path deliberately
+	// abandons when it parks a reply behind its tool rounds — it deleted the
+	// question of every tool-using turn, one startup at a time. Now the count is
+	// only a log line, and the transcript keeps what the user typed.
+	unanswered, err := s.Core.DB.UnansweredTurnsAll()
 	if err != nil {
 		return err
 	}
-	if removed > 0 {
-		log.Printf("chat: cleaned %d unresponded messages at startup", removed)
+	if unanswered > 0 {
+		log.Printf("chat: %d turn(s) never received a reply; kept as written", unanswered)
 	}
 	return nil
 }
 
-func (s *Service) ServiceShutdown(ctx context.Context) error {
+// ServiceShutdown cancels every in-flight run. The signature matters: Wails
+// asserts a ServiceShutdown interface whose method takes no context, so a
+// ServiceShutdown(ctx) variant is silently never called.
+func (s *Service) ServiceShutdown() error {
 	s.StopAll()
+	if s.Browser != nil {
+		// Cancelling the runs above can leave a click mid-flight; by now it has
+		// returned, and Chrome must go with the app rather than outlive it.
+		return s.Browser.Shutdown()
+	}
 	return nil
 }
 
@@ -199,4 +272,28 @@ func reasoningLevel(raw string) Protocol.ReasoningLevel {
 		return Protocol.ReasoningHigh
 	}
 	return Protocol.ReasoningUnset
+}
+
+// Status is the small dashboard the right panel's Details tab renders: when
+// the app started (uptime), when the agent last finished a turn (last
+// active), and whether a run is on right now (online vs working). One
+// snapshot per call; the panel recomputes the relative wording locally.
+func (s *Service) Status(agentID string) Shared.AgentStatusResult {
+	if aerr := s.Core.Ready(); aerr != nil {
+		return Shared.AgentStatusResult{Error: aerr}
+	}
+	last, err := s.Core.DB.LastActiveMs(agentID)
+	if err != nil {
+		return Shared.AgentStatusResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+	}
+	s.mu.Lock()
+	busy := len(s.cancels) > 0
+	s.mu.Unlock()
+	return Shared.AgentStatusResult{
+		Status: Shared.AgentStatusView{
+			StartedAtMs:  s.startedAtMs,
+			LastActiveMs: last,
+			Busy:         busy,
+		},
+	}
 }
