@@ -746,7 +746,23 @@ func (s *Service) buildHistory(agentID string, throughSeq int, budgetTokens int6
 	// close on either half of a pair. Pairs are kept or dropped whole:
 	// cancelling only the response of a call, or only the call of a
 	// response, is what produces the error, so never do that.
+	return repairHistoryTurns(out)
+}
+
+// repairHistoryTurns pairs tool calls with their responses and then makes the
+// transcript open on a user turn. Gemini needs a user turn ahead of any
+// function call, so a window that opens on an assistant turn is cut back to
+// its first user turn; cutting the head can orphan the next half of a pair, so
+// the repair runs again until the head is stable.
+func repairHistoryTurns(out []Protocol.Message) []Protocol.Message {
 	out = repairToolPairs(out)
+	for pass := 0; pass < 8; pass++ {
+		trimmed := trimLeadingModelTurns(out)
+		if len(trimmed) == len(out) {
+			break
+		}
+		out = repairToolPairs(trimmed)
+	}
 	return out
 }
 
@@ -834,6 +850,10 @@ func startsOrphaned(out []Protocol.Message, start int) bool {
 // are dropped whole; a message carrying text plus an orphaned half keeps
 // the text.
 func repairToolPairs(out []Protocol.Message) []Protocol.Message {
+	return coalesceModelTurns(repairPairsOnce(resultsFirst(out)))
+}
+
+func repairPairsOnce(out []Protocol.Message) []Protocol.Message {
 	kept := make([]Protocol.Message, 0, len(out))
 	for i, m := range out {
 		if carriesToolUse(m) {
@@ -888,6 +908,72 @@ func repairToolPairs(out []Protocol.Message) []Protocol.Message {
 		kept = out
 	}
 	return kept
+}
+
+// coalesceModelTurns merges adjacent assistant messages. Dropping an orphaned
+// tool_result carrier leaves the assistant turns on either side of it
+// touching, and Gemini rejects a function call that follows a model turn
+// instead of a user turn or a function response ("Please ensure that function
+// call turn comes immediately after a user turn or after a function response
+// turn"). Merged, the text and the call share one model turn, which is valid.
+func coalesceModelTurns(in []Protocol.Message) []Protocol.Message {
+	out := make([]Protocol.Message, 0, len(in))
+	for _, m := range in {
+		if n := len(out); n > 0 && m.Role == Protocol.RoleAssistant && out[n-1].Role == Protocol.RoleAssistant {
+			blocks := make([]Protocol.Block, 0, len(out[n-1].Blocks)+len(m.Blocks))
+			blocks = append(blocks, out[n-1].Blocks...)
+			blocks = append(blocks, m.Blocks...)
+			out[n-1].Blocks = blocks
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// resultsFirst moves the tool_result blocks of every user message ahead of
+// its text. A function response must sit directly after its function call;
+// text glued in front of it would push the response into a later content and
+// leave the call unanswered. The input is not mutated.
+func resultsFirst(in []Protocol.Message) []Protocol.Message {
+	out := make([]Protocol.Message, len(in))
+	for i, m := range in {
+		out[i] = m
+		if m.Role != Protocol.RoleUser || !carriesToolResult(m) {
+			continue
+		}
+		blocks := make([]Protocol.Block, 0, len(m.Blocks))
+		for _, b := range m.Blocks {
+			if b.Type == Protocol.BlockToolResult {
+				blocks = append(blocks, b)
+			}
+		}
+		for _, b := range m.Blocks {
+			if b.Type != Protocol.BlockToolResult {
+				blocks = append(blocks, b)
+			}
+		}
+		out[i].Blocks = blocks
+	}
+	return out
+}
+
+// trimLeadingModelTurns drops any assistant turns at the head of the
+// transcript. Gemini requires a function call turn to come immediately after
+// a user turn or a function response turn, so a window that the token budget
+// or the 40-row ceiling trimmed to open on an assistant message (with or
+// without a tool call in it) is rejected outright. Dropping the turn costs a
+// little context; sending it costs the whole request.
+func trimLeadingModelTurns(in []Protocol.Message) []Protocol.Message {
+	i := 0
+	for i < len(in) && in[i].Role != Protocol.RoleUser {
+		i++
+	}
+	// A leading user message that is only tool results has lost its call.
+	for i < len(in) && isToolCarrier(in[i]) {
+		i++
+	}
+	return in[i:]
 }
 
 // stripKind drops the blocks of one kind from m and appends what remains to
