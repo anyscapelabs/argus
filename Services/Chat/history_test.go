@@ -189,3 +189,53 @@ func TestRepairToolPairsNewestOrphanedCarrier(t *testing.T) {
 		t.Fatalf("an orphaned carrier should be dropped, got %+v", got)
 	}
 }
+
+// Dropping an orphaned tool_result carrier leaves two assistant turns
+// touching, so the next function call followed a model turn and Gemini
+// answered "function call turn comes immediately after a user turn or after a
+// function response turn" on every later send, even for a plain "hello".
+func TestRepairToolPairsMergesModelTurnsAroundDroppedCarrier(t *testing.T) {
+	out := []Protocol.Message{
+		msg(Protocol.RoleUser, text("hi")),
+		msg(Protocol.RoleAssistant, text("looking")),
+		msg(Protocol.RoleUser, toolResult()), // orphan: no call before it
+		msg(Protocol.RoleAssistant, toolUse("browser")),
+		msg(Protocol.RoleUser, toolResult()),
+	}
+	got := repairToolPairs(out)
+	for i, m := range got {
+		if i > 0 && m.Role == Protocol.RoleAssistant && got[i-1].Role == Protocol.RoleAssistant {
+			t.Fatalf("adjacent assistant turns survived: %+v", got)
+		}
+		if carriesToolUse(m) && (i == 0 || got[i-1].Role != Protocol.RoleUser) {
+			t.Fatalf("call at %d does not follow a user turn: %+v", i, got)
+		}
+	}
+}
+
+func TestRepairHistoryTurnsDropsLeadingModelTurns(t *testing.T) {
+	// A trimmed window can open on an assistant call; Gemini needs a user
+	// turn before any function call.
+	out := []Protocol.Message{
+		msg(Protocol.RoleAssistant, toolUse("browser")),
+		msg(Protocol.RoleUser, toolResult()),
+		msg(Protocol.RoleAssistant, text("done")),
+		msg(Protocol.RoleUser, text("hello")),
+	}
+	got := repairHistoryTurns(out)
+	if len(got) != 1 || got[0].Role != Protocol.RoleUser || got[0].Blocks[0].Text != "hello" {
+		t.Fatalf("window should restart at the first user turn, got %+v", got)
+	}
+}
+
+func TestRepairToolPairsPutsResultsBeforeText(t *testing.T) {
+	out := []Protocol.Message{
+		msg(Protocol.RoleUser, text("hi")),
+		msg(Protocol.RoleAssistant, toolUse("browser")),
+		msg(Protocol.RoleUser, text("next"), toolResult()),
+	}
+	got := repairToolPairs(out)
+	if len(got) < 3 || !carriesToolResult(got[2]) {
+		t.Fatalf("the response must directly follow its call, got %+v", got)
+	}
+}

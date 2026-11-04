@@ -252,6 +252,15 @@ func translateContents(req *Protocol.Request) []wireContent {
 		if len(parts) == 0 {
 			parts = append(parts, wirePart{Text: " "})
 		}
+		// Gemini rejects a function call turn that follows a model turn
+		// ("Please ensure that function call turn comes immediately after a
+		// user turn or after a function response turn"). Two assistant
+		// messages in a row — what is left when a caller drops the user
+		// message between them — are one model turn on the wire.
+		if n := len(out); n > 0 && role == "model" && out[n-1].Role == "model" {
+			out[n-1].Parts = append(out[n-1].Parts, parts...)
+			continue
+		}
 		out = append(out, wireContent{Role: role, Parts: parts})
 	}
 	if len(out) == 0 {
