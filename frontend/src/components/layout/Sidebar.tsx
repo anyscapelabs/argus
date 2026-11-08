@@ -5,6 +5,8 @@ import { FiChevronLeft } from 'react-icons/fi'
 import { GrSettingsOption } from 'react-icons/gr'
 import { CgArrowsScrollV } from 'react-icons/cg'
 import { useAccount } from '../../domains/account/hooks'
+import { useAgentProfile } from '../../domains/models/hooks'
+import { useChatMessages } from '../../domains/chat/hooks'
 
 type SidebarProps = {
   mode?: 'main' | 'settings'
@@ -14,8 +16,14 @@ type SidebarProps = {
 
 export default function Sidebar({ mode = 'main', onToggleSettings, onSignOut }: SidebarProps) {
   const { data: account } = useAccount()
+  const { data: agentProfile } = useAgentProfile('default')
+  const { data: messages = [] } = useChatMessages('default')
   const avatar = account?.user?.image ?? '/argus-logo.svg'
-  const [open, setOpen] = useState(false)
+  const agentAvatar = '/argus-logo.svg'
+  const lastMsg = messages.length ? messages[messages.length - 1] : null
+  const lastText = lastMsg?.text ?? ''
+  const lastTime = lastMsg?.created_at ? new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
+  const agentName = agentProfile?.agent_name || 'Argus'
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -66,6 +74,21 @@ export default function Sidebar({ mode = 'main', onToggleSettings, onSignOut }: 
             className="w-full bg-transparent text-sm text-primary placeholder:text-secondary focus:outline-none"
           />
         </div>
+      </div>
+      <div className="flex flex-col gap-1 px-2">
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left transition-colors hover:bg-hover-primary"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-primary bg-secondary">
+            <img src={agentAvatar} alt="" className="h-8 w-8 rounded-full" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-medium text-primary">{agentName}</div>
+            <div className="truncate text-xs text-secondary">{lastText || 'No messages yet'}</div>
+          </div>
+          <span className="shrink-0 text-xs text-secondary">{lastTime}</span>
+        </button>
       </div>
       <div ref={containerRef} className="relative mt-auto p-1">
         {open && (
