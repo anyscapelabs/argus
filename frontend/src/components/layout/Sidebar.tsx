@@ -67,7 +67,7 @@ export default function Sidebar({ mode = 'main', onToggleSettings, onSignOut }: 
         {open && (
           <div className="absolute bottom-full left-1 right-1 mb-2 rounded-xl border border-primary bg-primary p-1 shadow-lg">
             <div className="flex items-center gap-2 rounded-xl px-2 py-1.5">
-              <img src={avatar} alt="" className="h-8 w-8 rounded-full" />
+              <img src={avatar} alt="" className="h-10 w-10 rounded-full" />
               <div className="flex flex-col items-start leading-tight">
                 <span className="text-sm font-medium text-primary">{account?.user?.name ?? 'User'}</span>
                 <span className="text-xs text-secondary">{account?.plan?.id ?? ''}</span>
