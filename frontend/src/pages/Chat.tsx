@@ -9,13 +9,12 @@ import { asTakeoverState, pendingTakeovers, respondTakeover, type TakeoverDecisi
 import { useNoticeLines } from '../domains/permission/hooks'
 import { useArtifacts, type ArtifactView } from '../domains/artifacts/hooks'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FiChevronRight, FiGlobe, FiLink, FiTerminal } from 'react-icons/fi'
+import { FiArrowDown, FiChevronRight, FiGlobe, FiLink, FiTerminal } from 'react-icons/fi'
 import Toolbar from '../components/layout/Toolbar'
 import ChatInput from '../components/chat/ChatInput'
 import AgentBubble from '../components/chat/AgentBubble'
 import UserBubble from '../components/chat/UserBubble'
 import ThinkingIndicator from '../components/chat/ThinkingIndicator'
-import Spinner from '../components/Spinner'
 import { StatusLine } from '../components/chat/statusLine'
 import PermissionCard, { type Permission } from '../components/chat/PermissionCard'
 import MCPConnectCard from '../components/mcp/MCPConnectCard'
@@ -526,6 +525,7 @@ export default function Chat({
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const pinnedRef = useRef(true)
+  const [pinned, setPinned] = useState(true)
   // Where the viewport sat when an older page was requested. Prepending
   // history pushes every pixel down; without this anchor the reader of an old
   // message is thrown to the bottom of the new stack.
@@ -533,7 +533,9 @@ export default function Chat({
   const onScroll = () => {
     const el = scrollRef.current
     if (!el) return
-    pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+    const nextPinned = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+    pinnedRef.current = nextPinned
+    setPinned(nextPinned)
     if (el.scrollTop < 160 && hasNextPage && !isFetchingNextPage) {
       prependAnchor.current = { height: el.scrollHeight, top: el.scrollTop }
       fetchNextPage()
@@ -556,6 +558,14 @@ export default function Chat({
     el.scrollTop = el.scrollHeight
   }, [messages, permission, noticeKeyText, errorNotice, status, mcpConnect?.request_id, takeover?.request_id, artifacts.length])
 
+  const scrollToBottom = () => {
+    const el = scrollRef.current
+    if (!el) return
+    pinnedRef.current = true
+    setPinned(true)
+    el.scrollTop = el.scrollHeight
+  }
+
   return (
     <div className="relative flex h-dvh flex-1 min-h-0 overflow-hidden">
       <div className="flex flex-1 flex-col min-h-0">
@@ -575,8 +585,13 @@ export default function Chat({
           </div>
           <div ref={scrollRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto px-6 pt-6 pb-24">
             <div className="mx-auto flex max-w-3xl flex-col gap-3">
-              {isLoading && <div className="flex flex-1 items-center justify-center py-12"><Spinner /></div>}
-              {!isLoading && isFetchingNextPage && <div className="mt-1 text-center text-xs text-secondary">Loading older messages…</div>}
+              {isLoading && (
+                <div className="flex flex-col gap-3">
+                  <div className="h-10 w-2/3 animate-pulse rounded-xl bg-secondary" />
+                  <div className="h-16 w-1/2 animate-pulse rounded-xl bg-secondary" />
+                  <div className="h-10 w-3/4 animate-pulse rounded-xl bg-secondary" />
+                </div>
+              )}
               {!isLoading && messagesError && <div className="text-xs text-red-400">{String(messagesError)}</div>}
               {!isLoading && send.isError && (
                 <div className="w-fit rounded-xl border border-red-400/40 bg-secondary px-2 py-1 text-xs text-red-400">
@@ -656,6 +671,16 @@ export default function Chat({
               )}
             </div>
           </div>
+          {!pinned && (
+            <button
+              type="button"
+              onClick={scrollToBottom}
+              aria-label="Scroll to bottom"
+              className="absolute bottom-4 left-1/2 z-10 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-secondary bg-secondary text-primary shadow-md transition-colors hover:bg-hover-secondary"
+            >
+              <FiArrowDown size={16} />
+            </button>
+          )}
         </div>
         <div className="shrink-0">
           <ChatInput onSend={handleSend} busy={send.isPending} />
