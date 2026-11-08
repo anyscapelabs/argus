@@ -19,6 +19,7 @@ export default function Sidebar({ mode = 'main', onToggleSettings, onSignOut }: 
   const { data: agentProfile } = useAgentProfile('default')
   const { data: messages = [] } = useChatMessages('default')
   const avatar = account?.user?.image ?? '/argus-logo.svg'
+  const [open, setOpen] = useState(false)
   const agentAvatar = '/argus-logo.svg'
   const lastMsg = messages.length ? messages[messages.length - 1] : null
   const lastText = lastMsg?.text ?? ''
