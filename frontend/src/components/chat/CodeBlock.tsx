@@ -1,7 +1,37 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useRef, useState, type ReactNode } from 'react'
 import { FiCheck, FiCopy } from 'react-icons/fi'
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
+
+const Highlighter = lazy(async () => {
+  const [{ Prism: SyntaxHighlighter }, styleMod] = await Promise.all([
+    import('react-syntax-highlighter'),
+    import('react-syntax-highlighter/dist/esm/styles/prism'),
+  ])
+  const vscDarkPlus = styleMod.vscDarkPlus
+  function Comp({ code, language }: { code: string; language: string }) {
+    return (
+      <SyntaxHighlighter
+        language={language}
+        style={vscDarkPlus}
+        customStyle={{
+          margin: 0,
+          padding: '0.75rem',
+          background: 'transparent',
+          fontSize: '0.75rem',
+          lineHeight: '1.25rem',
+        }}
+        codeTagProps={{
+          style: {
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+          },
+        }}
+        wrapLongLines={false}
+      >
+        {code}
+      </SyntaxHighlighter>
+    )
+  }
+  return { default: Comp }
+})
 
 export default function CodeBlock({ children }: { children?: ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -22,25 +52,9 @@ export default function CodeBlock({ children }: { children?: ReactNode }) {
 
   return (
     <div ref={containerRef} className="group relative my-2 overflow-hidden rounded-xl border border-secondary bg-[#1e1e1e]">
-      <SyntaxHighlighter
-        language={language}
-        style={vscDarkPlus}
-        customStyle={{
-          margin: 0,
-          padding: '0.75rem',
-          background: 'transparent',
-          fontSize: '0.75rem',
-          lineHeight: '1.25rem',
-        }}
-        codeTagProps={{
-          style: {
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-          },
-        }}
-        wrapLongLines={false}
-      >
-        {code}
-      </SyntaxHighlighter>
+      <Suspense fallback={<pre className="m-0 p-3 text-xs text-grey-100">{code}</pre>}>
+        <Highlighter code={code} language={language} />
+      </Suspense>
       <button
         type="button"
         onClick={copy}
