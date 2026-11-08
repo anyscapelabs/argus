@@ -1,6 +1,5 @@
 import { FaArrowLeft } from 'react-icons/fa'
 import { IoSearch } from 'react-icons/io5'
-import { TbServer2 } from 'react-icons/tb'
 
 export default function SettingsSidebar({ onBack }: { onBack?: () => void }) {
   return (
@@ -24,15 +23,6 @@ export default function SettingsSidebar({ onBack }: { onBack?: () => void }) {
             className="w-full bg-transparent text-sm text-primary placeholder:text-secondary focus:outline-none"
           />
         </div>
-      </div>
-      <div className="mt-2 flex flex-col gap-0.5 px-2">
-        <button
-          type="button"
-          className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-primary bg-hover-primary"
-        >
-          <TbServer2 size={16} className="text-primary" />
-          <span>Providers</span>
-        </button>
       </div>
     </aside>
   )
