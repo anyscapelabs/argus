@@ -652,9 +652,13 @@ export default function Chat({
                     />
                   </div>
                 ) : item.msg.role === 'user' ? (
-                  <UserBubble key={item.id} content={item.msg.text} />
+                  <motion.div key={item.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: 'easeOut' }}>
+                    <UserBubble content={item.msg.text} />
+                  </motion.div>
                 ) : (
-                  <AgentBubble key={item.id} content={item.msg.text} status={item.msg.status} error={item.msg.error_message} />
+                  <motion.div key={item.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: 'easeOut' }}>
+                    <AgentBubble content={item.msg.text} status={item.msg.status} error={item.msg.error_message} />
+                  </motion.div>
                 ),
               )}
               {!isLoading && permission && (
