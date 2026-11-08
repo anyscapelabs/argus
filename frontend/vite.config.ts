@@ -12,12 +12,18 @@ export default defineConfig({
   },
   plugins: [react(), tailwindcss(), wails("./bindings")],
   build: {
-    chunkSizeWarningLimit: 2000,
+    chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
+        codeSplitting: true,
         manualChunks(id) {
           if (!id.includes("node_modules")) return;
-          if (id.includes("react-syntax-highlighter")) return "vendor-syntax";
+          if (id.includes("react-syntax-highlighter")) {
+            // Split the large highlighter into per-subpath chunks so no single
+            // chunk exceeds the warning limit.
+            const m = id.match(/react-syntax-highlighter\/dist\/esm\/([^/]+)/)
+            return m ? `syntax-${m[1]}` : "vendor-syntax"
+          }
           if (id.includes("framer-motion")) return "vendor-motion";
           if (id.includes("react-markdown") || id.includes("remark-gfm")) return "vendor-markdown";
           if (id.includes("@tanstack/react-query-devtools")) return "vendor-query-devtools";
