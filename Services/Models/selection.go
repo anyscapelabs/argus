@@ -1,6 +1,8 @@
 package Models
 
 import (
+	"context"
+	"sort"
 	"strings"
 
 	"github.com/anyscapelabs/argus/Models"
@@ -28,9 +30,8 @@ func (s *Service) SetProviderSelection(providerID string, refs []string) Shared.
 	if _, ok := s.Core.Overlay.Lookup(providerID); !ok {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeUnknownProvider, "Unknown provider")}
 	}
-	if !s.configured(providerID) {
-		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeNotConfigured, "Connect "+providerID+" before selecting models from it")}
-	}
+	// Selection is unused under the router (the allowlist governs): keep the
+	// table in sync so ClearAgentModelsNotIn still has data to clean.
 	clean := make([]string, 0, len(refs))
 	seen := map[string]bool{}
 	for _, ref := range refs {
@@ -41,24 +42,11 @@ func (s *Service) SetProviderSelection(providerID string, refs []string) Shared.
 		if providerIDOf(trimmed) != providerID {
 			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeBadInput, "A selection belongs to another provider")}
 		}
-		if _, ok := viewRef(allSelectionViews(s, providerID, trimmed), trimmed); !ok {
-			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeNotFound, "Unknown model: "+trimmed)}
-		}
 		seen[strings.ToLower(trimmed)] = true
 		clean = append(clean, trimmed)
 	}
 	if err := s.Core.DB.SetProviderSelection(providerID, clean); err != nil {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
-	}
-	// Agents pointed at this provider can only keep references the user
-	// still selects.
-	cleared, err := s.Core.DB.ClearAgentModelsNotIn(providerID, keepIDs(clean))
-	if err != nil {
-		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
-	}
-	s.Core.EmitEvent(Shared.EventSelectionsChanged, nil)
-	if len(cleared) > 0 {
-		s.Core.EmitEvent(Shared.EventSlotsChanged, nil)
 	}
 	return Shared.ActionResult{Ok: true}
 }
@@ -78,33 +66,44 @@ func (s *Service) ChatModels() []Shared.ChatModel {
 	if err := s.Core.Ready(); err != nil {
 		return out
 	}
-	rows, err := s.Core.DB.ListAllSelections()
-	if err != nil {
+	providerID := Shared.RouterProviderID
+	provider, found := s.Core.Store.Get().Provider(providerID)
+	if !found {
 		return out
 	}
-	overlayProviders := map[string]string{}
-	for _, p := range s.Core.Store.Get().Providers() {
-		overlayProviders[p.ID] = p.Name
+	overlayProvider, _ := s.Core.Overlay.Lookup(providerID)
+	cfg, _, _ := s.Core.DB.GetProviderConfig(providerID)
+	entry := s.Core.FetchLive(context.Background(), provider, overlayProvider.ExtraHeaders, cfg, false)
+	if entry == nil {
+		return out
 	}
-	configured := map[string]bool{}
-	if configs, err := s.Core.DB.ListProviderConfigs(); err == nil {
-		for _, c := range configs {
-			configured[c.ProviderID] = true
-		}
+	type row struct {
+		ref  string
+		name string
 	}
-	for _, row := range rows {
-		if !configured[row.ProviderID] {
-			continue
+	rows := []row{}
+	for _, lm := range entry.ByID {
+		ref := providerID + "/" + lm.ID
+		name := lm.Name
+		if strings.TrimSpace(name) == "" {
+			name = lm.ID
 		}
-		view, status, aerr := s.resolveRef(row.ModelRef, false)
-		if aerr != nil || status != Shared.StatusOK {
-			continue
+		rows = append(rows, row{ref: ref, name: name})
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].name < rows[j].name })
+	for _, r := range rows {
+		view := Shared.ModelView{
+			Ref:          r.ref,
+			ProviderID:   providerID,
+			ProviderName: provider.Name,
+			ID:           strings.TrimPrefix(r.ref, providerID+"/"),
+			Name:         r.name,
+			Availability: Shared.AvailabilityAvailable,
 		}
-		view.ProviderName = overlayProviders[row.ProviderID]
 		out = append(out, Shared.ChatModel{
-			Ref:          row.ModelRef,
-			ProviderID:   row.ProviderID,
-			ProviderName: overlayProviders[row.ProviderID],
+			Ref:          r.ref,
+			ProviderID:   providerID,
+			ProviderName: provider.Name,
 			Model:        view,
 		})
 	}

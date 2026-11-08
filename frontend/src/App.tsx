@@ -6,10 +6,12 @@ import Toolbar from './components/layout/Toolbar'
 import Sidebar from './components/layout/Sidebar'
 import SettingsSidebar from './components/settings/SettingsSidebar'
 import Onboarding from './pages/Onboarding'
+import SignIn from './pages/SignIn'
 import Home from './pages/Home'
 import Chat from './pages/Chat'
 import ArtifactViewer from './pages/ArtifactViewer'
 import { getChat } from './domains/chat/api'
+import { usePairing } from './domains/account/hooks'
 import Providers from './pages/settings/Providers'
 
 // Blank black canvas.
@@ -27,7 +29,12 @@ import Providers from './pages/settings/Providers'
 export default function App() {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const qc = useQueryClient()
-  const [page, setPage] = useState<'onboarding' | 'home' | 'chat' | 'settings'>('onboarding');
+  // The shell boots through pairing first: pending (checking the keyring),
+  // absent → onboarding, invalid → sign-in, valid → the agent screens. The
+  // later states emerge from this one source of truth, so every route read of
+  // `pairing` stays decisive.
+  const { pairing, leave } = usePairing(true)
+  const [page, setPage] = useState<'onboarding' | 'signin' | 'home' | 'chat' | 'settings'>('onboarding');
   // Which document is open full screen, by id. Not a boolean: the chat card, the
   // panel list and the viewer all need to agree on *which* document the user
   // meant, and closing is naming none of them.
@@ -35,15 +42,47 @@ export default function App() {
   const [sidebarMode, setSidebarMode] = useState<'main' | 'settings'>('main');
   const [pendingSend, setPendingSend] = useState<{ id: number; text: string; modelRef: string | null } | null>(null);
 
+  // Boot: hold the shell on the black canvas until the keyring check settles.
+  // A pairing that exists but no longer proves (revoked key, or the backend
+  // being unreachable) belongs on the sign-in screen — the account is still
+  // half-paired there, the error is visible, and "Connect" retries; only a
+  // truly unpaired keyring starts the onboarding tour.
+  const [booted, setBooted] = useState(false);
   useEffect(() => {
+    if (booted || pairing.status === 'pending') return
+    setBooted(true)
+    if (pairing.status === 'valid') setPage('home')
+    else if (pairing.status === 'invalid') setPage('signin')
+    else setPage('onboarding')
+  }, [pairing.status, booted])
+
+  // Protected routes: the agent screens exist only behind a verified key. Sign
+  // out (or a revoked key discovered on entitlements refetch) lands here.
+  useEffect(() => {
+    if (!booted) return
+    if (pairing.status === 'valid') return
+    if (page === 'home' || page === 'chat' || page === 'settings') setPage('signin')
+  }, [booted, pairing.status, page])
+
+  // While the shell is authenticated and resting on home, an existing chat
+  // picks up where it left off: the stream of history decides the landing.
+  // Runs after boot — on mount it would race the pairing effect, which
+  // rewrites the page as soon as the keyring check settles.
+  useEffect(() => {
+    if (!booted || pairing.status !== 'valid' || page !== 'home') return
+    let cancelled = false
     getChat('default')
       .then((res) => {
+        if (cancelled) return
         if (res?.messages && res.messages.length > 0) {
           setPage('chat')
         }
       })
       .catch(() => {})
-  }, [])
+    return () => {
+      cancelled = true
+    }
+  }, [booted, pairing.status, page])
 
   useEffect(() => {
     const invalidateAll = () => {
@@ -86,7 +125,12 @@ export default function App() {
       {page === 'onboarding' ? (
         <>
           <Toolbar />
-          <Onboarding onContinue={() => setPage('home')} />
+          <Onboarding onContinue={() => setPage('signin')} />
+        </>
+      ) : page === 'signin' ? (
+        <>
+          <Toolbar />
+          <SignIn onAuthenticated={() => setPage('home')} />
         </>
       ) : page === 'home' ? (
         <div className="flex flex-1 min-h-0">
@@ -97,7 +141,7 @@ export default function App() {
               setSidebarMode('settings')
               setPage('settings')
             }
-          }} />
+          }} onSignOut={() => { void leave.mutateAsync() }} />
           <Home onSend={(text: string, modelRef: string | null) => {
             setPendingSend({ id: Date.now(), text, modelRef });
             setPage('chat');
@@ -124,7 +168,7 @@ export default function App() {
               setSidebarMode('settings')
               setPage('settings')
             }
-          }} />
+          }} onSignOut={() => { void leave.mutateAsync() }} />
           <Chat pendingSend={pendingSend} onPendingConsumed={() => setPendingSend(null)} onOpenArtifact={(id) => setOpenArtifact(id)} />
           {artifactOverlay}
         </div>

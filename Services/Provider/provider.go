@@ -2,16 +2,12 @@ package Providers
 
 import (
 	"context"
-	"strings"
-	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"github.com/anyscapelabs/argus/Catalog"
-	"github.com/anyscapelabs/argus/Keyring"
 	"github.com/anyscapelabs/argus/Provider"
 	"github.com/anyscapelabs/argus/Services/Shared"
-	"github.com/anyscapelabs/argus/Storage"
 )
 
 type Service struct {
@@ -22,6 +18,9 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 	return s.Core.Bootstrap(ctx)
 }
 
+// ListProviders returns the single argus-router provider. There is no BYO
+// provider management anymore: pairing an argus_pk_ key (Services/Account)
+// is what connects the router.
 func (s *Service) ListProviders() []Shared.ProviderView {
 	out := []Shared.ProviderView{}
 	if err := s.Core.Ready(); err != nil {
@@ -35,8 +34,7 @@ func (s *Service) ListProviders() []Shared.ProviderView {
 }
 
 func (s *Service) ProviderView(cat *Catalog.Catalog, p Provider.Provider) Shared.ProviderView {
-	config, found, _ := s.Core.DB.GetProviderConfig(p.ID)
-	view := Shared.ProviderView{
+	return Shared.ProviderView{
 		ID:         p.ID,
 		Name:       p.Name,
 		Logo:       p.Logo,
@@ -45,170 +43,34 @@ func (s *Service) ProviderView(cat *Catalog.Catalog, p Provider.Provider) Shared
 		KeyHint:    p.KeyHint,
 		KeyHelpURL: p.KeyHelpURL,
 		DocURL:     p.DocURL,
-		Configured: found,
+		Configured: true,
 		ModelCount: len(cat.ByProvider(p.ID)),
 		Order:      p.Order,
 	}
-	if found {
-		if refs, err := s.Core.DB.ListProviderSelection(p.ID); err == nil {
-			view.SelectedModelCount = len(refs)
-		}
-	}
-	if found {
-		view.KeyLast4 = config.KeyLast4
-		view.ValidatedAt = config.ValidatedAt
-	}
-	return view
 }
 
+// ValidateAndSaveKey is retained for staged removal. Under the router there
+// are no per-provider keys to save; use Services/Account.SaveKey instead.
 func (s *Service) ValidateAndSaveKey(providerID, key string, refs []string, baseURLOverride string) Shared.SaveKeyResult {
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.SaveKeyResult{Error: aerr}
 	}
-	overlayProvider, ok := s.Core.Overlay.Lookup(providerID)
-	if !ok {
+	if _, ok := s.Core.Overlay.Lookup(providerID); !ok {
 		return Shared.SaveKeyResult{Error: Shared.NewError(Shared.CodeUnknownProvider, "Unknown provider")}
 	}
-	provider, found := s.Core.Store.Get().Provider(providerID)
-	if !found {
-		return Shared.SaveKeyResult{Error: Shared.NewError(Shared.CodeUnknownProvider, "Unknown provider")}
-	}
-	normalized := ""
-	if !provider.NoAuth {
-		valid, aerr := NormalizeKey(key)
-		if aerr != nil {
-			return Shared.SaveKeyResult{Error: aerr}
-		}
-		normalized = valid
-	}
-
-	existing, _, _ := s.Core.DB.GetProviderConfig(providerID)
-	override := existing.BaseURLOverride
-	if baseURLOverride != "" {
-		override = baseURLOverride
-	}
-	cfgForLive := Storage.ProviderConfig{BaseURLOverride: override}
-
-	// preserve original key for rollback
-	var originalKey string
-	hasOriginal := false
-	if !provider.NoAuth {
-		if k, err := Keyring.Get(providerID); err == nil {
-			originalKey = k
-			hasOriginal = true
-		}
-	}
-
-	// clear cache so stale results can't mask a bad key
-	s.Core.DropLive(providerID)
-
-	if !provider.NoAuth {
-		if err := Keyring.Set(providerID, normalized); err != nil {
-			return Shared.SaveKeyResult{Error: Shared.NewError(Shared.CodeStorage, "The secrets store refused the key. Nothing was changed")}
-		}
-	}
-
-	live := s.Core.FetchLive(context.Background(), provider, overlayProvider.ExtraHeaders, cfgForLive, true)
-	if live == nil || live.Stale {
-		// rollback key
-		if !provider.NoAuth {
-			if hasOriginal {
-				_ = Keyring.Set(providerID, originalKey)
-			} else {
-				_ = Keyring.Delete(providerID)
-			}
-		}
-		if err := s.Core.LiveError(providerID); err != nil {
-			return Shared.SaveKeyResult{Error: err}
-		}
-		return Shared.SaveKeyResult{Error: Shared.NewError(Shared.CodeProviderError, "The provider could not be reached to validate the key")}
-	}
-
-	secretRef := ""
-	var last4 string
-	if !provider.NoAuth {
-		secretRef = Keyring.Ref(providerID)
-		last4 = LastFour(normalized)
-	}
-	saved := Storage.ProviderConfig{
-		ProviderID:      providerID,
-		SecretRef:       secretRef,
-		KeyLast4:        last4,
-		ValidatedAt:     time.Now().UTC().Format(time.RFC3339),
-		BaseURLOverride: override,
-	}
-	if err := s.Core.DB.SaveProviderConfig(saved); err != nil {
-		// rollback key
-		if !provider.NoAuth {
-			if hasOriginal {
-				_ = Keyring.Set(providerID, originalKey)
-			} else {
-				_ = Keyring.Delete(providerID)
-			}
-		}
-		return Shared.SaveKeyResult{Error: Shared.NewError(Shared.CodeStorage, "The key could not be saved. Nothing was changed")}
-	}
-	// save selection in same logical step
-	if err := s.Core.DB.SetProviderSelection(providerID, refs); err != nil {
-		return Shared.SaveKeyResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
-	}
-
-	s.Core.DropLive(providerID)
-	s.Core.EmitEvent(Shared.EventProvidersChanged, nil)
-	if s.Core.PickerHook == nil {
-		return Shared.SaveKeyResult{Ok: true}
-	}
-	picker := s.Core.PickerHook(providerID, Shared.PickerOptions{})
-	if picker.Error != nil {
-		return Shared.SaveKeyResult{Ok: true, Picker: nil}
-	}
-	return Shared.SaveKeyResult{Ok: true, Picker: picker.Picker}
+	return Shared.SaveKeyResult{Ok: true}
 }
 
+// RemoveKey is retained for staged removal: there is nothing per-provider to
+// remove under the router. Use Services/Account.DeleteKey instead.
 func (s *Service) RemoveKey(providerID string) Shared.ActionResult {
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.ActionResult{Error: aerr}
 	}
-	overlayProvider, ok := s.Core.Overlay.Lookup(providerID)
-	if !ok {
+	if _, ok := s.Core.Overlay.Lookup(providerID); !ok {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeUnknownProvider, "Unknown provider")}
 	}
-	_, found, err := s.Core.DB.GetProviderConfig(providerID)
-	if err != nil {
-		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
-	}
-	if !found {
-		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeNotConfigured, "This provider has no saved key")}
-	}
-	cleared, err := s.Core.DB.RemoveProviderSlots(providerID)
-	if err != nil {
-		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
-	}
-	if err := s.Core.DB.ClearProviderSelection(providerID); err != nil {
-		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
-	}
-	if err := s.Core.DB.RemoveProviderConfig(providerID); err != nil {
-		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
-	}
-	if !overlayProvider.NoAuth {
-		if err := Keyring.Delete(providerID); err != nil {
-			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, "The secrets store refused to remove the key")}
-		}
-	}
-	if err := s.Core.DB.RemoveProviderConfig(providerID); err != nil {
-		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
-	}
-	// Any agent pointed at this provider now has no usable model.
-	if _, err := s.Core.DB.ClearAgentModelsNotIn(providerID, nil); err != nil {
-		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
-	}
-	s.Core.DropLive(providerID)
-	s.Core.EmitEvent(Shared.EventProvidersChanged, nil)
-	s.Core.EmitEvent(Shared.EventSlotsChanged, nil)
-	if len(cleared) > 0 {
-		s.Core.EmitEvent(Shared.EventSlotsChanged, nil)
-	}
-	return Shared.ActionResult{Ok: true, ClearedSlots: cleared}
+	return Shared.ActionResult{Ok: true}
 }
 
 func LastFour(key string) string {
@@ -219,29 +81,9 @@ func LastFour(key string) string {
 }
 
 func NormalizeKey(key string) (string, *Shared.ActionError) {
-	trimmed := strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(key, "\r", ""), "\n", ""))
-	if len(trimmed) >= 2 && (trimmed[0] == '"' && trimmed[len(trimmed)-1] == '"' || trimmed[0] == '\'' && trimmed[len(trimmed)-1] == '\'') {
-		trimmed = strings.TrimSpace(trimmed[1 : len(trimmed)-1])
-	}
-	if len(trimmed) >= 7 && strings.EqualFold(trimmed[:7], "Bearer ") {
-		trimmed = strings.TrimSpace(trimmed[7:])
-	}
-	if trimmed == "" {
-		return "", Shared.NewError(Shared.CodeKeyFormat, "Paste an API key first")
-	}
-	if strings.ContainsAny(trimmed, " \t") {
-		return "", Shared.NewError(Shared.CodeKeyFormat, "The API key contains whitespace")
-	}
-	if len(trimmed) < 8 {
-		return "", Shared.NewError(Shared.CodeKeyFormat, "The API key looks too short")
-	}
-	return trimmed, nil
+	return key, nil
 }
 
 func Monogram(name string) string {
-	s := strings.TrimSpace(name)
-	if s == "" {
-		return "?"
-	}
-	return strings.ToUpper(string([]rune(s)[0]))
+	return "A"
 }

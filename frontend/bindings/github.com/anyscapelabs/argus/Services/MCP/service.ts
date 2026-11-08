@@ -68,6 +68,13 @@ export function HasStoredSession(serverID: string): $CancellablePromise<boolean>
 }
 
 /**
+ * ListServerIDs lists the servers with a live session.
+ */
+export function ListServerIDs(): $CancellablePromise<string[] | null> {
+    return $Call.ByID(339244261);
+}
+
+/**
  * ListServers returns all server configurations.
  */
 export function ListServers(): $CancellablePromise<$models.ServerConfig[] | null> {

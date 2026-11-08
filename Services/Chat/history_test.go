@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/anyscapelabs/argus/Protocol"
+	"github.com/anyscapelabs/argus/Storage"
 )
 
 func opaqueError(msg string) *Protocol.Error {
@@ -237,5 +238,140 @@ func TestRepairToolPairsPutsResultsBeforeText(t *testing.T) {
 	got := repairToolPairs(out)
 	if len(got) < 3 || !carriesToolResult(got[2]) {
 		t.Fatalf("the response must directly follow its call, got %+v", got)
+	}
+}
+
+// TestWithoutErroredPairsDropsErroredPair: a tool_use whose next result
+// carried IsError — denied permission, failed command — is dropped whole,
+// leaving surrounding turns intact. Logging happens in withoutErroredPairs.
+func TestWithoutErroredPairsDropsErroredPair(t *testing.T) {
+	out := []Protocol.Message{
+		msg(Protocol.RoleUser, text("hi")),
+		msg(Protocol.RoleAssistant, text("look"), toolUse("browser")),
+		msg(Protocol.RoleUser, Protocol.Block{Type: Protocol.BlockToolResult, Text: "denied", IsError: true, ToolRefID: "c1"}),
+		msg(Protocol.RoleAssistant, text("sorry")),
+	}
+	got := withoutErroredPairs(out)
+	for _, m := range got {
+		if carriesToolUse(m) || carriesToolResult(m) {
+			t.Fatalf("an errored pair should be dropped whole, got %+v", got)
+		}
+	}
+}
+
+// TestWithoutErroredPairsKeepsSuccessfulPair: clean pairs are untouched.
+func TestWithoutErroredPairsKeepsSuccessfulPair(t *testing.T) {
+	out := []Protocol.Message{
+		msg(Protocol.RoleUser, text("hi")),
+		msg(Protocol.RoleAssistant, toolUse("browser")),
+		msg(Protocol.RoleUser, toolResult()),
+		msg(Protocol.RoleAssistant, text("done")),
+	}
+	got := withoutErroredPairs(out)
+	if len(got) != 4 {
+		t.Fatalf("a successful pair should survive, got %d messages", len(got))
+	}
+}
+
+// A tool_use with no name is never run, so it gets no result. It must not stay
+// in the assistant message either: it would be replayed as a call nothing
+// answered.
+func TestDropUnnamedCallsKeepsNamedOnes(t *testing.T) {
+	m := msg(Protocol.RoleAssistant,
+		text("on it"),
+		Protocol.Block{Type: Protocol.BlockToolUse, ToolCall: &Protocol.ToolCall{ID: "a"}},
+		Protocol.Block{Type: Protocol.BlockToolUse},
+		toolUse("browser"),
+	)
+	got := dropUnnamedCalls(m)
+	if len(got.Blocks) != 2 || got.Blocks[0].Text != "on it" || got.Blocks[1].ToolCall.Name != "browser" {
+		t.Fatalf("want the text and the named call only, got %+v", got.Blocks)
+	}
+	if len(m.Blocks) != 4 {
+		t.Fatal("the input message must not be mutated")
+	}
+}
+
+// row is a persisted message in the shapes the send path writes.
+func row(id string, seq int, role string, status string, textArg string) Storage.Message {
+	return Storage.Message{ID: id, Seq: seq, Role: role, Status: status, Text: textArg}
+}
+
+func rowErr(id string, seq int) Storage.Message {
+	return Storage.Message{ID: id, Seq: seq, Role: "assistant", Status: "error", ErrorMessage: "boom"}
+}
+
+// A turn that ended in an error must leave the window whole: the question,
+// its tool rounds and the failed reply. The surviving turns keep their
+// relative order.
+func TestDropErroredTurnsRemovesWholePairWithRounds(t *testing.T) {
+	msgs := []Storage.Message{
+		row("q1", 1, "user", "complete", "do a thing"),
+		row("r1", 2, "assistant", "complete", "calling"),
+		row("c1", 3, "user", "complete", ""), // tool carrier
+		rowErr("a1", 4),
+		row("q2", 5, "user", "complete", "try again"),
+	}
+	got := dropErroredTurns(msgs, 5)
+	if len(got) != 1 || got[0].ID != "q2" {
+		t.Fatalf("the errored turn must vanish whole, got %+v", got)
+	}
+}
+
+func TestDropErroredTurnsKeepsCleanTurns(t *testing.T) {
+	msgs := []Storage.Message{
+		row("q1", 1, "user", "complete", "hi"),
+		row("a1", 2, "assistant", "complete", "hello"),
+		row("q2", 3, "user", "complete", "bye"),
+	}
+	got := dropErroredTurns(msgs, 3)
+	if len(got) != 3 {
+		t.Fatalf("a clean transcript must survive untouched, got %+v", got)
+	}
+}
+
+// The newest turn is the question the request being built is about to
+// answer — even if an earlier run against it errored, it stays on deck.
+func TestDropErroredTurnsKeepsTheTurnOnDeck(t *testing.T) {
+	msgs := []Storage.Message{
+		row("q1", 1, "user", "complete", "hi"),
+		rowErr("a1", 2),
+	}
+	got := dropErroredTurns(msgs, 1)
+	if len(got) != 2 {
+		t.Fatalf("the on-deck question must survive its own error, got %+v", got)
+	}
+}
+
+// A steering row is raised out of band, not by the user's typing, so its
+// turn survives regardless of the reply's fate.
+func TestDropErroredTurnsKeepsSteeredTurn(t *testing.T) {
+	steered := row("s1", 1, "user", "complete", "signed in")
+	steered.Kind = "steering"
+	msgs := []Storage.Message{
+		steered,
+		rowErr("a1", 2),
+		row("q1", 3, "user", "complete", "next"),
+	}
+	got := dropErroredTurns(msgs, 3)
+	if len(got) != 3 || got[0].ID != "s1" || got[2].ID != "q1" {
+		// The errored reply row is allowed to ride along: buildHistory's
+		// status filter drops it before replay.
+		t.Fatalf("a steered turn must survive its error, got %+v", got)
+	}
+}
+
+// A cancelled turn still tells the user what happened in the chat, and
+// stopping a run is deliberate. "Removed" means errored replies, nothing
+// else.
+func TestDropErroredTurnsKeepsCancelledTurn(t *testing.T) {
+	msgs := []Storage.Message{
+		row("q1", 1, "user", "complete", "hi"),
+		row("a1", 2, "assistant", "cancelled", ""),
+		row("q2", 3, "user", "complete", "bye"),
+	}
+	got := dropErroredTurns(msgs, 3)
+	if len(got) != 3 {
+		t.Fatalf("a cancelled turn must not be dropped, got %+v", got)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -187,6 +188,22 @@ func (m *Manager) ListTools() []Tool {
 	defer m.mu.RUnlock()
 	out := make([]Tool, len(m.tools))
 	copy(out, m.tools)
+	return out
+}
+
+// ListServerIDs lists the configured servers holding a live session. Tool
+// schemas are attached lazily, so the asker needs the ids without the
+// schemas themselves.
+func (m *Manager) ListServerIDs() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]string, 0, len(m.servers))
+	for id, sc := range m.servers {
+		if sc.sess != nil {
+			out = append(out, id)
+		}
+	}
+	sort.Strings(out)
 	return out
 }
 

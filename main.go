@@ -8,6 +8,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	notifications "github.com/wailsapp/wails/v3/pkg/services/notifications"
 
+	serviceaccount "github.com/anyscapelabs/argus/Services/Account"
 	serviceartifacts "github.com/anyscapelabs/argus/Services/Artifacts"
 	servicebrowser "github.com/anyscapelabs/argus/Services/Browser"
 	servicecatalog "github.com/anyscapelabs/argus/Services/Catalog"
@@ -61,6 +62,7 @@ func (n systemNotifier) Notify(title, body string) {
 func main() {
 
 	core := Shared.NewCore()
+	account := &serviceaccount.Service{Core: core}
 	providers := &serviceprovider.Service{Core: core}
 	models := &servicemodels.Service{Core: core}
 	catalog := &servicecatalog.Service{Core: core}
@@ -88,6 +90,7 @@ func main() {
 		Description: "Argus desktop app",
 		Icon:        appIcon,
 		Services: []application.Service{
+			application.NewService(account),
 			application.NewService(providers),
 			application.NewService(models),
 			application.NewService(catalog),

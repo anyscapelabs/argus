@@ -80,6 +80,12 @@ func systemPromptFor(profile Storage.AgentProfile, withTools bool) string {
 		b.WriteString("- Keys are lowercase with underscores (writing_style, work_hours). One short sentence per key. Reusing a key replaces the old fact — never create near-duplicate keys.\n")
 		b.WriteString("- Don't store secrets, one-off task details, or anything the user asks you not to keep. If they ask what you remember, list the memory block; if they say to drop something, call forget.\n")
 
+		// Conversation history tool — older turns are not replayed.
+		b.WriteString("\n### conversation_read\n")
+		b.WriteString("Only the latest few turns of this chat are shown to you; older ones stay in storage. Free, no approval needed.\n")
+		b.WriteString("- Call it only when the user points at something you cannot see (\"like I said earlier\", \"that report from Monday\", \"pick up where we left off\"). Never for greetings, self-contained requests, or just in case.\n")
+		b.WriteString("- conversation_read(query) finds earlier messages by words and returns numbered snippets; conversation_read(from_seq, to_seq) reads those messages in full. Search first, read second, then answer from what you found.\n")
+
 		// Filesystem tools
 		b.WriteString("\n### read_file / write_file / grep_files\n")
 		b.WriteString("Read, save and search text files on the user's machine; the same behaviour on Linux, macOS and Windows. Paths may be absolute or start with ~.\n")

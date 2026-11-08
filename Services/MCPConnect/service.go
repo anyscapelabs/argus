@@ -142,7 +142,7 @@ func (s *Service) PromptBlock(withTools bool) string {
 			b.WriteString(l + "\n")
 		}
 		if withTools {
-			b.WriteString("Their tools are in your tool list, spelled <server_id>__<tool_name>, and ready to call.\n")
+			b.WriteString("Their tools are NOT attached to this conversation by default. When a request needs one of them, call load_mcp_tools with the server_id first; the tool schemas arrive with your next turn and are named <server_id>__<tool_name>.\n")
 		}
 		b.WriteString("This list is current as of this message. If the user signed into one of these after you last looked, it is connected: carry on, and do not ask them to confirm it or call connect_mcp again.\n")
 	}

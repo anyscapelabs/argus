@@ -15,6 +15,11 @@ import * as Provider$0 from "../../Provider/models.js";
 // @ts-ignore: Unused imports
 import * as Shared$0 from "../Shared/models.js";
 
+/**
+ * ListProviders returns the single argus-router provider. There is no BYO
+ * provider management anymore: pairing an argus_pk_ key (Services/Account)
+ * is what connects the router.
+ */
 export function ListProviders(): $CancellablePromise<Shared$0.ProviderView[] | null> {
     return $Call.ByID(2805701055);
 }
@@ -23,10 +28,18 @@ export function ProviderView(cat: Catalog$0.Catalog | null, p: Provider$0.Provid
     return $Call.ByID(3341094607, cat, p);
 }
 
+/**
+ * RemoveKey is retained for staged removal: there is nothing per-provider to
+ * remove under the router. Use Services/Account.DeleteKey instead.
+ */
 export function RemoveKey(providerID: string): $CancellablePromise<Shared$0.ActionResult> {
     return $Call.ByID(1667295738, providerID);
 }
 
+/**
+ * ValidateAndSaveKey is retained for staged removal. Under the router there
+ * are no per-provider keys to save; use Services/Account.SaveKey instead.
+ */
 export function ValidateAndSaveKey(providerID: string, key: string, refs: string[] | null, baseURLOverride: string): $CancellablePromise<Shared$0.SaveKeyResult> {
     return $Call.ByID(1516885870, providerID, key, refs, baseURLOverride);
 }

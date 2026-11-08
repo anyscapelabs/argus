@@ -31,7 +31,7 @@ export default function ModelPicker({ selectedRef, onSelect, onClose }: ModelPic
   if (chatModels.length === 0) {
     return (
       <div className="w-58 rounded-xl border border-secondary bg-secondary p-3 text-xs text-secondary shadow-lg">
-        No models selected. Configure providers in Settings.
+        No models available yet. Pair your Argus key in the dashboard to see the models your plan allows.
       </div>
     )
   }

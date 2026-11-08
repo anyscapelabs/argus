@@ -158,6 +158,17 @@ func (s *Service) ListTools() []Tool {
 	return m.ListTools()
 }
 
+// ListServerIDs lists the servers with a live session.
+func (s *Service) ListServerIDs() []string {
+	s.mu.RLock()
+	m := s.manager
+	s.mu.RUnlock()
+	if m == nil {
+		return nil
+	}
+	return m.ListServerIDs()
+}
+
 func loadDotEnv() {
 	for _, p := range []string{".env", ".env.local", "config/.env", "../.env"} {
 		f, err := os.Open(p)
