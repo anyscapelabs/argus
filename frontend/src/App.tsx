@@ -13,6 +13,7 @@ import ArtifactViewer from './pages/ArtifactViewer'
 import { getChat } from './domains/chat/api'
 import { usePairing } from './domains/account/hooks'
 import Providers from './pages/settings/Providers'
+import Spinner from './components/Spinner'
 
 // Blank black canvas.
 //
@@ -116,6 +117,14 @@ export default function App() {
       <ArtifactViewer artifactID={openArtifact} onBack={() => setOpenArtifact(null)} />
     </div>
   ) : null
+
+  if (!booted) {
+    return (
+      <div className="flex min-h-dvh w-full items-center justify-center bg-primary">
+        <Spinner />
+      </div>
+    )
+  }
 
   return (
     <div

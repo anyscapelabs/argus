@@ -15,6 +15,7 @@ import ChatInput from '../components/chat/ChatInput'
 import AgentBubble from '../components/chat/AgentBubble'
 import UserBubble from '../components/chat/UserBubble'
 import ThinkingIndicator from '../components/chat/ThinkingIndicator'
+import Spinner from '../components/Spinner'
 import { StatusLine } from '../components/chat/statusLine'
 import PermissionCard, { type Permission } from '../components/chat/PermissionCard'
 import MCPConnectCard from '../components/mcp/MCPConnectCard'
@@ -574,7 +575,7 @@ export default function Chat({
           </div>
           <div ref={scrollRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto px-6 pt-6 pb-24">
             <div className="mx-auto flex max-w-3xl flex-col gap-3">
-              {isLoading && <div className="text-xs text-secondary">Loading…</div>}
+              {isLoading && <div className="flex flex-1 items-center justify-center py-12"><Spinner /></div>}
               {isFetchingNextPage && <div className="mt-1 text-center text-xs text-secondary">Loading older messages…</div>}
               {!isLoading && !hasNextPage && messages.length > 0 && (
                 <div className="mt-1 text-center text-xs text-secondary">This is the start of the conversation</div>
