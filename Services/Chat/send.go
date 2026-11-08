@@ -324,6 +324,10 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	reachedEnd := false
 	rounds := 0
 	extraTries := 0
+	// wroteArtifact turns on once any round called write_artifact. From then on
+	// the turn's visible text is checked against the stored documents so a model
+	// that pastes the document into the chat as well cannot leak it.
+	wroteArtifact := false
 
 	// runModelTurn asks the model for one turn and re-asks on retryable
 	// provider failures. The request is stateless, so a retry simply re-runs
@@ -371,6 +375,9 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 		loadedMCP := map[string]bool{}
 		roundResults := make([]Protocol.Block, 0, len(calls))
 		for _, call := range calls {
+			if call.Name == writeArtifactToolDef.Name {
+				wroteArtifact = true
+			}
 			if call.Name == mcpLoadToolName {
 				serverID, defs, block := s.runMCPLoad(call, loadedMCP)
 				roundResults = append(roundResults, block)
@@ -386,7 +393,11 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 		}
 		if len(roundResults) > 0 {
 			req.Messages = append(req.Messages, Protocol.Message{Role: Protocol.RoleUser, Blocks: roundResults})
-			s.persistRound(agentID, modelRef, result.Message, roundResults)
+			persisted := result.Message
+			if wroteArtifact {
+				persisted.Blocks, _ = s.withoutArtifactEcho(agentID, mr.StartedAt, persisted.Blocks, "round")
+			}
+			s.persistRound(agentID, modelRef, persisted, roundResults)
 		}
 		rounds++
 	}
@@ -444,6 +455,15 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	}
 
 	blocks := stripToolUses(result.Message.Blocks)
+	if wroteArtifact && msgStatus == "complete" {
+		var dropped int
+		blocks, dropped = s.withoutArtifactEcho(agentID, mr.StartedAt, blocks, "reply")
+		// The reply was only the document. Leave one line so the turn does not end
+		// on a card with no words, which GetChat would otherwise hide as empty.
+		if dropped > 0 && strings.TrimSpace(flattenText(blocks)) == "" {
+			blocks = append(blocks, Protocol.Block{Type: Protocol.BlockText, Text: artifactEchoFallback})
+		}
+	}
 	text := flattenText(blocks)
 	// The reply row was reserved before any round existed; move it behind
 	// the round pairs so history replays in execution order.
