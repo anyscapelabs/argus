@@ -49,19 +49,23 @@ export default function Sidebar({ mode = 'main', onToggleSettings, onSignOut }: 
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-primary bg-sidebar self-stretch">
-      <div className="flex items-center justify-between p-1">
+      <div className="flex items-center p-1">
         <button
           type="button"
           className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-300 transition-colors hover:bg-hover-primary"
         >
           <BsLayoutSidebarInset size={16} />
         </button>
-        <button
-          type="button"
-          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-primary bg-secondary text-primary transition-colors hover:bg-hover-secondary"
-        >
-          <IoSearch size={16} />
-        </button>
+      </div>
+      <div className="px-2 pb-2">
+        <div className="flex items-center gap-2 rounded-xl border border-primary px-2 py-1">
+          <IoSearch size={14} className="text-secondary" />
+          <input
+            type="text"
+            placeholder="Search"
+            className="w-full bg-transparent text-sm text-primary placeholder:text-secondary focus:outline-none"
+          />
+        </div>
       </div>
       <div ref={containerRef} className="relative mt-auto p-1">
         {open && (
