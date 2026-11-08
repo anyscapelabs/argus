@@ -59,7 +59,7 @@ export default function RightPanel({ onClose, onOpenArtifact }: RightPanelProps)
           type="button"
           className="group relative grid h-24 w-24 cursor-pointer place-items-center rounded-full border border-primary bg-transparent transition-opacity hover:opacity-80"
         >
-          <img src="/logo.png" alt="Argus" className="h-20 w-20 rounded-full transition-opacity group-hover:opacity-0" />
+          <img src="/argus-logo.svg" alt="Argus" className="h-20 w-20 rounded-full transition-opacity group-hover:opacity-0" />
           <GoPencil size={28} className="absolute opacity-0 transition-opacity group-hover:opacity-100" />
         </button>
       </div>

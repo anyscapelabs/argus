@@ -14,7 +14,7 @@ type SidebarProps = {
 
 export default function Sidebar({ mode = 'main', onToggleSettings, onSignOut }: SidebarProps) {
   const { data: account } = useAccount()
-  const avatar = account?.user?.image ?? '/logo.png'
+  const avatar = account?.user?.image ?? '/argus-logo.svg'
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
 

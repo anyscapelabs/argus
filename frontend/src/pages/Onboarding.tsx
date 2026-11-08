@@ -8,7 +8,7 @@ export default function Onboarding({ onContinue }: OnboardingProps) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
       <div className="flex items-center gap-3">
-        <img src="/logo.png" alt="Argus" className="h-16 w-16" />
+        <img src="/argus-logo.svg" alt="Argus" className="h-16 w-16" />
         <h1 className="text-5xl text-primary" style={{ fontFamily: "'Geist Pixel Square'" }}>Argus Agent</h1>
       </div>
       <p className="mt-4 max-w-sm text-xl font-medium text-primary">
