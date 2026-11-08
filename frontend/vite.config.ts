@@ -12,7 +12,7 @@ export default defineConfig({
   },
   plugins: [react(), tailwindcss(), wails("./bindings")],
   build: {
-    chunkSizeWarningLimit: 500,
+    chunkSizeWarningLimit: 2000,
     rollupOptions: {
       output: {
         manualChunks(id) {
