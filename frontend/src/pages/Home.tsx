@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import { useAgentProfile } from '../domains/models/hooks'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiChevronRight } from 'react-icons/fi'
 import Toolbar from '../components/layout/Toolbar'
-import RightPanel from '../components/layout/RightPanel'
+const RightPanel = lazy(() => import('../components/layout/RightPanel'))
 import ChatInput from '../components/chat/ChatInput'
 
 function timeOfDay() {
@@ -52,7 +52,11 @@ export default function Home({ onSend, onOpenArtifact }: HomeProps) {
         </div>
       </div>
       <AnimatePresence>
-        {rightOpen && <RightPanel key="right-panel" onClose={() => setRightOpen(false)} onOpenArtifact={onOpenArtifact} />}
+        {rightOpen && (
+          <Suspense fallback={null}>
+            <RightPanel key="right-panel" onClose={() => setRightOpen(false)} onOpenArtifact={onOpenArtifact} />
+          </Suspense>
+        )}
       </AnimatePresence>
     </div>
   )

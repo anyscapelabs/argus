@@ -1,15 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Events } from '@wailsio/runtime'
 import { useQueryClient } from '@tanstack/react-query'
 import { Time } from '../bindings/events'
 import Toolbar from './components/layout/Toolbar'
 import Sidebar from './components/layout/Sidebar'
 import SettingsSidebar from './components/settings/SettingsSidebar'
-import Onboarding from './pages/Onboarding'
-import SignIn from './pages/SignIn'
-import Home from './pages/Home'
-import Chat from './pages/Chat'
-import ArtifactViewer from './pages/ArtifactViewer'
+const Onboarding = lazy(() => import('./pages/Onboarding'))
+const SignIn = lazy(() => import('./pages/SignIn'))
+const Home = lazy(() => import('./pages/Home'))
+const Chat = lazy(() => import('./pages/Chat'))
+const ArtifactViewer = lazy(() => import('./pages/ArtifactViewer'))
 import { getChat } from './domains/chat/api'
 import { usePairing } from './domains/account/hooks'
 import Spinner from './components/Spinner'
@@ -114,7 +114,9 @@ export default function App() {
   // copy of this overlay.
   const artifactOverlay = openArtifact ? (
     <div className="fixed inset-0 z-50">
-      <ArtifactViewer artifactID={openArtifact} onBack={() => setOpenArtifact(null)} />
+      <Suspense fallback={null}>
+        <ArtifactViewer artifactID={openArtifact} onBack={() => setOpenArtifact(null)} />
+      </Suspense>
     </div>
   ) : null
 
@@ -131,7 +133,8 @@ export default function App() {
       ref={canvasRef}
       className="flex min-h-dvh w-full flex-col bg-primary text-grey-100"
     >
-      {page === 'onboarding' ? (
+      <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Spinner /></div>}>
+        {page === 'onboarding' ? (
         <>
           <Toolbar />
           <Onboarding onContinue={() => setPage('signin')} />
@@ -183,6 +186,7 @@ export default function App() {
           {artifactOverlay}
         </div>
       )}
+      </Suspense>
     </div>
   );
 }

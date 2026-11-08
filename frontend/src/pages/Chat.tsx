@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Events } from '@wailsio/runtime'
 import { useAgentProfile } from '../domains/models/hooks'
@@ -20,7 +21,7 @@ import PermissionCard, { type Permission } from '../components/chat/PermissionCa
 import MCPConnectCard from '../components/mcp/MCPConnectCard'
 import TakeoverCard from '../components/browser/TakeoverCard'
 import Notifier from '../components/chat/Notifier'
-import RightPanel from '../components/layout/RightPanel'
+const RightPanel = lazy(() => import('../components/layout/RightPanel'))
 import ArtifactCard from '../components/chat/ArtifactCard'
 import { HOUR_MS, dayChipLabel, dayKey, msgStamp } from '../lib/time'
 
@@ -687,7 +688,11 @@ export default function Chat({
         </div>
       </div>
       <AnimatePresence>
-        {rightOpen && <RightPanel key="right-panel" onClose={() => setRightOpen(false)} onOpenArtifact={onOpenArtifact} />}
+        {rightOpen && (
+          <Suspense fallback={null}>
+            <RightPanel key="right-panel" onClose={() => setRightOpen(false)} onOpenArtifact={onOpenArtifact} />
+          </Suspense>
+        )}
       </AnimatePresence>
     </div>
   )
