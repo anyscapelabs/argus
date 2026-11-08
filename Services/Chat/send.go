@@ -45,6 +45,23 @@ func toolCalls(msg Protocol.Message) []Protocol.ToolCall {
 	return calls
 }
 
+// dropUnnamedCalls removes tool_use blocks that carry no tool name. toolCalls
+// never runs them, so they get no result; left in the assistant message they
+// would be replayed (and persisted) as calls that nothing answered, which
+// providers reject — Gemini because the call and response counts differ, and
+// a nameless call is invalid on its own.
+func dropUnnamedCalls(msg Protocol.Message) Protocol.Message {
+	kept := make([]Protocol.Block, 0, len(msg.Blocks))
+	for _, b := range msg.Blocks {
+		if b.Type == Protocol.BlockToolUse && (b.ToolCall == nil || b.ToolCall.Name == "") {
+			continue
+		}
+		kept = append(kept, b)
+	}
+	msg.Blocks = kept
+	return msg
+}
+
 func (s *Service) Send(agentID, text string) Shared.SendResult {
 	return s.send(agentID, text, false, "")
 }
@@ -130,6 +147,13 @@ func (s *Service) send(agentID, text string, unattended bool, kind string) Share
 	if base := s.baseURLOverride(providerID); base != "" {
 		provider.BaseURL = base
 	}
+	// Defence in depth: the selected model must be in the paired plan's
+	// allowlist. The router enforces it server-side too, but failing here
+	// keeps the agent's profile honest.
+	if providerID == Shared.RouterProviderID && !s.allowedModel(modelID) {
+		release()
+		return Shared.SendResult{Error: Shared.NewError(Shared.CodeBadInput, "This model is not in your plan")}
+	}
 	overlayProvider, _ := s.Core.Overlay.Lookup(providerID)
 	key := ""
 	if !provider.NoAuth {
@@ -205,7 +229,10 @@ func (s *Service) send(agentID, text string, unattended bool, kind string) Share
 	}
 
 	// contexto through userSeq (the user message was inserted above)
-	history := s.buildHistory(agentID, userSeq, s.historyBudgetTokens(profile.ModelRef, providerID, modelID))
+	// Only a short recent window is replayed; anything older is reached through
+	// conversation_read. Every model the router allows can call tools, so there
+	// is no long-replay fallback.
+	history := s.buildHistory(agentID, userSeq, s.historyBudgetTokens(profile.ModelRef, providerID, modelID), recentHistoryMessages)
 
 	req := Protocol.Request{
 		Model:           modelID,
@@ -214,8 +241,11 @@ func (s *Service) send(agentID, text string, unattended bool, kind string) Share
 	}
 	// Terminal tool calling, gated by the capability check inside
 	// attachTools; the system prompt tells the model about it only when the
-	// tool is actually attached.
-	withTools := s.attachTools(&req, &target)
+	// tool is actually attached. Integration tools ride along only when the
+	// replayed history already touched them; every other connector waits
+	// behind the loader, so a request costs schemas for one integration at
+	// most instead of all of them.
+	withTools := s.attachTools(&req, &target, mcpServersReferenced(history, s.connectedServerIDs()))
 	sysPrompt := systemPromptFor(profile, withTools)
 	// Durable facts the agent saved earlier, re-read every run.
 	if mem := Memory.PromptBlock(s.Core.DB, withTools); mem != "" {
@@ -236,6 +266,7 @@ func (s *Service) send(agentID, text string, unattended bool, kind string) Share
 		}
 	}
 	req.System = sysPrompt
+	log.Printf("chat: history messages=%d system_tokens≈%d tools=%d", len(history), s.historySystemTokens(&req), len(req.Tools))
 
 	// Keep the default output budget unless the model's own limit is tighter,
 	// so reasoning models aren't handed a field they reject.
@@ -335,9 +366,22 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 		// Replaying the assistant turn, then appending one user message
 		// carrying every tool_result block, is the shape all three adapter
 		// families translate back into their own wire format.
+		result.Message = dropUnnamedCalls(result.Message)
 		req.Messages = append(req.Messages, result.Message)
+		loadedMCP := map[string]bool{}
 		roundResults := make([]Protocol.Block, 0, len(calls))
 		for _, call := range calls {
+			if call.Name == mcpLoadToolName {
+				serverID, defs, block := s.runMCPLoad(call, loadedMCP)
+				roundResults = append(roundResults, block)
+				// The schemas belong to the next model round, not this
+				// one; a repeat load must not stack a second copy.
+				if len(defs) > 0 && !loadedMCP[serverID] {
+					loadedMCP[serverID] = true
+					req.Tools = append(req.Tools, defs...)
+				}
+				continue
+			}
 			roundResults = append(roundResults, s.runTool(ctx, runID, agentID, profile.AgentName, call))
 		}
 		if len(roundResults) > 0 {
@@ -610,11 +654,12 @@ func clampToModel(s *Service, modelRef, providerID, modelID string, target *Prot
 	*maxOut = scratch.MaxOutputTokens
 }
 
-func (s *Service) buildHistory(agentID string, throughSeq int, budgetTokens int64) []Protocol.Message {
+func (s *Service) buildHistory(agentID string, throughSeq int, budgetTokens int64, maxMessages int) []Protocol.Message {
 	msgs, err := s.Core.DB.ListMessages(agentID, 0, 1000)
 	if err != nil {
 		return nil
 	}
+	msgs = dropErroredTurns(msgs, throughSeq)
 	agentName := agentDisplayName(s, agentID)
 	var out []Protocol.Message
 	// Steer rows are invisible turns the app raises itself (takeover
@@ -713,30 +758,32 @@ func (s *Service) buildHistory(agentID string, throughSeq int, budgetTokens int6
 	// Token-budget trim: keep the newest exchanges that fit, never starting
 	// mid round-trip — a window that opens on a tool_result carrier without
 	// its tool_use is a wire-format error, not just lost context. The 40-row
-	// ceiling from before stays as a hard secondary bound.
-	start := 0
-	used := int64(0)
-	overBudget := false
-	for i := len(out) - 1; i >= 0; i-- {
-		t := msgTokens(out[i])
-		if used+t > budgetTokens {
-			start = i + 1
-			overBudget = true
-			break
+	// ceiling (maxMessages) stays as a hard secondary bound.
+	{
+		start := 0
+		used := int64(0)
+		overBudget := false
+		for i := len(out) - 1; i >= 0; i-- {
+			t := msgTokens(out[i])
+			if used+t > budgetTokens {
+				start = i + 1
+				overBudget = true
+				break
+			}
+			used += t
 		}
-		used += t
-	}
-	if overBudget && start >= len(out) && len(out) > 0 {
-		start = len(out) - 1 // the newest message always survives
-	}
-	if len(out)-start > 40 {
-		start = len(out) - 40
-	}
-	for start < len(out) && startsOrphaned(out, start) {
-		start++
-	}
-	if start > 0 {
-		out = out[start:]
+		if overBudget && start >= len(out) && len(out) > 0 {
+			start = len(out) - 1 // the newest message always survives
+		}
+		if len(out)-start > maxMessages {
+			start = len(out) - maxMessages
+		}
+		for start < len(out) && startsOrphaned(out, start) {
+			start++
+		}
+		if start > 0 {
+			out = out[start:]
+		}
 	}
 	// Pair every function call with an immediate function response, and
 	// vice versa. Gemini rejects a content whose functionCall is not
@@ -744,9 +791,113 @@ func (s *Service) buildHistory(agentID string, throughSeq int, budgetTokens int6
 	// function call turn comes immediately after a user turn or after a
 	// function response turn"), and a window trimmed mid-round can open or
 	// close on either half of a pair. Pairs are kept or dropped whole:
-	// cancelling only the response of a call, or only the call of a
-	// response, is what produces the error, so never do that.
-	return repairHistoryTurns(out)
+	// Pairs are kept or dropped whole. An errored tool_result — denied
+	// permission, failed command, invalid call — is noise for future turns:
+	// the model already saw the failure once, and replaying it re-burns
+	// thousands of tokens on every request. The error is logged instead and
+	// cannot poison history.
+	return repairHistoryTurns(withoutErroredPairs(out))
+}
+
+// dropErroredTurns removes every turn whose reply ended in an error — the
+// user's question, the tool rounds written while answering it, and the
+// failed reply itself. An errored turn still replays as a pair with a dead
+// answer: the question stays, no reply ever replaces it, and every later
+// request re-bills the failed run's rounds while inviting the model to
+// answer a question that already failed. Dropping the pair whole keeps the
+// failed turn out of the window entirely; the reply row is skipped either
+// way, so nothing readable is lost.
+func dropErroredTurns(msgs []Storage.Message, throughSeq int) []Storage.Message {
+	if len(msgs) == 0 {
+		return msgs
+	}
+	// A turn is all rows between one real user question and the next.
+	boundary := func(i int) bool {
+		return msgs[i].Role == "user" && strings.TrimSpace(msgs[i].Text) != ""
+	}
+	out := make([]Storage.Message, 0, len(msgs))
+	for start := 0; start < len(msgs); {
+		if !boundary(start) {
+			out = append(out, msgs[start])
+			start++
+			continue
+		}
+		end := start + 1
+		for end < len(msgs) && !boundary(end) {
+			end++
+		}
+		drop := false
+		steered := false
+		onDeck := false
+		for i := start; i < end; i++ {
+			if msgs[i].Kind == Storage.MessageKindSteering {
+				steered = true
+			}
+			if msgs[i].Seq == throughSeq {
+				onDeck = true
+			}
+			if msgs[i].Role == "assistant" && msgs[i].Status == "error" {
+				drop = true
+			}
+		}
+		// The newest turn is the question the request being built is about
+		// to answer — its reply simply does not exist yet. A steering row is
+		// raised out-of-band, not by the user's typing, so it keeps the
+		// place regardless of how the run after it ended.
+		if drop && !onDeck && !steered {
+			log.Printf("chat: dropping errored turn seq=%d..%d", msgs[start].Seq, msgs[end-1].Seq)
+			start = end
+			continue
+		}
+		out = append(out, msgs[start:end]...)
+		start = end
+	}
+	return out
+}
+
+// withoutErroredPairs drops every tool_use/tool_result pair whose result
+// carried IsError. Only the matching halves are removed: a tool_use without
+// a result behind it would be a wire-format error, so the pair goes whole.
+// Dropped pairs are logged with the call id so they stay debuggable.
+func withoutErroredPairs(out []Protocol.Message) []Protocol.Message {
+	kept := make([]Protocol.Message, 0, len(out))
+	for i, m := range out {
+		if carriesToolUse(m) {
+			failed := false
+			droppedIDs := ""
+			if i+1 < len(out) {
+				for _, b := range out[i+1].Blocks {
+					if b.Type == Protocol.BlockToolResult && b.IsError {
+						failed = true
+						droppedIDs += b.ToolRefID + " "
+					}
+				}
+			}
+			if failed {
+				log.Printf("chat: dropping errored tool pair ids=%s", droppedIDs)
+				stripKind(m, Protocol.BlockToolUse, &kept)
+			} else {
+				kept = append(kept, m)
+			}
+			continue
+		}
+		if carriesToolResult(m) {
+			// A result whose call was dropped above must not ride along alone.
+			errRefs := ""
+			for _, b := range m.Blocks {
+				if b.Type == Protocol.BlockToolResult && b.IsError {
+					errRefs += b.ToolRefID + " "
+				}
+			}
+			if errRefs != "" {
+				log.Printf("chat: dropping errored tool_result ids=%s", errRefs)
+				stripKind(m, Protocol.BlockToolResult, &kept)
+				continue
+			}
+		}
+		kept = append(kept, m)
+	}
+	return repairHistoryTurns(kept)
 }
 
 // repairHistoryTurns pairs tool calls with their responses and then makes the
@@ -1066,9 +1217,9 @@ func isToolCarrier(m Protocol.Message) bool {
 	return true
 }
 
-// historyBudgetTokens replays at most half the model's context, leaving room
-// for the system prompt, tool payloads and the reply. Unknown models fall
-// back to a conservative 24k window.
+// historyBudgetTokens sizes the replayed recent window: a tenth of the model's
+// context, kept between 2k and recentHistoryTokens. Older turns come back
+// through conversation_read. Unknown models are assumed to have a 24k context.
 func (s *Service) historyBudgetTokens(modelRef, providerID, modelID string) int64 {
 	ctxLen := int64(0)
 	if m, ok := s.Core.Store.Get().Get(modelRef); ok && m.Limits != nil {
@@ -1084,11 +1235,22 @@ func (s *Service) historyBudgetTokens(modelRef, providerID, modelID string) int6
 	if ctxLen <= 0 {
 		ctxLen = 24000
 	}
-	b := ctxLen / 2
-	if b > 60000 {
-		b = 60000
+	b := ctxLen / 10
+	if b > recentHistoryTokens {
+		b = recentHistoryTokens
+	}
+	if b < 2000 {
+		b = 2000
 	}
 	return b
+}
+
+func (s *Service) historySystemTokens(req *Protocol.Request) int64 {
+	n := len(req.System)
+	for _, t := range req.Tools {
+		n += len(t.Description) + len(t.Schema)
+	}
+	return int64(n/4) + 200
 }
 
 func (s *Service) ensureAgent(agentID string) (Storage.AgentProfile, error) {
@@ -1239,7 +1401,36 @@ func (s *Service) baseURLOverride(providerID string) string {
 }
 
 func getKey(providerID string) (string, error) {
-	return Keyring.Get(providerID)
+	return Keyring.GetFor(providerID)
+}
+
+func (s *Service) allowedModel(modelID string) bool {
+	if s.Core == nil || s.Core.DB == nil {
+		return true
+	}
+	payload, _, found, err := s.Core.DB.GetAccountEntitlements()
+	if err != nil || !found || payload == "" {
+		return true
+	}
+	var ent struct {
+		Allowlist []any `json:"allowlist"`
+	}
+	if err := json.Unmarshal([]byte(payload), &ent); err != nil || len(ent.Allowlist) == 0 {
+		return true
+	}
+	for _, item := range ent.Allowlist {
+		switch v := item.(type) {
+		case string:
+			if strings.EqualFold(strings.TrimSpace(v), modelID) {
+				return true
+			}
+		case map[string]any:
+			if id, _ := v["id"].(string); strings.EqualFold(strings.TrimSpace(id), modelID) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // sCtx gives the location resolver its own bounded network budget without

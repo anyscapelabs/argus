@@ -37,23 +37,21 @@ func (s *Service) Picker(providerID string, options Shared.PickerOptions) Shared
 	if !okOverlay {
 		overlayProvider = Provider.OverlayProvider{ID: providerID}
 	}
-	config, configured, _ := s.Core.DB.GetProviderConfig(providerID)
+	config, _, _ := s.Core.DB.GetProviderConfig(providerID)
 
 	var live *Shared.LiveResults
 	var liveError *Shared.ActionError
 	liveChecked := false
 	stale := false
-	if configured {
-		entry := s.Core.FetchLive(context.Background(), provider, overlayProvider.ExtraHeaders, config, options.RefreshLive)
-		if entry != nil {
-			live = entry
-			liveChecked = true
-			liveError = s.Core.LiveError(providerID)
-			stale = entry.Stale
-		}
+	entry := s.Core.FetchLive(context.Background(), provider, overlayProvider.ExtraHeaders, config, options.RefreshLive)
+	if entry != nil {
+		live = entry
+		liveChecked = true
+		liveError = s.Core.LiveError(providerID)
+		stale = entry.Stale
 	}
 
-	view := s.Assemble(cat, provider, overlayProvider, config, configured, live, liveError, liveChecked, stale, options)
+	view := s.Assemble(cat, provider, overlayProvider, config, true, live, liveError, liveChecked, stale, options)
 	return Shared.PickerResult{Ok: true, Picker: &view}
 }
 

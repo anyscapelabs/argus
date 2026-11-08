@@ -1,6 +1,8 @@
 package Gemini
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -169,6 +171,11 @@ func (st *streamState) part(p wirePart, g *gateway) bool {
 		return true
 	}
 	if p.FunctionCall != nil {
+		if p.FunctionCall.Name == "" {
+			// A call with no name cannot be run or answered. Passing it on
+			// would put a nameless functionResponse in every later request.
+			return true
+		}
 		if !st.close(g) {
 			return false
 		}
@@ -177,7 +184,7 @@ func (st *streamState) part(p wirePart, g *gateway) bool {
 		st.nextBlock++
 		id := p.FunctionCall.ID
 		if id == "" {
-			id = "synth_" + itoa(st.toolSeq)
+			id = synthCallID(st.toolSeq)
 			st.toolSeq++
 		}
 		input := strings.TrimSpace(string(p.FunctionCall.Args))
@@ -218,6 +225,18 @@ func (st *streamState) part(p wirePart, g *gateway) bool {
 
 func itoa(n int) string {
 	return strconv.Itoa(n)
+}
+
+// synthCallID names a call Gemini sent without an id. The counter restarts
+// with every stream, so on its own it repeats across turns ("synth_0" again
+// and again) and ids stop identifying a call; the random part keeps them
+// unique across the whole transcript.
+func synthCallID(seq int) string {
+	var b [4]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "synth_" + itoa(seq)
+	}
+	return "synth_" + itoa(seq) + "_" + hex.EncodeToString(b[:])
 }
 
 func (st *streamState) open(typ Protocol.BlockType, g *gateway) bool {

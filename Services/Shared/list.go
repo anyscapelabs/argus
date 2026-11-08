@@ -107,6 +107,7 @@ type openAIModelPage struct {
 	ID            string  `json:"id"`
 	DisplayName   string  `json:"display_name"`
 	Name          string  `json:"name"`
+	OwnedBy       string  `json:"owned_by"`
 	ContextLength float64 `json:"context_length"`
 	ContextWindow float64 `json:"context_window"`
 	MaxModelLen   float64 `json:"max_model_len"`
@@ -139,9 +140,13 @@ func keepChat(in []openAIModelPage) []LiveModel {
 		if !isChatType(m.Type) {
 			continue
 		}
+		name := firstNonEmpty(m.DisplayName, m.Name)
+		if name == "" {
+			name = m.ID
+		}
 		out = append(out, LiveModel{
 			ID:         m.ID,
-			Name:       firstNonEmpty(m.DisplayName, m.Name, m.ID),
+			Name:       name,
 			ContextLen: int64FromFloat(pickPositiveNumber(m.ContextLength, m.ContextWindow, m.MaxModelLen)),
 		})
 	}
@@ -333,7 +338,7 @@ func (c *Core) FetchLive(ctx context.Context, provider Provider.Provider, extraH
 	}
 	key := ""
 	if !provider.NoAuth {
-		stored, kerr := Keyring.Get(provider.ID)
+		stored, kerr := Keyring.GetFor(provider.ID)
 		if kerr != nil {
 			if errors.Is(kerr, Keyring.ErrNotFound) {
 				e.err = NewError(CodeNotConfigured, "Connect "+provider.ID+" first. Paste the API key in Settings")
@@ -348,6 +353,10 @@ func (c *Core) FetchLive(ctx context.Context, provider Provider.Provider, extraH
 	}
 	models, aerr := fetchList(ctx, provider, extraHeaders, cfg.BaseURLOverride, key)
 	if aerr == nil {
+		// Merge the entitlements allowlist so a model the router knows but
+		// /v1/models omitted (or a stale /v1/models response) is still
+		// visible; the router enforces the allowlist server-side anyway.
+		models = mergeAllowlist(models, c.allowlist())
 		res := &LiveResults{ByID: indexLiveModels(models), FetchedAt: time.Now()}
 		e.results = res
 		e.err = nil
@@ -361,10 +370,79 @@ func (c *Core) FetchLive(ctx context.Context, provider Provider.Provider, extraH
 		e.stale = true
 		return &res
 	}
+	// No network results yet: fall back to the cached allowlist snapshot so
+	// the picker still works offline within the grace window.
+	if allow := c.allowlist(); len(allow) > 0 {
+		res := &LiveResults{ByID: indexLiveModels(allow), FetchedAt: time.Now(), Stale: true}
+		e.results = res
+		e.err = aerr
+		e.stale = true
+		return res
+	}
 	e.err = aerr
 	e.results = nil
 	e.stale = false
 	return nil
+}
+
+func (c *Core) allowlist() []LiveModel {
+	if c.DB == nil {
+		return nil
+	}
+	payload, _, found, err := c.DB.GetAccountEntitlements()
+	if err != nil || !found || payload == "" {
+		return nil
+	}
+	var ent struct {
+		Allowlist []any `json:"allowlist"`
+	}
+	if err := json.Unmarshal([]byte(payload), &ent); err != nil {
+		return nil
+	}
+	out := make([]LiveModel, 0, len(ent.Allowlist))
+	for _, item := range ent.Allowlist {
+		switch v := item.(type) {
+		case string:
+			id := strings.TrimSpace(v)
+			if id == "" {
+				continue
+			}
+			out = append(out, LiveModel{ID: id, Name: id})
+		case map[string]any:
+			id, _ := v["id"].(string)
+			id = strings.TrimSpace(id)
+			if id == "" {
+				continue
+			}
+			name, _ := v["display_name"].(string)
+			if name == "" {
+				name, _ = v["name"].(string)
+			}
+			if name == "" {
+				name = id
+			}
+			out = append(out, LiveModel{ID: id, Name: name})
+		}
+	}
+	return out
+}
+
+func mergeAllowlist(live, allow []LiveModel) []LiveModel {
+	if len(allow) == 0 {
+		return live
+	}
+	seen := map[string]bool{}
+	for _, m := range live {
+		seen[strings.ToLower(m.ID)] = true
+	}
+	out := live
+	for _, m := range allow {
+		if !seen[strings.ToLower(m.ID)] {
+			out = append(out, m)
+			seen[strings.ToLower(m.ID)] = true
+		}
+	}
+	return out
 }
 
 func (c *Core) LiveError(providerID string) *ActionError {

@@ -50,6 +50,12 @@ export interface AgentStatusView {
     "busy": boolean;
 }
 
+export interface AllowedModel {
+    "id": string;
+    "display_name"?: string;
+    "name"?: string;
+}
+
 /**
  * ArtifactExportResult reports where the derived file landed. Path is absolute,
  * because the panel offers to reveal it.
@@ -152,6 +158,43 @@ export interface CustomModelInput {
 }
 
 /**
+ * EntitlementPlan mirrors the API plan block.
+ */
+export interface EntitlementPlan {
+    "id": string;
+}
+
+/**
+ * EntitlementUser mirrors the API identity block.
+ */
+export interface EntitlementUser {
+    "id": string;
+    "name": string | null;
+    "email": string | null;
+    "image": string | null;
+}
+
+/**
+ * Entitlements is the identity + plan + allowlist trio the agent runs on.
+ * The allowlist carries the router's catalog id plus display name per entry
+ * so the picker shows the display name without any frontend trimming.
+ */
+export interface Entitlements {
+    "user": EntitlementUser;
+    "plan": EntitlementPlan;
+    "allowlist": AllowedModel[] | null;
+    "offline"?: boolean;
+}
+
+/**
+ * EntitlementsView carries the entitlements snapshot or a typed error.
+ */
+export interface EntitlementsView {
+    "account"?: Entitlements | null;
+    "error"?: ActionError | null;
+}
+
+/**
  * ExportFormatView is one entry of the export menu. A format the machine cannot
  * produce is still listed, disabled, with Required explaining what to install —
  * hiding an option the user can fix by installing something is worse than
@@ -185,6 +228,19 @@ export interface GetChatResult {
 
 export interface GetModelResult {
     "view"?: ModelView | null;
+    "error"?: ActionError | null;
+}
+
+export interface KeyStatus {
+    "hasKey": boolean;
+}
+
+/**
+ * KeyStatus is the presence probe the shell's router uses, without ever
+ * touching the secret's value.
+ */
+export interface KeyStatusResult {
+    "status"?: KeyStatus | null;
     "error"?: ActionError | null;
 }
 
@@ -354,6 +410,14 @@ export interface RefreshResult {
     "ok": boolean;
     "error"?: ActionError | null;
     "status"?: StatusView | null;
+}
+
+/**
+ * SaveAccountKeyResult acknowledges a keyring write of the agent account key.
+ */
+export interface SaveAccountKeyResult {
+    "ok": boolean;
+    "error"?: ActionError | null;
 }
 
 export interface SaveKeyResult {

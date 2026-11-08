@@ -178,35 +178,45 @@ func decodeArgs(input string, valid bool) (args json.RawMessage, ok bool) {
 	return json.RawMessage(trimmed), true
 }
 
-func functionResponsePayload(text string) json.RawMessage {
+func functionResponsePayload(text string, isError bool) json.RawMessage {
+	key := "result"
+	if isError {
+		key = "error"
+	}
+	wrap := func(v any) json.RawMessage {
+		raw, err := json.Marshal(map[string]any{key: v})
+		if err != nil {
+			return json.RawMessage(`{"` + key + `":""}`)
+		}
+		return raw
+	}
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
-		return json.RawMessage(`{"result":""}`)
+		return wrap("")
 	}
-	if json.Valid([]byte(trimmed)) {
-		var probe json.RawMessage
-		_ = json.Unmarshal([]byte(trimmed), &probe)
-		wrapped, err := json.Marshal(struct {
-			Result json.RawMessage `json:"result"`
-		}{Result: probe})
-		if err == nil {
-			return wrapped
-		}
+	if !isError && json.Valid([]byte(trimmed)) {
+		return wrap(json.RawMessage(trimmed))
 	}
-	esc, err := json.Marshal(struct {
-		Result string `json:"result"`
-	}{Result: text})
-	if err != nil {
-		return json.RawMessage(`{"result":""}`)
-	}
-	return esc
+	return wrap(text)
+}
+
+// dummyThoughtSignature is Google's documented escape hatch for Gemini 3
+// models: a function call replayed without the signature the model issued
+// (history from another provider, or from before signatures were stored) is
+// rejected with a 400 unless it carries this value.
+const dummyThoughtSignature = "skip_thought_signature_validator"
+
+func needsThoughtSignature(model string) bool {
+	return strings.Contains(strings.ToLower(model), "gemini-3")
 }
 
 func translateContents(req *Protocol.Request) []wireContent {
-	out := make([]wireContent, 0, len(req.Messages))
-	for _, m := range req.Messages {
+	msgs := normalizeToolTurns(req.Messages)
+	out := make([]wireContent, 0, len(msgs))
+	for _, m := range msgs {
 		role := roleFor(m.Role)
 		parts := make([]wirePart, 0, len(m.Blocks))
+		signedCall := false
 		for _, blk := range m.Blocks {
 			switch blk.Type {
 			case Protocol.BlockText:
@@ -221,7 +231,7 @@ func translateContents(req *Protocol.Request) []wireContent {
 				}
 				parts = append(parts, wirePart{Text: blk.Text, Thought: true, ThoughtSignature: blk.Signature})
 			case Protocol.BlockToolUse:
-				if blk.ToolCall == nil {
+				if blk.ToolCall == nil || blk.ToolCall.Name == "" {
 					continue
 				}
 				args, _ := decodeArgs(blk.ToolCall.Input, blk.ToolCall.Valid)
@@ -235,17 +245,29 @@ func translateContents(req *Protocol.Request) []wireContent {
 						part.ThoughtSignature = extra.Signature
 					}
 				}
+				// Only the first call of a step needs a signature, and only
+				// Gemini 3 enforces it.
+				if part.ThoughtSignature == "" && !signedCall && needsThoughtSignature(req.Model) {
+					part.ThoughtSignature = dummyThoughtSignature
+				}
+				signedCall = true
 				parts = append(parts, part)
 			case Protocol.BlockToolResult:
+				// normalizeToolTurns has already set the name from the
+				// matching call; a result that still has none answers
+				// nothing and Gemini would reject the whole request for it.
 				name := blk.ToolName
 				if blk.ToolCall != nil && blk.ToolCall.Name != "" {
 					name = blk.ToolCall.Name
+				}
+				if name == "" {
+					continue
 				}
 				content := blk.Text
 				if content == "" && blk.ToolCall != nil {
 					content = blk.ToolCall.Input
 				}
-				resp := wireFunctionResponse{ID: blk.ToolRefID, Name: name, Response: functionResponsePayload(content)}
+				resp := wireFunctionResponse{ID: blk.ToolRefID, Name: name, Response: functionResponsePayload(content, blk.IsError)}
 				parts = append(parts, wirePart{FunctionResponse: &resp})
 			}
 		}

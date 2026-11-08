@@ -24,6 +24,7 @@ func (db *DB) migrate() error {
 		migration10,
 		migration11,
 		migration12,
+		migration13,
 	}
 
 	for i := version; i < len(migrations); i++ {
@@ -352,6 +353,21 @@ func migration12(db *DB) error {
 		if strings.Contains(err.Error(), "duplicate column name") {
 			return nil
 		}
+		return err
+	}
+	return nil
+}
+
+// migration13 creates the account_entitlements cache used for offline auth. One
+// row holds the last successful entitlements snapshot as JSON plus the unix
+// timestamp it was fetched, so a paired app can boot without the network.
+func migration13(db *DB) error {
+	stmt := `CREATE TABLE IF NOT EXISTS account_entitlements (
+		id TEXT PRIMARY KEY,
+		payload TEXT NOT NULL,
+		fetched_at INTEGER NOT NULL
+	)`
+	if _, err := db.conn.Exec(stmt); err != nil {
 		return err
 	}
 	return nil

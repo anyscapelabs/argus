@@ -9,6 +9,20 @@ import (
 
 const service = "argus"
 
+// AccountKeyRef is the keyring ref for the argus_pk_ service-account key.
+// The router provider authenticates with this key, not a per-provider one.
+const AccountKeyRef = "account/key"
+
+// KeyFor returns the secret ref a provider authenticates with. The single
+// argus-router provider uses the account key; per-provider refs are kept for
+// backward compatibility with pre-router installs.
+func KeyFor(providerID string) string {
+	if providerID == "argus-router" {
+		return AccountKeyRef
+	}
+	return Ref(providerID)
+}
+
 // ErrNotFound is returned when the secrets store has no value for a ref.
 // It is distinct from a broken secrets store so callers can tell
 // "not configured yet" apart from "storage is failing".
@@ -16,6 +30,12 @@ var ErrNotFound = errors.New("no value stored for this key")
 
 func Ref(providerID string) string {
 	return "provider/" + providerID + "/api_key"
+}
+
+// GetFor reads the secret a provider authenticates with (account key for
+// the router provider, per-provider ref for legacy providers).
+func GetFor(providerID string) (string, error) {
+	return GetSecret(KeyFor(providerID))
 }
 
 func Set(providerID, key string) error {
