@@ -568,7 +568,7 @@ export default function Chat({
               transition={{ type: 'spring', stiffness: 300, damping: 20 }}
               className="group flex cursor-pointer items-center gap-2 rounded-full bg-secondary px-3 py-1 transition-colors hover:bg-hover-secondary"
             >
-              <img src="/argus-logo.svg" alt="Argus" className="h-10 w-10 rounded-full" />
+              <img src="/argus-logo.svg" alt="Argus" className="h-20 w-20 rounded-full" />
               <span className="text-sm font-medium text-primary">{agentProfile?.agent_name || 'Argus'}</span>
               <FiChevronRight size={14} className="w-0 overflow-hidden opacity-0 transition-all duration-300 ease-out group-hover:w-4 group-hover:translate-x-1 group-hover:opacity-100" />
             </motion.button>
