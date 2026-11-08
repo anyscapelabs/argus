@@ -795,7 +795,7 @@ func (s *Service) runTool(ctx context.Context, runID, agentID, agentName string,
 	}
 
 	if !call.Valid {
-		return result("invalid tool call: the arguments were not valid JSON", true)
+		return result(invalidCallMessage(call.Name), true)
 	}
 
 	if call.Name == "get_time_and_location" {
@@ -1047,55 +1047,7 @@ func (s *Service) runTool(ctx context.Context, runID, agentID, agentName string,
 	}
 
 	if call.Name == "write_artifact" {
-		if s.Artifacts == nil {
-			return result("documents are not available in this build", true)
-		}
-		var input struct {
-			Title      string `json:"title"`
-			Body       string `json:"body"`
-			ArtifactID string `json:"artifact_id"`
-			Append     bool   `json:"append"`
-		}
-		if err := json.Unmarshal([]byte(call.Input), &input); err != nil {
-			return result("invalid tool input: could not parse the write_artifact arguments", true)
-		}
-		if strings.TrimSpace(input.Body) == "" {
-			return result("invalid tool input: body is required — the document text itself", true)
-		}
-		label := strings.TrimSpace(input.Title)
-		if label == "" {
-			label = strings.TrimSpace(input.ArtifactID)
-		}
-		activity("tool_started", label)
-		res := s.Artifacts.Save(agentID, input.ArtifactID, input.Title, input.Body, input.Append)
-		activity("tool_finished", label)
-		if res.Error != nil {
-			return result("could not save the document: "+res.Error.Message, true)
-		}
-		if res.Rejected {
-			// The document was not stored, so the finding list is the whole
-			// answer: line numbers and the rule, enough to fix in this turn.
-			return result("The document was NOT saved. It broke the document rules:\n"+
-				res.Findings+"\nCorrect those lines and call write_artifact again.", true)
-		}
-		verb := "Saved"
-		if input.Append {
-			verb = "Extended"
-		}
-		var b strings.Builder
-		fmt.Fprintf(&b, "%s %q as an artifact (id %s, version %d, %d words). ",
-			verb, res.Artifact.Title, shortID(res.Artifact.ID), res.Artifact.Version, res.Artifact.Words)
-		b.WriteString("It is in the Artifacts panel, where the user exports it as .md, .html, .pdf or .docx. ")
-		b.WriteString("Tell the user in a sentence what you wrote; do not repeat the document in chat.")
-		if res.Findings != "" {
-			b.WriteString("\n" + res.Findings)
-		}
-		if input.Append {
-			fmt.Fprintf(&b, "\nTo continue this document, call write_artifact with artifact_id %q and append=true.", res.Artifact.ID)
-		} else {
-			fmt.Fprintf(&b, "\nTo revise or extend it later, call write_artifact with artifact_id %q.", res.Artifact.ID)
-		}
-		return result(b.String(), false)
+		return s.runArtifactTool(call, agentID, result, activity)
 	}
 
 	if call.Name == "read_file" || call.Name == "write_file" || call.Name == "grep_files" {
