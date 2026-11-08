@@ -40,6 +40,7 @@ export default function App() {
   // meant, and closing is naming none of them.
   const [openArtifact, setOpenArtifact] = useState<string | null>(null);
   const [sidebarMode, setSidebarMode] = useState<'main' | 'settings'>('main');
+  const [settingsReturn, setSettingsReturn] = useState<'home' | 'chat'>('home');
   const [pendingSend, setPendingSend] = useState<{ id: number; text: string; modelRef: string | null } | null>(null);
 
   // Boot: hold the shell on the black canvas until the keyring check settles.
@@ -147,6 +148,7 @@ export default function App() {
               setSidebarMode('main')
             } else {
               setSidebarMode('settings')
+              setSettingsReturn('home')
               setPage('settings')
             }
           }} onSignOut={() => { void leave.mutateAsync() }} />
@@ -160,7 +162,7 @@ export default function App() {
         <div className="flex flex-1 min-h-0">
           <SettingsSidebar onBack={() => {
             setSidebarMode('main')
-            setPage('home')
+            setPage(settingsReturn)
           }} />
           <div className="flex flex-1 min-h-0 flex-col">
             <Toolbar />
@@ -173,6 +175,7 @@ export default function App() {
               setSidebarMode('main')
             } else {
               setSidebarMode('settings')
+              setSettingsReturn('chat')
               setPage('settings')
             }
           }} onSignOut={() => { void leave.mutateAsync() }} />
