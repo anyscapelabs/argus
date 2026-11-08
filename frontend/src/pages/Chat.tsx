@@ -576,12 +576,9 @@ export default function Chat({
           <div ref={scrollRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto px-6 pt-6 pb-24">
             <div className="mx-auto flex max-w-3xl flex-col gap-3">
               {isLoading && <div className="flex flex-1 items-center justify-center py-12"><Spinner /></div>}
-              {isFetchingNextPage && <div className="mt-1 text-center text-xs text-secondary">Loading older messages…</div>}
-              {!isLoading && !hasNextPage && messages.length > 0 && (
-                <div className="mt-1 text-center text-xs text-secondary">This is the start of the conversation</div>
-              )}
-              {messagesError && <div className="text-xs text-red-400">{String(messagesError)}</div>}
-              {send.isError && (
+              {!isLoading && isFetchingNextPage && <div className="mt-1 text-center text-xs text-secondary">Loading older messages…</div>}
+              {!isLoading && messagesError && <div className="text-xs text-red-400">{String(messagesError)}</div>}
+              {!isLoading && send.isError && (
                 <div className="w-fit rounded-xl border border-red-400/40 bg-secondary px-2 py-1 text-xs text-red-400">
                   {String((send.error as any)?.message ?? send.error)}
                 </div>
@@ -644,7 +641,7 @@ export default function Chat({
                   <AgentBubble key={item.id} content={item.msg.text} status={item.msg.status} error={item.msg.error_message} />
                 ),
               )}
-              {permission && (
+              {!isLoading && permission && (
                 <PermissionCard
                   permission={permission}
                   agentName={agentProfile?.agent_name}
@@ -653,8 +650,8 @@ export default function Chat({
                   onDeny={() => decide('deny')}
                 />
               )}
-              {errorNotice && <Notifier text={errorNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400"><FiTerminal size={9} className="text-red-400" /></div>} />}
-              {runActive && (
+              {!isLoading && errorNotice && <Notifier text={errorNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400"><FiTerminal size={9} className="text-red-400" /></div>} />}
+              {!isLoading && runActive && (
                 <ThinkingIndicator chip={chip} text={chip ? undefined : (status || 'Thinking…')} />
               )}
             </div>
