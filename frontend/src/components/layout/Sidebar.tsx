@@ -7,6 +7,7 @@ import { CgArrowsScrollV } from 'react-icons/cg'
 import { useAccount } from '../../domains/account/hooks'
 import { useAgentProfile } from '../../domains/models/hooks'
 import { useChatMessages } from '../../domains/chat/hooks'
+import AgentListItem from './AgentListItem'
 
 type SidebarProps = {
   mode?: 'main' | 'settings'
@@ -77,19 +78,13 @@ export default function Sidebar({ mode = 'main', onToggleSettings, onSignOut }: 
         </div>
       </div>
       <div className="flex flex-col gap-1 px-2">
-        <button
-          type="button"
-          className="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left transition-colors hover:bg-hover-primary"
-        >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-primary bg-secondary">
-            <img src={agentAvatar} alt="" className="h-8 w-8 rounded-full" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium text-primary">{agentName}</div>
-            <div className="truncate text-xs text-secondary">{lastText || 'No messages yet'}</div>
-          </div>
-          <span className="shrink-0 text-xs text-secondary">{lastTime}</span>
-        </button>
+        <AgentListItem
+          avatar={agentAvatar}
+          name={agentName}
+          lastMessage={lastText}
+          time={lastTime}
+          active
+        />
       </div>
       <div ref={containerRef} className="relative mt-auto p-1">
         {open && (
