@@ -4,6 +4,7 @@ import (
 	"embed"
 
 	"log"
+	"os"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	notifications "github.com/wailsapp/wails/v3/pkg/services/notifications"
@@ -60,6 +61,13 @@ func (n systemNotifier) Notify(title, body string) {
 }
 
 func main() {
+	// Force the Linux build onto the X11 backend instead of Wayland. GTK/webkit
+	// honour these before the first window is created, so set them up front.
+	if os.Getenv("GDK_BACKEND") == "" {
+		os.Setenv("GDK_BACKEND", "x11")
+	}
+	os.Setenv("XDG_SESSION_TYPE", "x11")
+	os.Unsetenv("WAYLAND_DISPLAY")
 
 	core := Shared.NewCore()
 	account := &serviceaccount.Service{Core: core}
