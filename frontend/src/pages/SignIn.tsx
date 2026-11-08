@@ -31,7 +31,7 @@ export default function SignIn({ onAuthenticated }: SignInProps) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
       <div className="flex flex-col items-center gap-3">
-        <img src="/logo.png" alt="Argus" className="h-16 w-16" />
+        <img src="/argus-logo.svg" alt="Argus" className="h-16 w-16" />
         <h1 className="text-4xl text-primary" style={{ fontFamily: "'Geist Pixel Square'" }}>
           Sign in
         </h1>
