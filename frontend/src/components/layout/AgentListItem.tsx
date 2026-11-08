@@ -26,11 +26,11 @@ export default function AgentListItem({
         active ? 'bg-hover-primary' : 'hover:bg-hover-primary'
       }`}
     >
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${active ? 'border-accent bg-accent/10' : 'border-primary bg-secondary'}`}>
+      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${active ? 'border-accent-secondary bg-accent-secondary/10' : 'border-primary bg-secondary'}`}>
         <img src={avatar} alt="" className="h-8 w-8 rounded-full" />
       </div>
       <div className="min-w-0 flex-1">
-        <div className={`truncate text-sm font-medium ${active ? 'text-accent' : 'text-primary'}`}>{name}</div>
+        <div className={`truncate text-sm font-medium ${active ? 'text-primary' : 'text-primary'}`}>{name}</div>
         <div className="truncate text-xs text-secondary">{lastMessage || 'No messages yet'}</div>
       </div>
       <span className="shrink-0 text-xs text-secondary">{time}</span>
