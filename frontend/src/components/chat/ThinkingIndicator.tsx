@@ -16,7 +16,7 @@ export type ThinkingIndicatorProps = {
 export default function ThinkingIndicator({ text, chip }: ThinkingIndicatorProps) {
   const reduceMotion = useReducedMotion()
   return (
-    <div className="w-fit max-w-xl rounded-xl bg-secondary px-2 py-1 text-sm font-medium">
+    <div className="w-fit max-w-xl text-sm font-medium">
       {chip ? (
         /* The key makes a changed site fade in instead of snapping. */
         <motion.div

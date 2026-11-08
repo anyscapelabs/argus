@@ -653,8 +653,8 @@ export default function Chat({
                 />
               )}
               {errorNotice && <Notifier text={errorNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400"><FiTerminal size={9} className="text-red-400" /></div>} />}
-              {runActive && (chip || status) && (
-                <ThinkingIndicator chip={chip} text={chip ? undefined : status} />
+              {runActive && (
+                <ThinkingIndicator chip={chip} text={chip ? undefined : (status || 'Thinking…')} />
               )}
             </div>
           </div>
