@@ -12,7 +12,6 @@ import Chat from './pages/Chat'
 import ArtifactViewer from './pages/ArtifactViewer'
 import { getChat } from './domains/chat/api'
 import { usePairing } from './domains/account/hooks'
-import Providers from './pages/settings/Providers'
 import Spinner from './components/Spinner'
 
 // Blank black canvas.
@@ -165,7 +164,6 @@ export default function App() {
           }} />
           <div className="flex flex-1 min-h-0 flex-col">
             <Toolbar />
-            <Providers />
           </div>
         </div>
       ) : (
