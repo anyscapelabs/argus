@@ -59,7 +59,7 @@ export default function Sidebar({ mode = 'main', onToggleSettings, onSignOut }: 
       </div>
       <div className="px-2 pb-2">
         <div className="flex items-center gap-2 rounded-xl border border-primary px-2 py-1">
-          <IoSearch size={14} className="text-secondary" />
+          <IoSearch size={18} className="text-secondary" />
           <input
             type="text"
             placeholder="Search"
