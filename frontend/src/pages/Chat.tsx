@@ -16,6 +16,7 @@ import ChatInput from '../components/chat/ChatInput'
 import AgentBubble from '../components/chat/AgentBubble'
 import UserBubble from '../components/chat/UserBubble'
 import ThinkingIndicator from '../components/chat/ThinkingIndicator'
+import Spinner from '../components/Spinner'
 import { StatusLine } from '../components/chat/statusLine'
 import PermissionCard, { type Permission } from '../components/chat/PermissionCard'
 import MCPConnectCard from '../components/mcp/MCPConnectCard'
@@ -567,6 +568,14 @@ export default function Chat({
     el.scrollTop = el.scrollHeight
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center bg-primary">
+        <Spinner />
+      </div>
+    )
+  }
+
   return (
     <div className="relative flex h-dvh flex-1 min-h-0 overflow-hidden">
       <div className="flex flex-1 flex-col min-h-0">
@@ -586,13 +595,6 @@ export default function Chat({
           </div>
           <div ref={scrollRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto px-6 pt-6 pb-24">
             <div className="mx-auto flex max-w-3xl flex-col gap-3">
-              {isLoading && (
-                <div className="flex flex-col gap-3">
-                  <div className="h-10 w-2/3 animate-pulse rounded-xl bg-secondary" />
-                  <div className="h-16 w-1/2 animate-pulse rounded-xl bg-secondary" />
-                  <div className="h-10 w-3/4 animate-pulse rounded-xl bg-secondary" />
-                </div>
-              )}
               {!isLoading && messagesError && <div className="text-xs text-red-400">{String(messagesError)}</div>}
               {!isLoading && send.isError && (
                 <div className="w-fit rounded-xl border border-red-400/40 bg-secondary px-2 py-1 text-xs text-red-400">
