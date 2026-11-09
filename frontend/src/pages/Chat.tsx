@@ -8,7 +8,7 @@ import { respondPermission, noticeText, type PermissionRequestView, type Permiss
 import { respondMCPConnect, pendingMCPConnects, type MCPConnectRequestView, type MCPConnectState } from '../domains/mcp/api'
 import { asTakeoverState, pendingTakeovers, respondTakeover, type TakeoverDecision, type TakeoverRequestView, type TakeoverState, type TakeoverStatus } from '../domains/browser/api'
 import { useNoticeLines } from '../domains/permission/hooks'
-import { useArtifacts, type ArtifactView } from '../domains/artifacts/hooks'
+import { useArtifacts } from '../domains/artifacts/hooks'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiArrowDown, FiChevronRight, FiGlobe, FiLink, FiTerminal } from 'react-icons/fi'
 import Toolbar from '../components/layout/Toolbar'
