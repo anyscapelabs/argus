@@ -220,7 +220,9 @@ func fetchGemini(ctx context.Context, provider Provider.Provider, override strin
 		if aerr != nil {
 			return nil, aerr
 		}
-		if err := json.Unmarshal(body, &struct{ Models []json.RawMessage `json:"models"` }{}); err != nil {
+		if err := json.Unmarshal(body, &struct {
+			Models []json.RawMessage `json:"models"`
+		}{}); err != nil {
 			// Not the native Gemini shape; the OpenAI-compatible endpoint
 			// returns [{id,name}] instead.
 			var envelope struct {
@@ -233,10 +235,10 @@ func fetchGemini(ctx context.Context, provider Provider.Provider, override strin
 		}
 		var response struct {
 			Models []struct {
-				Name        string   `json:"name"`
-				DisplayName string   `json:"displayName"`
-				InputLimit  int64    `json:"inputTokenLimit"`
-				OutputLimit int64    `json:"outputTokenLimit"`
+				Name        string `json:"name"`
+				DisplayName string `json:"displayName"`
+				InputLimit  int64  `json:"inputTokenLimit"`
+				OutputLimit int64  `json:"outputTokenLimit"`
 			} `json:"models"`
 			NextPageToken string `json:"nextPageToken"`
 		}
@@ -271,7 +273,6 @@ func isChatType(t string) bool {
 	}
 	return true
 }
-
 
 func pickPositiveNumber(values ...float64) float64 {
 	for _, v := range values {
