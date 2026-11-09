@@ -8,7 +8,9 @@ package Chat
 // The shape is the MCPConnect card's: a request raised from the app side, one
 // live card per agent, a Wails-bound Respond the UI's buttons call, and an
 // in-memory state the frontend can re-read on remount. States: requested →
-// active (the user is driving) → done; declined ends it too.
+// active (the user is driving) → done; declined ends it too. The bookkeeping
+// (one live card per agent) rides Shared.InteractionStore, shared with that
+// card so both can't drift.
 
 import (
 	"context"
@@ -20,7 +22,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/anyscapelabs/argus/Services/Shared"
-	"github.com/anyscapelabs/argus/Storage"
 )
 
 // takeoverStates the frontend knows.
@@ -48,18 +49,6 @@ type userTakeover struct {
 	view Shared.TakeoverRequestView
 }
 
-func (s *Service) takeoverEnsure() {
-	if s.takeovers == nil {
-		s.takeovers = map[string]*userTakeover{}
-	}
-	if s.takeoverOwner == nil {
-		s.takeoverOwner = map[string]string{}
-	}
-	if s.captchaAskAt == nil {
-		s.captchaAskAt = map[string]time.Time{}
-	}
-}
-
 // captchaDetected answers whether snapshot text carries a challenge the agent
 // cannot pass alone.
 func captchaDetected(text string) bool {
@@ -69,14 +58,15 @@ func captchaDetected(text string) bool {
 // captchaArrived applies the per-agent cooldown: one page yields one card,
 // not one per browser call while the user works.
 func (s *Service) captchaArrived(agentID string) bool {
-	s.takeoverMu.Lock()
-	s.takeoverEnsure()
+	s.captchaMu.Lock()
+	defer s.captchaMu.Unlock()
+	if s.captchaAskAt == nil {
+		s.captchaAskAt = map[string]time.Time{}
+	}
 	if last, ok := s.captchaAskAt[agentID]; ok && time.Since(last) < takeoverCooldown {
-		s.takeoverMu.Unlock()
 		return false
 	}
 	s.captchaAskAt[agentID] = time.Now()
-	s.takeoverMu.Unlock()
 	return true
 }
 
@@ -88,17 +78,9 @@ func (s *Service) RegisterTakeover(agentID, agentName, reason string) (Shared.Ta
 	if s.Browser == nil {
 		return Shared.TakeoverRequestView{}, fmt.Errorf("browser: this build has no browser support")
 	}
-	takeoverMu := &s.takeoverMu
-	takeoverMu.Lock()
-	s.takeoverEnsure()
-	if live, ok := s.takeoverOwner[agentID]; ok {
-		if r, ok2 := s.takeovers[live]; ok2 {
-			v := r.view
-			takeoverMu.Unlock()
-			return v, nil
-		}
+	if r, ok := s.takeoverStore.Live(agentID); ok {
+		return r.view, nil
 	}
-	takeoverMu.Unlock()
 
 	if s.Browser.TakenOver() {
 		return Shared.TakeoverRequestView{}, fmt.Errorf("browser: the user is already driving the browser")
@@ -122,10 +104,14 @@ func (s *Service) RegisterTakeover(agentID, agentName, reason string) (Shared.Ta
 		State:      takeoverRequested,
 		CreatedAt:  time.Now().UnixMilli(),
 	}}
-	takeoverMu.Lock()
-	s.takeovers[r.view.RequestID] = r
-	s.takeoverOwner[agentID] = r.view.RequestID
-	takeoverMu.Unlock()
+	if !s.takeoverStore.Begin(agentID, r, r.view.RequestID) {
+		// The slot filled between the check and the park; give back the
+		// card that won.
+		if live, ok := s.takeoverStore.Live(agentID); ok {
+			return live.view, nil
+		}
+		return r.view, fmt.Errorf("browser: the user is already driving the browser")
+	}
 	s.Core.EmitEvent(Shared.EventTakeoverRequested, r.view)
 	return r.view, nil
 }
@@ -133,9 +119,7 @@ func (s *Service) RegisterTakeover(agentID, agentName, reason string) (Shared.Ta
 // RespondTakeover is the binding the card's buttons call. decisions:
 // takeover | done | decline.
 func (s *Service) RespondTakeover(requestID, decision string) Shared.ActionResult {
-	s.takeoverMu.Lock()
-	r, ok := s.takeovers[requestID]
-	s.takeoverMu.Unlock()
+	r, ok := s.takeoverStore.Get(requestID)
 	if !ok {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeNotFound, "That takeover request is no longer active")}
 	}
@@ -159,12 +143,7 @@ func (s *Service) RespondTakeover(requestID, decision string) Shared.ActionResul
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeBadInput, "Unknown decision")}
 	}
 	if decision != "takeover" {
-		s.takeoverMu.Lock()
-		delete(s.takeovers, requestID)
-		if s.takeoverOwner[r.view.AgentID] == requestID {
-			delete(s.takeoverOwner, r.view.AgentID)
-		}
-		s.takeoverMu.Unlock()
+		s.takeoverStore.End(requestID, r.view.AgentID)
 	}
 	return Shared.ActionResult{Ok: true}
 }
@@ -176,21 +155,13 @@ func (s *Service) PendingTakeover(agentID string) Shared.TakeoverListResult {
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.TakeoverListResult{Error: aerr}
 	}
-	s.takeoverMu.Lock()
-	s.takeoverEnsure()
-	var out []Shared.TakeoverRequestView
-	if live, ok := s.takeoverOwner[agentID]; ok {
-		if r, ok2 := s.takeovers[live]; ok2 {
-			v := r.view
-			if v.State == takeoverRequested && s.Browser != nil && s.Browser.TakenOver() {
-				v.State = takeoverActive
-			}
-			out = append(out, v)
+	out := []Shared.TakeoverRequestView{}
+	if r, ok := s.takeoverStore.Live(agentID); ok {
+		v := r.view
+		if v.State == takeoverRequested && s.Browser != nil && s.Browser.TakenOver() {
+			v.State = takeoverActive
 		}
-	}
-	s.takeoverMu.Unlock()
-	if out == nil {
-		out = []Shared.TakeoverRequestView{}
+		out = append(out, v)
 	}
 	return Shared.TakeoverListResult{Takeovers: out}
 }
@@ -212,10 +183,7 @@ func (s *Service) emitTakeover(r *userTakeover, state, msg string) {
 func (s *Service) finishTakeover(r *userTakeover, state, msg string) {
 	s.emitTakeover(r, state, msg)
 	s.persistTakeoverNotice(r, state, msg)
-	s.takeoverMu.Lock()
-	delete(s.takeovers, r.view.RequestID)
-	delete(s.takeoverOwner, r.view.AgentID)
-	s.takeoverMu.Unlock()
+	s.takeoverStore.End(r.view.RequestID, r.view.AgentID)
 	// The run that raised the card was told to stop and wait for a handover that
 	// never happened, so it needs the same invisible turn that "done" and
 	// "decline" send — otherwise the agent sits silent while the user reads a
@@ -284,24 +252,7 @@ func whereOf(v Shared.TakeoverRequestView) string {
 	return "the page"
 }
 
+// persistTakeoverNotice writes the settled state into the notices table.
 func (s *Service) persistTakeoverNotice(r *userTakeover, state, msg string) {
-	if s.Core == nil || s.Core.DB == nil || r.view.AgentID == "" {
-		return
-	}
-	id, err := uuid.NewV7()
-	if err != nil {
-		return
-	}
-	if err := s.Core.DB.InsertPermissionNotice(Storage.PermissionNotice{
-		ID:        id.String(),
-		AgentID:   r.view.AgentID,
-		AgentName: r.view.AgentName,
-		Tool:      "browser",
-		Decision:  state,
-		Kind:      "takeover",
-		Body:      noticeTextForTakeover(r.view, state, msg),
-		CreatedAt: time.Now().UnixMilli(),
-	}); err != nil {
-		log.Printf("takeover: could not persist %s notice: %v", state, err)
-	}
+	Shared.PersistNotice(s.Core, r.view.AgentID, r.view.AgentName, "browser", state, "takeover", noticeTextForTakeover(r.view, state, msg))
 }

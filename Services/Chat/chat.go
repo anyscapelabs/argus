@@ -49,10 +49,9 @@ type Service struct {
 
 	// takeovers is the browser human-takeover card state: one live card per
 	// agent, plus when a captcha was last asked about. See takeover.go.
-	takeoverMu    sync.Mutex
-	takeovers     map[string]*userTakeover // requestID -> live card
-	takeoverOwner map[string]string        // agentID -> requestID
+	takeoverStore Shared.InteractionStore[*userTakeover]
 	captchaAskAt  map[string]time.Time
+	captchaMu     sync.Mutex
 
 	// startedAtMs is when the app booted; the right panel reads uptime off
 	// it instead of the backend ticking a timer.
