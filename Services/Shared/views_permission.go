@@ -1,7 +1,6 @@
 package Shared
 
-import (
-)
+import ()
 
 type PermissionRequestView struct {
 	RequestID string `json:"request_id"`
@@ -62,4 +61,16 @@ type PermissionNoticeView struct {
 	Kind      string `json:"kind"`
 	Text      string `json:"text"`
 	CreatedAt int64  `json:"created_at"`
+}
+
+type PermissionState struct {
+	AgentID string `json:"agent_id"`
+	Tool    string `json:"tool"`
+	Allowed bool   `json:"allowed"`
+	Denied  bool   `json:"denied"`
+}
+
+type PermissionStateResult struct {
+	State PermissionState `json:"state"`
+	Error *ActionError    `json:"error,omitempty"`
 }
