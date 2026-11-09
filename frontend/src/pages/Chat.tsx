@@ -135,6 +135,7 @@ export default function Chat({
   const scrollRef = useRef<HTMLDivElement>(null)
   const pinnedRef = useRef(true)
   const [pinned, setPinned] = useState(true)
+  const [scrolled, setScrolled] = useState(false)
   // Where the viewport sat when an older page was requested. Prepending
   // history pushes every pixel down; without this anchor the reader of an old
   // message is thrown to the bottom of the new stack.
@@ -145,6 +146,7 @@ export default function Chat({
     const nextPinned = el.scrollHeight - el.scrollTop - el.clientHeight < 120
     pinnedRef.current = nextPinned
     setPinned(nextPinned)
+    setScrolled(el.scrollTop > 0)
     if (el.scrollTop < 160 && hasNextPage && !isFetchingNextPage) {
       prependAnchor.current = { height: el.scrollHeight, top: el.scrollTop }
       fetchNextPage()
@@ -186,9 +188,9 @@ export default function Chat({
   return (
     <div className="relative flex h-dvh flex-1 min-h-0 overflow-hidden">
       <div className="flex flex-1 flex-col min-h-0">
-        <Toolbar />
+        <Toolbar scrolled={scrolled} />
         <div className="relative flex flex-1 min-h-0 flex-col">
-          <div className="absolute left-1/2 -top-10 z-10 -translate-x-1/2">
+          <div className="absolute left-1/2 -top-10 z-30 -translate-x-1/2">
             <motion.button
               type="button"
               onClick={() => setRightOpen((v) => !v)}

@@ -50,3 +50,22 @@ export async function pendingMCPConnects(agentID: string): Promise<MCPConnectReq
   const res = await (MCPConnectService as any).Pending(agentID)
   return res ?? []
 }
+
+
+export type IntegrationView = {
+  id: string
+  name: string
+  description?: string
+  icon?: string
+  connected?: boolean
+}
+
+export async function listIntegrations(): Promise<IntegrationView[]> {
+  const res = await (MCPConnectService as any).Integrations()
+  return res ?? []
+}
+
+export async function registerMCPConnect(agentID: string, agentName: string, serverID: string): Promise<string> {
+  const res = await (MCPConnectService as any).Register(agentID, agentName, serverID)
+  return res ?? ''
+}

@@ -207,7 +207,22 @@ func (s *Service) runMCPLoad(call Protocol.ToolCall, loaded map[string]bool) (st
 			len(defs), serverID, strings.Join(names(defs), "\n- ")), false)
 	}
 	if s.MCP != nil && s.MCP.Manager() != nil && s.MCP.Manager().IsConnected(serverID) {
-		return serverID, nil, result(serverID+" is connected but published no tools; there is nothing to load.", false)
+		// The session is live but the tool cache may be stale or empty (e.g. the
+		// server's tools/list failed on first refresh). Refresh once before
+		// concluding there is nothing to load.
+		if m := s.MCP.Manager(); m != nil {
+			m.RefreshTools()
+		}
+		defs = s.mcpServerToolDefs(serverID)
+		if len(defs) > 0 {
+			return serverID, defs, result(fmt.Sprintf(
+				"Loaded %d tools for %s. Their schemas are attached now — call them by name:\n- %s",
+				len(defs), serverID, strings.Join(names(defs), "\n- ")), false)
+		}
+		return serverID, nil, result(serverID+" is connected but published no tools; there is nothing to load. (The server's tools/list returned no tools or failed; check MCP logs.)", false)
+	}
+	if s.MCP != nil && s.MCP.HasStoredSession(serverID) {
+		return serverID, nil, result(serverID+" is signed in but not connected in this session yet (session restore may still be in progress, or it needs to be reconnected). Ask the user to reconnect it from Integrations, or try again shortly.", true)
 	}
 	return serverID, nil, result("Not connected: no connection for "+serverID+". "+
 		"If the user wants it connected, call connect_mcp with this server_id.", true)

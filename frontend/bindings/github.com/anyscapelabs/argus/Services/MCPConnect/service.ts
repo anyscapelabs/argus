@@ -10,6 +10,13 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as Shared$0 from "../Shared/models.js";
 
 /**
+ * Integrations lists the connectors Argus offers, with local connection state.
+ */
+export function Integrations(): $CancellablePromise<Shared$0.IntegrationView[] | null> {
+    return $Call.ByID(2712563097);
+}
+
+/**
  * Pending lets the frontend restore the card after a remount or reload. An
  * unanswered request comes first, because that is the one needing a click; the
  * card that settled last follows so a reload still shows what is connected.

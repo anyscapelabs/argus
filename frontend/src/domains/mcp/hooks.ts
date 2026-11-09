@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Events } from '@wailsio/runtime'
 import { useQueryClient } from '@tanstack/react-query'
-import { respondMCPConnect, pendingMCPConnects, type MCPConnectRequestView, type MCPConnectState } from './api'
+import { respondMCPConnect, pendingMCPConnects, listIntegrations, registerMCPConnect, type MCPConnectRequestView, type MCPConnectState } from './api'
+import { useQuery } from '@tanstack/react-query'
 
 // The connector flow: the pending sign-in card(s) the backend holds, their
 // events, and the decide handler the card's buttons call. The backend holds
@@ -84,4 +85,89 @@ export function useMCPConnectFlow() {
   }
 
   return { mcpConnect, mcpState, mcpError, decide }
+}
+
+
+export function useIntegrations() {
+  return useQuery({
+    queryKey: ['mcp', 'integrations'],
+    queryFn: listIntegrations,
+  })
+}
+
+export function useIntegrationConnect() {
+  const qc = useQueryClient()
+  const [states, setStates] = useState<Record<string, { state: MCPConnectState; error?: string; requestId?: string }>>({})
+
+  useEffect(() => {
+    const unsub = Events.On('mcp:connect:status', (event: any) => {
+      const payload = (event?.data ?? event) as any
+      if (!payload?.server_id || !payload?.request_id) return
+      setStates((cur) => {
+        const prev = cur[payload.server_id]
+        if (prev?.requestId && prev.requestId !== payload.request_id) return cur
+        return {
+          ...cur,
+          [payload.server_id]: { state: payload.state, error: payload.error, requestId: payload.request_id },
+        }
+      })
+      if (payload.state === 'connected' || payload.state === 'denied' || payload.state === 'expired') {
+        qc.invalidateQueries({ queryKey: ['mcp', 'integrations'] })
+      }
+    })
+    return () => unsub && unsub()
+  }, [qc])
+
+  const connect = async (serverId: string) => {
+    setStates((cur) => ({ ...cur, [serverId]: { state: 'requested', error: undefined } }))
+    try {
+      const result = await registerMCPConnect('default', 'Argus', serverId)
+      if (result === 'connected') {
+        setStates((cur) => ({ ...cur, [serverId]: { state: 'connected' } }))
+        qc.invalidateQueries({ queryKey: ['mcp', 'integrations'] })
+        return
+      }
+      if (result === 'unknown') {
+        throw new Error('Unknown integration')
+      }
+
+      let req = (await pendingMCPConnects('default')).find(
+        (r) => r.server_id === serverId && r.state !== 'connected',
+      )
+      if (!req && result === 'shown') {
+        await new Promise((r) => setTimeout(r, 150))
+        req = (await pendingMCPConnects('default')).find(
+          (r) => r.server_id === serverId && r.state !== 'connected',
+        )
+      }
+      if (!req) {
+        if (result === 'shown') {
+          setStates((cur) => ({ ...cur, [serverId]: { state: 'requested' } }))
+          return
+        }
+        throw new Error('Could not start connection')
+      }
+
+      setStates((cur) => ({
+        ...cur,
+        [serverId]: {
+          state: req?.state === 'authorizing' ? 'authorizing' : 'authorizing',
+          requestId: req.request_id,
+        },
+      }))
+      if (req.state !== 'authorizing') {
+        await respondMCPConnect(req.request_id, 'connect')
+      }
+    } catch (err: any) {
+      setStates((cur) => ({ ...cur, [serverId]: { state: 'failed', error: err?.message || 'Could not connect' } }))
+    }
+  }
+
+  const clear = (serverId: string) => setStates((cur) => {
+    const next = { ...cur }
+    delete next[serverId]
+    return next
+  })
+
+  return { states, connect, clear }
 }

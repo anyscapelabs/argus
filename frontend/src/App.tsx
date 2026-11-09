@@ -156,7 +156,7 @@ export default function App() {
               setSettingsReturn('home')
               setPage('settings')
             }
-          }} onOpenIntegrations={() => { setIntegrationsReturn('home'); setPage('integrations'); setSidebarMode('main') }} onSignOut={() => { void leave.mutateAsync() }} />
+          }} onOpenIntegrations={() => { setIntegrationsReturn('home'); setPage('integrations'); setSidebarMode('main') }} onOpenChat={() => setPage('chat')} agentActive={false} onSignOut={() => { void leave.mutateAsync() }} />
           <Home onSend={(text: string, modelRef: string | null) => {
             setPendingSend({ id: Date.now(), text, modelRef });
             setPage('chat');
@@ -173,8 +173,8 @@ export default function App() {
               setSettingsReturn(integrationsReturn)
               setPage('settings')
             }
-          }} onOpenIntegrations={() => { setIntegrationsReturn('chat'); setPage('integrations'); setSidebarMode('main') }} onSignOut={() => { void leave.mutateAsync() }} />
-          <Integrations onBack={() => setPage(integrationsReturn)} />
+          }} onOpenIntegrations={() => { setIntegrationsReturn('chat'); setPage('integrations'); setSidebarMode('main') }} onOpenChat={() => setPage('chat')} agentActive={false} onSignOut={() => { void leave.mutateAsync() }} />
+          <Integrations />
         </div>
       ) : page === 'settings' ? (
         <div className="flex flex-1 min-h-0">
@@ -196,7 +196,7 @@ export default function App() {
               setSettingsReturn('chat')
               setPage('settings')
             }
-          }} onOpenIntegrations={() => { setIntegrationsReturn(page === 'chat' || page === 'integrations' ? 'chat' : 'home'); setPage('integrations'); setSidebarMode('main') }} onSignOut={() => { void leave.mutateAsync() }} />
+          }} onOpenIntegrations={() => { setIntegrationsReturn(page === 'chat' || page === 'integrations' ? 'chat' : 'home'); setPage('integrations'); setSidebarMode('main') }} onOpenChat={() => setPage('chat')} agentActive={true} onSignOut={() => { void leave.mutateAsync() }} />
           <Chat pendingSend={pendingSend} onPendingConsumed={() => setPendingSend(null)} onOpenArtifact={(id) => setOpenArtifact(id)} />
           {artifactOverlay}
         </div>

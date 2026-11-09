@@ -219,6 +219,18 @@ export interface GetModelResult {
     "error"?: ActionError | null;
 }
 
+/**
+ * IntegrationView is a connector offered by Argus, plus its local connection
+ * state for the Integrations page.
+ */
+export interface IntegrationView {
+    "id": string;
+    "name": string;
+    "description": string;
+    "icon": string;
+    "connected": boolean;
+}
+
 export interface KeyStatus {
     "hasKey": boolean;
 }

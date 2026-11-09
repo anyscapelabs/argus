@@ -13,10 +13,19 @@ type SidebarProps = {
   mode?: 'main' | 'settings'
   onToggleSettings?: () => void
   onOpenIntegrations?: () => void
+  onOpenChat?: () => void
   onSignOut?: () => void
+  agentActive?: boolean
 }
 
-export default function Sidebar({ mode = 'main', onToggleSettings, onOpenIntegrations, onSignOut }: SidebarProps) {
+export default function Sidebar({
+  mode = 'main',
+  onToggleSettings,
+  onOpenIntegrations,
+  onOpenChat,
+  onSignOut,
+  agentActive = false,
+}: SidebarProps) {
   const { data: account } = useAccount()
   const { data: agentProfile } = useAgentProfile('default')
   const { data: messages = [] } = useChatMessages('default')
@@ -90,7 +99,8 @@ export default function Sidebar({ mode = 'main', onToggleSettings, onOpenIntegra
           name={agentName}
           lastMessage={lastText}
           time={lastTime}
-          active
+          active={agentActive}
+          onClick={onOpenChat}
         />
       </div>
       <div ref={containerRef} className="relative mt-auto p-1">

@@ -1,4 +1,5 @@
 import { FiCheck } from 'react-icons/fi'
+import { IoAdd } from 'react-icons/io5'
 import type { MCPConnectRequestView, MCPConnectState } from '../../domains/mcp/api'
 
 type Props = {
@@ -6,16 +7,18 @@ type Props = {
   state: MCPConnectState
   error?: string
   onConnect: () => void
-  onDeny: () => void
+  onDeny?: () => void
   onCancel: () => void
+  denyLabel?: string
+  className?: string
 }
 
-export default function MCPConnectCard({ request, state, error, onConnect, onDeny, onCancel }: Props) {
+export default function MCPConnectCard({ request, state, error, onConnect, onDeny, onCancel, denyLabel, className }: Props) {
   const waiting = state === 'authorizing'
   const failed = state === 'failed'
   const connected = state === 'connected'
   return (
-    <div className="w-full max-w-sm min-h-10 p-2 rounded-xl border border-secondary bg-secondary flex items-center gap-3">
+    <div className={`w-full max-w-sm min-h-10 p-2 rounded-xl border border-secondary bg-secondary flex items-center gap-3 ${className ?? ''}`.trim()}>
       <div className="h-10 w-10 rounded-lg border border-secondary overflow-hidden">
         <img
           src={request.icon || `/${request.server_id}.png`}
@@ -36,21 +39,32 @@ export default function MCPConnectCard({ request, state, error, onConnect, onDen
       {connected ? (
         // The card stays on screen after a successful sign-in and the action
         // pill keeps its place, so nothing shifts under the chat.
-        <span className="flex items-center gap-1 px-3 py-1 rounded-full bg-accent text-black text-sm font-medium">
-          <FiCheck size={12} />
-          Connected
+        <span
+          aria-label="Connected"
+          title="Connected"
+          className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-black"
+        >
+          <FiCheck size={14} />
         </span>
       ) : waiting ? (
-        <button onClick={onCancel} className="px-3 py-1 rounded-full text-sm font-medium text-secondary hover:text-primary cursor-pointer">
+        <button onClick={onCancel} className="cursor-pointer rounded-full px-2 py-1 text-sm font-medium text-secondary hover:text-primary">
           Cancel
         </button>
       ) : (
         <div className="flex items-center gap-2">
-          <button onClick={onDeny} className="px-3 py-1 rounded-full text-sm font-medium text-secondary hover:text-primary cursor-pointer">
-            {failed ? 'Dismiss' : 'Deny'}
-          </button>
-          <button onClick={onConnect} className="px-3 py-1 rounded-full bg-accent text-black text-sm font-medium hover:bg-hover-accent cursor-pointer">
-            {failed ? 'Retry' : 'Connect'}
+          {onDeny ? (
+            <button onClick={onDeny} className="cursor-pointer rounded-full px-2 py-1 text-sm font-medium text-secondary hover:text-primary">
+              {denyLabel ?? (failed ? 'Dismiss' : 'Deny')}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onConnect}
+            aria-label={failed ? 'Retry' : 'Connect'}
+            title={failed ? 'Retry' : 'Connect'}
+            className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-accent text-black hover:bg-hover-accent"
+          >
+            <IoAdd size={16} />
           </button>
         </div>
       )}

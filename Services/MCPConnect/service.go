@@ -404,6 +404,36 @@ func (s *Service) settledFromStore(agentID string) (Shared.MCPConnectRequestView
 	}, true
 }
 
+// Integrations lists the connectors Argus offers, with local connection state.
+func (s *Service) Integrations() []Shared.IntegrationView {
+	cat := s.catalog()
+	if cat == nil {
+		return nil
+	}
+	out := make([]Shared.IntegrationView, 0, len(cat.Items()))
+	for _, it := range cat.Items() {
+		if it.URL == "" {
+			continue
+		}
+		connected := false
+		if s.MCP != nil {
+			if s.MCP.Manager() != nil && s.MCP.Manager().IsConnected(it.ID) {
+				connected = true
+			} else if s.MCP.HasStoredSession(it.ID) {
+				connected = true
+			}
+		}
+		out = append(out, Shared.IntegrationView{
+			ID:          it.ID,
+			Name:        it.Name,
+			Description: it.Description,
+			Icon:        it.Icon,
+			Connected:   connected,
+		})
+	}
+	return out
+}
+
 // Pending lets the frontend restore the card after a remount or reload. An
 // unanswered request comes first, because that is the one needing a click; the
 // card that settled last follows so a reload still shows what is connected.

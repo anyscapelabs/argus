@@ -218,6 +218,7 @@ func (m *Manager) refreshToolsLocked() {
 		res, err := sc.sess.ListTools(ctx, &mcp.ListToolsParams{})
 		cancel()
 		if err != nil {
+			fmt.Printf("mcp: list tools failed for %s: %v\n", id, err)
 			continue
 		}
 		for _, t := range res.Tools {
@@ -233,6 +234,9 @@ func (m *Manager) refreshToolsLocked() {
 				Description: t.Description,
 				InputSchema: schema,
 			})
+		}
+		if len(res.Tools) == 0 {
+			fmt.Printf("mcp: %s connected but returned 0 tools\n", id)
 		}
 	}
 	m.tools = tools
@@ -268,4 +272,23 @@ func (m *Manager) Disconnect() {
 	}
 	m.servers = make(map[string]*serverConn)
 	m.tools = nil
+}
+
+
+func (m *Manager) RefreshTools() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.refreshToolsLocked()
+}
+
+func (m *Manager) ToolCount(serverID string) int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	n := 0
+	for _, t := range m.tools {
+		if t.ServerID == serverID {
+			n++
+		}
+	}
+	return n
 }
