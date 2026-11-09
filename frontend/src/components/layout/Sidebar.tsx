@@ -68,7 +68,7 @@ export default function Sidebar({ mode = 'main', onToggleSettings, onSignOut }: 
         </button>
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-300 transition-colors hover:bg-hover-primary"
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-primary bg-secondary text-primary transition-colors hover:bg-hover-secondary"
         >
           <IoAdd size={18} />
         </button>
