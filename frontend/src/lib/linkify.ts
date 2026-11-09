@@ -7,6 +7,8 @@
 import { isValidElement, type ReactNode } from 'react'
 import type { ReactElement } from 'react'
 
+const countOf = (s: string, ch: string) => s.split(ch).length - 1
+
 export function linkify(text: string): string {
   const NUL = String.fromCharCode(0)
   const placeholder = () => new RegExp(`${NUL}(\\d+)${NUL}`, 'g')
@@ -23,14 +25,21 @@ export function linkify(text: string): string {
   out = out.replace(/!\[[^\]]*\]\([^)]*\)/g, keep)
   out = out.replace(/\[[^\]]+\]\([^)]+\)/g, keep)
   out = out.replace(/(^|[\s(>])(https?:\/\/[^\s<]+)/g, (m, pre: string, url: string, offset: number, string: string) => {
-    const clean = url.replace(/[.,;:!?'"]+$/, '')
+    // Trailing punctuation is part of the sentence, not the URL, and a
+    // closepallian `)` that does not open anything inside the URL belongs to
+    // the surrounding text. Both ride after the angle brackets, never inside.
+    let clean = url.replace(/[.,;:!?'"]+$/, '')
+    while (clean.endsWith(')') && countOf(clean, ')') > countOf(clean, '(')) {
+      clean = clean.slice(0, -1)
+    }
+    const suffix = url.slice(clean.length)
     if (!clean) return m
     const after = string.slice(offset + m.length)
     if (after === '') {
-      return `${pre}<${clean}>`
+      return `${pre}<${clean}>${suffix}`
     }
     if (/^[\s)\],;.!?\n\r]/.test(after)) {
-      return `${pre}<${clean}>`
+      return `${pre}<${clean}>${suffix}`
     }
     return m
   })
