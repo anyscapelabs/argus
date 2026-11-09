@@ -41,7 +41,7 @@ export default function Sidebar({ mode = 'main', onToggleSettings, onSignOut }: 
 
   if (mode === 'settings') {
     return (
-      <aside className="flex w-64 shrink-0 flex-col border-r border-primary bg-sidebar self-stretch rounded-xl overflow-hidden">
+      <aside className="flex w-64 shrink-0 flex-col border-r border-primary bg-sidebar self-stretch">
         <div className="flex items-center p-1">
           <button
             type="button"
@@ -58,8 +58,8 @@ export default function Sidebar({ mode = 'main', onToggleSettings, onSignOut }: 
   }
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r border-primary bg-sidebar self-stretch rounded-xl overflow-hidden">
-      <div className="flex items-center justify-between p-1">
+    <aside className="flex w-64 shrink-0 flex-col border-r border-primary bg-sidebar self-stretch">
+      <div className="flex items-center justify-between rounded-full p-1">
         <button
           type="button"
           className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-300 transition-colors hover:bg-hover-primary"
