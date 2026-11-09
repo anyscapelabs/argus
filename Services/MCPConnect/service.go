@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -14,7 +12,6 @@ import (
 	"github.com/anyscapelabs/argus/Services/Integrations"
 	"github.com/anyscapelabs/argus/Services/MCP"
 	"github.com/anyscapelabs/argus/Services/Shared"
-	"github.com/anyscapelabs/argus/Storage"
 	"github.com/google/uuid"
 )
 
@@ -36,21 +33,16 @@ type Service struct {
 	// The shape mirrors Scheduler's narrow chat runner: this service says what
 	// happened, something else decides how to run.
 	OnSettled func(agentID, text string)
-	mu        sync.Mutex
-	reqs      map[string]*request
-	byAgent   map[string]string
+	// store is the one-live-card-per-agent bookkeeper shared with the browser
+	// takeover card, so a second connector ask returns the pending card
+	// instead of stacking one.
+	store Shared.InteractionStore[*request]
 	// last holds the card that settled per agent, so a reload can still show
 	// which integration is signed in rather than starting from nothing.
 	last map[string]Shared.MCPConnectRequestView
 }
 
 func (s *Service) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
-	if s.reqs == nil {
-		s.reqs = map[string]*request{}
-	}
-	if s.byAgent == nil {
-		s.byAgent = map[string]string{}
-	}
 	if s.last == nil {
 		s.last = map[string]Shared.MCPConnectRequestView{}
 	}
@@ -176,9 +168,7 @@ func (s *Service) Register(agentID, agentName, serverID string) string {
 	if s.MCP != nil && s.MCP.Manager().IsConnected(serverID) {
 		return "connected"
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, busy := s.byAgent[agentID]; busy {
+	if _, busy := s.store.Live(agentID); busy {
 		return "pending"
 	}
 	id, _ := uuid.NewV7()
@@ -198,16 +188,16 @@ func (s *Service) Register(agentID, agentName, serverID string) string {
 		},
 	}
 	r.expire = time.AfterFunc(requestTTL, func() { s.finish(r.view.RequestID, "expired", "") })
-	s.reqs[r.view.RequestID] = r
-	s.byAgent[agentID] = r.view.RequestID
+	if !s.store.Begin(agentID, r, r.view.RequestID) {
+		r.expire.Stop()
+		return "pending"
+	}
 	s.emit(r, "requested", "")
 	return "shown"
 }
 
 func (s *Service) Respond(requestID, decision string) Shared.ActionResult {
-	s.mu.Lock()
-	r, ok := s.reqs[requestID]
-	s.mu.Unlock()
+	r, ok := s.store.Get(requestID)
 	if !ok {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeNotFound, "That request is no longer active")}
 	}
@@ -215,21 +205,21 @@ func (s *Service) Respond(requestID, decision string) Shared.ActionResult {
 	case "deny":
 		s.finish(requestID, "denied", "")
 	case "cancel":
-		s.mu.Lock()
+		s.store.Lock()
 		if r.cancel != nil {
 			r.cancel()
 		}
-		s.mu.Unlock()
+		s.store.Unlock()
 	case "connect":
-		s.mu.Lock()
+		s.store.Lock()
 		if r.cancel != nil {
-			s.mu.Unlock()
+			s.store.Unlock()
 			return Shared.ActionResult{Ok: true}
 		}
 		ctx, cancel := context.WithCancel(context.Background())
 		r.cancel = cancel
 		r.expire.Stop()
-		s.mu.Unlock()
+		s.store.Unlock()
 		s.emit(r, "authorizing", "")
 		go s.runConnect(ctx, r)
 	default:
@@ -255,27 +245,22 @@ func (s *Service) runConnect(ctx context.Context, r *request) {
 }
 
 func (s *Service) retryable(r *request, msg string) {
-	s.mu.Lock()
+	s.store.Lock()
 	r.cancel = nil
 	r.expire.Reset(requestTTL)
-	s.mu.Unlock()
+	s.store.Unlock()
 	s.persistNotice(r.view, "failed", msg)
 	s.emit(r, "failed", msg)
 }
 
 func (s *Service) finish(id, state, msg string) {
-	s.mu.Lock()
 	var cancel context.CancelFunc
-	r, ok := s.reqs[id]
+	r, ok := s.store.Get(id)
 	if ok {
-		delete(s.reqs, id)
-		if r.view.AgentID != "" {
-			if s.byAgent[r.view.AgentID] == id {
-				delete(s.byAgent, r.view.AgentID)
-			}
-		}
+		s.store.End(id, r.view.AgentID)
 		r.expire.Stop()
 		cancel = r.cancel
+		s.store.Lock()
 		if state == "connected" {
 			// The card outlives the request that produced it: it is the only
 			// place that says this integration is signed in.
@@ -283,8 +268,8 @@ func (s *Service) finish(id, state, msg string) {
 			done.State = state
 			s.last[r.view.AgentID] = done
 		}
+		s.store.Unlock()
 	}
-	s.mu.Unlock()
 	// An expired or denied card must stop the sign-in that is still waiting on
 	// it, otherwise the loopback listener and its browser tab outlive the card
 	// that opened them. A completed connect has already detached its context,
@@ -377,29 +362,9 @@ func noticeTextFor(v Shared.MCPConnectRequestView, state, msg string) string {
 }
 
 // persistNotice writes the settled state into the notices table. Kind is "mcp"
-// so the row is not mistaken for a terminal permission, and Body carries the
-// finished sentence because a decision word alone cannot describe a sign-in.
+// so the row is not mistaken for a terminal permission.
 func (s *Service) persistNotice(v Shared.MCPConnectRequestView, state, msg string) {
-	if s.Core == nil || s.Core.DB == nil || v.AgentID == "" {
-		return
-	}
-	id, err := uuid.NewV7()
-	if err != nil {
-		return
-	}
-	err = s.Core.DB.InsertPermissionNotice(Storage.PermissionNotice{
-		ID:        id.String(),
-		AgentID:   v.AgentID,
-		AgentName: v.AgentName,
-		Tool:      v.ServerID,
-		Decision:  state,
-		Kind:      "mcp",
-		Body:      noticeTextFor(v, state, msg),
-		CreatedAt: time.Now().UnixMilli(),
-	})
-	if err != nil {
-		log.Printf("mcpconnect: could not persist %s notice: %v", state, err)
-	}
+	Shared.PersistNotice(s.Core, v.AgentID, v.AgentName, v.ServerID, state, "mcp", noticeTextFor(v, state, msg))
 }
 
 // settledFromStore rebuilds the connected card from the notices table, which is
@@ -443,13 +408,8 @@ func (s *Service) settledFromStore(agentID string) (Shared.MCPConnectRequestView
 // unanswered request comes first, because that is the one needing a click; the
 // card that settled last follows so a reload still shows what is connected.
 func (s *Service) Pending(agentID string) []Shared.MCPConnectRequestView {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	var out []Shared.MCPConnectRequestView
-	for _, r := range s.reqs {
-		if r.view.AgentID != agentID {
-			continue
-		}
+	for _, r := range s.store.List(agentID) {
 		v := r.view
 		v.State = "requested"
 		if r.cancel != nil {
