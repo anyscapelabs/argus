@@ -9,6 +9,7 @@ const Onboarding = lazy(() => import('./pages/Onboarding'))
 const SignIn = lazy(() => import('./pages/SignIn'))
 const Home = lazy(() => import('./pages/Home'))
 const Chat = lazy(() => import('./pages/Chat'))
+const Integrations = lazy(() => import('./pages/Integrations'))
 const ArtifactViewer = lazy(() => import('./pages/ArtifactViewer'))
 import { getChat } from './domains/chat/api'
 import { usePairing } from './domains/account/hooks'
@@ -34,13 +35,14 @@ export default function App() {
   // later states emerge from this one source of truth, so every route read of
   // `pairing` stays decisive.
   const { pairing, leave } = usePairing(true)
-  const [page, setPage] = useState<'onboarding' | 'signin' | 'home' | 'chat' | 'settings'>('onboarding');
+  const [page, setPage] = useState<'onboarding' | 'signin' | 'home' | 'chat' | 'settings' | 'integrations'>('onboarding');
   // Which document is open full screen, by id. Not a boolean: the chat card, the
   // panel list and the viewer all need to agree on *which* document the user
   // meant, and closing is naming none of them.
   const [openArtifact, setOpenArtifact] = useState<string | null>(null);
   const [sidebarMode, setSidebarMode] = useState<'main' | 'settings'>('main');
   const [settingsReturn, setSettingsReturn] = useState<'home' | 'chat'>('home');
+  const [integrationsReturn, setIntegrationsReturn] = useState<'home' | 'chat'>('chat');
   const [pendingSend, setPendingSend] = useState<{ id: number; text: string; modelRef: string | null } | null>(null);
 
   // Boot: hold the shell on the black canvas until the keyring check settles.
@@ -62,7 +64,7 @@ export default function App() {
   useEffect(() => {
     if (!booted) return
     if (pairing.status === 'valid') return
-    if (page === 'home' || page === 'chat' || page === 'settings') setPage('signin')
+    if (page === 'home' || page === 'chat' || page === 'settings' || page === 'integrations') setPage('signin')
   }, [booted, pairing.status, page])
 
   // While the shell is authenticated and resting on home, an existing chat
@@ -154,12 +156,25 @@ export default function App() {
               setSettingsReturn('home')
               setPage('settings')
             }
-          }} onSignOut={() => { void leave.mutateAsync() }} />
+          }} onOpenIntegrations={() => { setIntegrationsReturn('home'); setPage('integrations'); setSidebarMode('main') }} onSignOut={() => { void leave.mutateAsync() }} />
           <Home onSend={(text: string, modelRef: string | null) => {
             setPendingSend({ id: Date.now(), text, modelRef });
             setPage('chat');
           }} onOpenArtifact={(id) => setOpenArtifact(id)} />
           {artifactOverlay}
+        </div>
+      ) : page === 'integrations' ? (
+        <div className="flex flex-1 min-h-0">
+          <Sidebar mode={sidebarMode} onToggleSettings={() => {
+            if (sidebarMode === 'settings') {
+              setSidebarMode('main')
+            } else {
+              setSidebarMode('settings')
+              setSettingsReturn(integrationsReturn)
+              setPage('settings')
+            }
+          }} onOpenIntegrations={() => { setIntegrationsReturn('chat'); setPage('integrations'); setSidebarMode('main') }} onSignOut={() => { void leave.mutateAsync() }} />
+          <Integrations onBack={() => setPage(integrationsReturn)} />
         </div>
       ) : page === 'settings' ? (
         <div className="flex flex-1 min-h-0">
@@ -181,7 +196,7 @@ export default function App() {
               setSettingsReturn('chat')
               setPage('settings')
             }
-          }} onSignOut={() => { void leave.mutateAsync() }} />
+          }} onOpenIntegrations={() => { setIntegrationsReturn(page === 'chat' || page === 'integrations' ? 'chat' : 'home'); setPage('integrations'); setSidebarMode('main') }} onSignOut={() => { void leave.mutateAsync() }} />
           <Chat pendingSend={pendingSend} onPendingConsumed={() => setPendingSend(null)} onOpenArtifact={(id) => setOpenArtifact(id)} />
           {artifactOverlay}
         </div>
