@@ -27,3 +27,13 @@ type MCPConnectDecisionView struct {
 	Decision  string `json:"decision"`
 	ServerID  string `json:"server_id"`
 }
+
+// IntegrationView is a connector offered by Argus, plus its local connection
+// state for the Integrations page.
+type IntegrationView struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Icon        string `json:"icon"`
+	Connected   bool   `json:"connected"`
+}

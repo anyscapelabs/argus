@@ -6,6 +6,7 @@ import { FiMinus } from 'react-icons/fi'
 type ToolbarProps = {
   children?: ReactNode
   className?: string
+  scrolled?: boolean
 }
 
 const controlClass =
@@ -14,10 +15,10 @@ const controlClass =
 const closeClass =
   'flex h-8 w-8 items-center justify-center rounded-full p-2 text-grey-100 transition-colors hover:bg-[#ef4444]'
 
-export default function Toolbar({ children, className = '' }: ToolbarProps) {
+export default function Toolbar({ children, className = '', scrolled = false }: ToolbarProps) {
   return (
     <header
-      className={`flex h-12 w-full items-center gap-2 bg-primary p-1 ${className}`}
+      className={`relative z-20 flex h-12 w-full items-center gap-2 p-1 transition-colors duration-200 ${scrolled ? 'bg-gradient-to-b from-[var(--color-bg-primary)] from-60% to-transparent' : 'bg-primary'} ${className}`}
     >
       <div className="flex flex-1 items-center gap-2">{children}</div>
       <div className="flex flex-1 items-center justify-end gap-0.5">

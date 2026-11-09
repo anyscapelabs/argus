@@ -25,6 +25,7 @@ export type {
     ExportFormatsResult,
     GetChatResult,
     GetModelResult,
+    IntegrationView,
     KeyStatus,
     KeyStatusResult,
     ListRequestsResult,

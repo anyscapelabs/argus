@@ -1,6 +1,7 @@
 package MCP
 
 import (
+	"encoding/json"
 	"bytes"
 	"context"
 	"errors"
@@ -73,10 +74,19 @@ func (c *callback) close() {
 	_ = c.srv.Shutdown(ctx)
 }
 
+func jsonString(v string) string {
+	b, _ := json.Marshal(v)
+	return string(b)
+}
+
+func renderDonePage(title, message string) string {
+	return fmt.Sprintf(donePage, jsonString(title), jsonString(message))
+}
+
 func (c *callback) handle(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	if e := q.Get("error"); e != "" {
-		fmt.Fprintf(w, donePage, "Sign-in was cancelled")
+		_, _ = w.Write([]byte(renderDonePage("Sign-in was cancelled", "You can close this tab and return to Argus.")))
 		select {
 		case c.failed <- fmt.Errorf("authorization denied: %s", e):
 		default:
@@ -87,10 +97,10 @@ func (c *callback) handle(w http.ResponseWriter, r *http.Request) {
 	if code == "" {
 		// Not a sign-in response (a favicon request, a stray probe). Keep
 		// listening rather than reporting a bogus code.
-		fmt.Fprintf(w, donePage, "Nothing to do here")
+		_, _ = w.Write([]byte(renderDonePage("Nothing to do here", "You can close this tab and return to Argus.")))
 		return
 	}
-	fmt.Fprintf(w, donePage, "Connected")
+	_, _ = w.Write([]byte(renderDonePage("Connected", "You can close this tab and return to Argus.")))
 	select {
 	case c.result <- &auth.AuthorizationResult{Code: code, State: q.Get("state"), Iss: q.Get("iss")}:
 	default:
@@ -134,9 +144,52 @@ func openBrowser(u string) error {
 	}
 }
 
-const donePage = "<!doctype html><meta charset=utf-8><title>Argus</title>" +
-	"<body style='font-family:sans-serif;text-align:center;margin-top:20vh'>" +
-	"<h2>%s</h2><p>You can close this tab and return to Argus.</p>"
+const donePage = `<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Argus</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap');
+  :root { color-scheme: dark; }
+  html, body { height: 100%%; margin: 0; }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    color: #e6e6e8;
+    font-family: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    text-align: center;
+  }
+  #root { width: 100%%; height: 100%%; display: flex; align-items: center; justify-content: center; }
+  .wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px; }
+  .logo svg { width: 72px; height: 72px; display: block; }
+  h2 { margin: 0; font-size: 20px; font-weight: 500; color: #fff; }
+  p { margin: 0; font-size: 14px; color: #b0b1b6; }
+</style>
+<body>
+  <div id="root"></div>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script>
+    const e = React.createElement;
+    const logo = e('svg', { width: 72, height: 72, viewBox: '200 200 624 624', fill: 'none', xmlns: 'http://www.w3.org/2000/svg', 'aria-hidden': true },
+      e('path', { d: 'M268.195 317.692C274.667 293.536 293.536 274.667 317.692 268.195L558.373 203.705C582.529 197.232 608.304 204.138 625.988 221.822L802.178 398.012C819.862 415.696 826.768 441.471 820.296 465.627L755.805 706.308C749.333 730.464 730.464 749.333 706.308 755.805L465.627 820.295C441.471 826.768 415.696 819.862 398.012 802.178L221.822 625.988C204.138 608.304 197.232 582.529 203.705 558.373L268.195 317.692Z', fill: 'white' }),
+      e('rect', { x: '298.6', y: '513.768', width: '105', height: '300', rx: '52.5', transform: 'rotate(-45 298.6 513.768)', fill: '#121214' }),
+      e('rect', { x: '440.022', y: '372.346', width: '105', height: '300', rx: '52.5', transform: 'rotate(-45 440.022 372.346)', fill: '#121214' })
+    );
+    function App() {
+      return e('div', { className: 'wrap' },
+        e('div', { className: 'logo' }, logo),
+        e('h2', null, %s),
+        e('p', null, %s)
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(e(App));
+  </script>
+</body>
+</html>`
 
 // installedClientURL adds the parameters a Google "Desktop app" client needs
 // and the SDK does not send. Without access_type=offline the token endpoint
