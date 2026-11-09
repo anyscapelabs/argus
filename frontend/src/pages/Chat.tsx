@@ -16,6 +16,7 @@ import ChatInput from '../components/chat/ChatInput'
 import AgentBubble from '../components/chat/AgentBubble'
 import UserBubble from '../components/chat/UserBubble'
 import ThinkingIndicator from '../components/chat/ThinkingIndicator'
+import Argus from '../components/chat/Argus'
 import Spinner from '../components/Spinner'
 import { StatusLine } from '../components/chat/statusLine'
 import PermissionCard, { type Permission } from '../components/chat/PermissionCard'
@@ -674,7 +675,10 @@ export default function Chat({
               )}
               {!isLoading && errorNotice && <Notifier text={errorNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400"><FiTerminal size={9} className="text-red-400" /></div>} />}
               {!isLoading && runActive && (
-                <ThinkingIndicator chip={chip} text={chip ? undefined : (status || 'Thinking…')} />
+                <div className="flex items-center gap-3">
+                  <Argus state={status && status.toLowerCase().includes('typing') ? 'typing' : 'thinking'} size={40} />
+                  <ThinkingIndicator chip={chip} text={chip ? undefined : (status || 'Thinking…')} />
+                </div>
               )}
             </div>
           </div>
