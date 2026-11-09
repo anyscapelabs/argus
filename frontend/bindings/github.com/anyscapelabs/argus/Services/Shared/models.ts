@@ -38,12 +38,6 @@ export interface AgentStatusResult {
     "error"?: ActionError | null;
 }
 
-/**
- * AgentStatusView is the small dashboard the right panel's Details tab renders.
- * StartedAtMs is the app process start (uptime reads off it), LastActiveMs is
- * the moment the agent last finished a turn (0 = never), Busy says a run is
- * on right now so the row can read Working instead of Online.
- */
 export interface AgentStatusView {
     "started_at_ms": number;
     "last_active_ms": number;
@@ -73,12 +67,6 @@ export interface ArtifactResult {
     "error"?: ActionError | null;
 }
 
-/**
- * ArtifactView is one document the agent wrote. Body is the canonical Markdown
- * and arrives only from Get: a panel listing thirty reports should not carry
- * thirty documents over the bridge. Words and Bytes are stored, not recomputed,
- * so the number the panel shows is the number the writer was told.
- */
 export interface ArtifactView {
     "id": string;
     "agent_id": string;
