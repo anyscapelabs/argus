@@ -1,6 +1,7 @@
 package Chat
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/anyscapelabs/argus/Protocol"
@@ -210,4 +211,59 @@ func (s *Service) runMCPLoad(call Protocol.ToolCall, loaded map[string]bool) (st
 	}
 	return serverID, nil, result("Not connected: no connection for "+serverID+". "+
 		"If the user wants it connected, call connect_mcp with this server_id.", true)
+}
+
+// runMCPDynamicTool executes a call whose name belongs to a connector
+// (server-prefixed). It reports false when no published tool matches, leaving
+// the unknown-tool error to the registry.
+func (s *Service) runMCPDynamicTool(call Protocol.ToolCall, result resultFn) (bool, Protocol.Block) {
+	if s.MCP == nil {
+		return false, Protocol.Block{}
+	}
+	for _, t := range s.MCP.ListTools() {
+		if mcpToolName(t.ServerID, t.Name) == call.Name {
+			var args map[string]interface{}
+			if strings.TrimSpace(call.Input) != "" {
+				_ = json.Unmarshal([]byte(call.Input), &args)
+			}
+			argsJSON, _ := json.Marshal(args)
+			out, err := s.MCP.CallTool(t.ServerID, t.Name, string(argsJSON))
+			if err != nil {
+				return true, result("integration call failed: "+err.Error(), true)
+			}
+			if out == "" {
+				out = "{}"
+			}
+			return true, result(out, false)
+		}
+	}
+	return false, Protocol.Block{}
+}
+
+// runConnectMCPTool requests a connector connection card from the user.
+func runConnectMCPTool(
+	s *Service,
+	_ context.Context,
+	_ string,
+	agentID, agentName string,
+	call Protocol.ToolCall,
+	result resultFn,
+	_ activityFn,
+) Protocol.Block {
+	var input struct {
+		ServerID string `json:"server_id"`
+	}
+	if err := json.Unmarshal([]byte(call.Input), &input); err != nil {
+		return result("invalid tool input: could not parse the connect_mcp arguments", true)
+	}
+	switch s.MCPConnect.Register(agentID, agentName, strings.TrimSpace(input.ServerID)) {
+	case "shown":
+		return result("A connection card is on screen. The user must press Connect and finish sign-in in their browser. Do not say it is connected; stop and wait — the app gives you a new turn when it settles.", false)
+	case "pending":
+		return result("A connection card is already waiting for the user. Do not request another.", false)
+	case "connected":
+		return result("That integration is already connected. Use its tools.", false)
+	default:
+		return result("Unknown integration id. Valid ids: "+strings.Join(s.integrationIDs(), ", ")+".", true)
+	}
 }
