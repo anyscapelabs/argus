@@ -62,7 +62,7 @@ export default function Sidebar({ mode = 'main', onToggleSettings, onSignOut }: 
       <div className="flex items-center justify-between rounded-full p-1">
         <button
           type="button"
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-primary text-grey-300 transition-colors hover:bg-hover-primary"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-grey-300 transition-colors hover:bg-hover-primary"
         >
           <BsLayoutSidebarInset size={16} />
         </button>
