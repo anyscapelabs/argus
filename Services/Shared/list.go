@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/anyscapelabs/argus/Keyring"
+	"github.com/anyscapelabs/argus/Net"
 	"github.com/anyscapelabs/argus/Provider"
 	"github.com/anyscapelabs/argus/Storage"
 )
@@ -41,13 +42,6 @@ type liveEntry struct {
 	stale   bool
 }
 
-var listClient = &http.Client{
-	Timeout: listTimeout,
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		return fmt.Errorf("redirects are not allowed for list-models calls")
-	},
-}
-
 func listEndpoint(baseURL, modelsPath string) string {
 	return strings.TrimSuffix(baseURL, "/") + modelsPath
 }
@@ -62,7 +56,7 @@ func doList(ctx context.Context, method, url string, headers http.Header) ([]byt
 			req.Header.Add(k, v)
 		}
 	}
-	resp, err := listClient.Do(req)
+	resp, err := Net.Client(Net.Oneshot).Do(req)
 	if err != nil {
 		return nil, NewError(CodeNetwork, "Could not reach the provider. Check your connection and try again")
 	}
