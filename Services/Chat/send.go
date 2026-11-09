@@ -2,11 +2,9 @@ package Chat
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/anyscapelabs/argus/Keyring"
 	"github.com/anyscapelabs/argus/Models"
@@ -34,7 +32,6 @@ const maxModelRetries = 2
 const wrapUpDirective = "You have reached the tool-round limit for this run. Do not call any more tools. " +
 	"Tell the user plainly what you already did, what you learned, and what could not be finished."
 
-// toolCalls collects the completed tool_use blocks of a collected turn.
 func (s *Service) Send(agentID, text string) Shared.SendResult {
 	return s.send(agentID, text, false, "")
 }
@@ -289,52 +286,6 @@ func (s *Service) send(agentID, text string, unattended bool, kind string) Share
 	return Shared.SendResult{Ok: true, RunID: runID, UserMessageID: userID, AssistantMessageID: assistantID}
 }
 
-func messageIsOpaqueProviderError(e *Protocol.Error) bool {
-	if e == nil {
-		return false
-	}
-	msg := strings.ToLower(strings.TrimSpace(e.Message))
-	if msg == "" {
-		return true
-	}
-	if msg == "provider returned error" {
-		return true
-	}
-	// OpenRouter's catch-all: "Provider returned error" with a raw of
-	// "ERROR" means the hidden backend failed without explanation.
-	if msg == "error" || msg == "internal error" {
-		return true
-	}
-	return false
-}
-
-// friendlyError replaces an opaque provider message with one a person can
-// act on. The raw body and code are kept in the database (error_raw), so
-// debugging is unaffected — only the visible string changes.
-func friendlyError(e *Protocol.Error) {
-	if e == nil || !messageIsOpaqueProviderError(e) {
-		return
-	}
-	e.Message = "Sorry, something went wrong connecting to the model. Please try again."
-}
-
-// retryDelay honors the provider's Retry-After when present, otherwise backs
-// off exponentially (2s, 4s).
-func retryDelay(err *Protocol.Error, tries int) time.Duration {
-	if err.RetryAfter > 0 {
-		d := time.Duration(err.RetryAfter) * time.Second
-		if d > 90*time.Second {
-			d = 90 * time.Second
-		}
-		return d
-	}
-	return time.Duration(2<<tries) * time.Second
-}
-
-// stripToolUses removes tool_use blocks from a message being persisted. An
-// assistant row whose tool_results never got written (cancelled or failed
-// turn) would otherwise sit in history as an orphaned call the provider
-// rejects, poisoning every later send.
 func stripToolUses(blocks []Protocol.Block) []Protocol.Block {
 	out := make([]Protocol.Block, 0, len(blocks))
 	for _, b := range blocks {
@@ -344,35 +295,6 @@ func stripToolUses(blocks []Protocol.Block) []Protocol.Block {
 		out = append(out, b)
 	}
 	return out
-}
-
-func clampToModel(s *Service, modelRef, providerID, modelID string, target *Protocol.Target, maxOut *int64) {
-	if maxOut == nil {
-		return
-	}
-	ad, aerr := Router.AdapterFor(target)
-	if aerr != nil {
-		return
-	}
-	info := Protocol.ModelInfo{ID: modelID}
-	if m, ok := s.Core.Store.Get().Get(modelRef); ok && m.Limits != nil {
-		info.ContextLen = m.Limits.Context
-		info.MaxOutput = m.Limits.Output
-	} else if rows, lerr := s.Core.DB.ListCustomModels(providerID); lerr == nil {
-		for _, cm := range rows {
-			if cm.ModelID == modelID {
-				info.ContextLen = cm.ContextWindow
-				info.MaxOutput = cm.MaxOutput
-				break
-			}
-		}
-	}
-	if info.MaxOutput <= 0 {
-		return
-	}
-	scratch := &Protocol.Request{MaxOutputTokens: *maxOut}
-	Protocol.ClampRequest(scratch, ad.Capabilities(info))
-	*maxOut = scratch.MaxOutputTokens
 }
 
 func (s *Service) ensureAgent(agentID string) (Storage.AgentProfile, error) {
@@ -388,158 +310,4 @@ func (s *Service) ensureAgent(agentID string) (Storage.AgentProfile, error) {
 		return p, err
 	}
 	return p, nil
-}
-
-func (s *Service) computeCost(usage Protocol.Usage, modelRef string) *float64 {
-	// try catalog
-	cat := s.Core.Store.Get()
-	if m, ok := cat.Get(modelRef); ok && m.Cost != nil {
-		return computeCostFromPrice(usage, m.Cost)
-	}
-	// custom models
-	rows, err := s.Core.DB.ListAllCustomModels()
-	if err == nil {
-		for _, cm := range rows {
-			if cm.Ref() == modelRef {
-				// build cost
-				cost := &Models.Cost{}
-				if cm.PriceKnown {
-					cost.Input = &cm.PriceInput
-					cost.Output = &cm.PriceOutput
-				}
-				return computeCostFromPrice(usage, cost)
-			}
-		}
-	}
-	return nil
-}
-
-func computeCostFromPrice(usage Protocol.Usage, cost *Models.Cost) *float64 {
-	if cost == nil {
-		return nil
-	}
-	total := 0.0
-	if usage.InputTokens > 0 {
-		if cost.Input == nil {
-			return nil
-		}
-		total += float64(usage.InputTokens) / 1e6 * *cost.Input
-	}
-	if usage.CacheReadTokens > 0 {
-		price := cost.CacheRead
-		if price == nil {
-			price = cost.Input
-		}
-		if price == nil {
-			return nil
-		}
-		total += float64(usage.CacheReadTokens) / 1e6 * *price
-	}
-	if usage.CacheWriteTokens > 0 {
-		price := cost.CacheWrite
-		if price == nil {
-			price = cost.Input
-		}
-		if price == nil {
-			return nil
-		}
-		total += float64(usage.CacheWriteTokens) / 1e6 * *price
-	}
-	if usage.OutputTokens > 0 {
-		if cost.Output == nil {
-			return nil
-		}
-		total += float64(usage.OutputTokens) / 1e6 * *cost.Output
-	}
-	if usage.ReasoningTokens > 0 {
-		price := cost.Reasoning
-		if price == nil {
-			price = cost.Output
-		}
-		if price == nil {
-			return nil
-		}
-		total += float64(usage.ReasoningTokens) / 1e6 * *price
-	}
-	return &total
-}
-
-func flattenText(blocks []Protocol.Block) string {
-	var b strings.Builder
-	for _, blk := range blocks {
-		if blk.Type == Protocol.BlockText {
-			if b.Len() > 0 {
-				b.WriteString("\n")
-			}
-			b.WriteString(blk.Text)
-		}
-	}
-	return b.String()
-}
-
-func mustMarshal(v any) string {
-	b, _ := json.Marshal(v)
-	return string(b)
-}
-
-func hostOf(raw string) string {
-	raw = strings.TrimPrefix(raw, "https://")
-	raw = strings.TrimPrefix(raw, "http://")
-	if i := strings.Index(raw, "/"); i >= 0 {
-		raw = raw[:i]
-	}
-	return raw
-}
-
-func nowUnixMs() int64 {
-	return time.Now().UnixMilli()
-}
-
-func (s *Service) baseURLOverride(providerID string) string {
-	cfg, found, err := s.Core.DB.GetProviderConfig(providerID)
-	if err != nil || !found {
-		return ""
-	}
-	return strings.TrimSpace(cfg.BaseURLOverride)
-}
-
-func getKey(providerID string) (string, error) {
-	return Keyring.GetFor(providerID)
-}
-
-func (s *Service) allowedModel(modelID string) bool {
-	if s.Core == nil || s.Core.DB == nil {
-		return true
-	}
-	payload, _, found, err := s.Core.DB.GetAccountEntitlements()
-	if err != nil || !found || payload == "" {
-		return true
-	}
-	var ent struct {
-		Allowlist []any `json:"allowlist"`
-	}
-	if err := json.Unmarshal([]byte(payload), &ent); err != nil || len(ent.Allowlist) == 0 {
-		return true
-	}
-	for _, item := range ent.Allowlist {
-		switch v := item.(type) {
-		case string:
-			if strings.EqualFold(strings.TrimSpace(v), modelID) {
-				return true
-			}
-		case map[string]any:
-			if id, _ := v["id"].(string); strings.EqualFold(strings.TrimSpace(id), modelID) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// sCtx gives the location resolver its own bounded network budget without
-// touching the run lifecycle.
-func sCtx() context.Context {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	_ = cancel // lifetime bounded by the inner request timeout
-	return ctx
 }
