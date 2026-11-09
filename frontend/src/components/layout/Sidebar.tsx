@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { BsLayoutSidebarInset } from 'react-icons/bs'
-import { IoSearch, IoLogOutOutline, IoExtensionPuzzleOutline } from 'react-icons/io5'
+import { IoSearch, IoLogOutOutline, IoExtensionPuzzleOutline, IoAdd } from 'react-icons/io5'
 import { FiChevronLeft } from 'react-icons/fi'
 import { GrSettingsOption } from 'react-icons/gr'
 import { CgArrowsScrollV } from 'react-icons/cg'
@@ -59,12 +59,18 @@ export default function Sidebar({ mode = 'main', onToggleSettings, onSignOut }: 
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-primary bg-sidebar self-stretch">
-      <div className="flex items-center p-1">
+      <div className="flex items-center justify-between p-1">
         <button
           type="button"
           className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-300 transition-colors hover:bg-hover-primary"
         >
           <BsLayoutSidebarInset size={16} />
+        </button>
+        <button
+          type="button"
+          className="flex h-8 w-8 items-center justify-center rounded-lg text-grey-300 transition-colors hover:bg-hover-primary"
+        >
+          <IoAdd size={18} />
         </button>
       </div>
       <div className="px-2 pb-2">
