@@ -1,10 +1,12 @@
 import { useRef, useState, useEffect } from 'react'
 import { LuPlus } from 'react-icons/lu'
 import { FaArrowUp } from 'react-icons/fa'
-import { FiCircle, FiCpu } from 'react-icons/fi'
+import { FiCircle } from 'react-icons/fi'
 import ModelPicker from './ModelPicker'
+import VoiceIcon from './VoiceIcon'
 import { useChatModels, useAgentProfile, useSetAgentModel } from '../../domains/models/hooks'
 import { useUsage } from '../../domains/chat/hooks'
+import { ModelIcon } from '../../lib/modelIcons'
 
 function formatUsage(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`
@@ -104,16 +106,27 @@ export default function ChatInput({ onSend, busy = false }: ChatInputProps) {
           className="mx-2 flex-1 resize-none overflow-hidden bg-transparent py-1 text-sm leading-5 text-primary placeholder:text-grey-300 focus:outline-none"
           style={{ minHeight: 28, maxHeight: 160 }}
         />
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={busy}
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-black transition-colors hover:bg-hover-accent ${
-            busy ? 'opacity-50' : ''
-          }`}
-        >
-          <FaArrowUp size={12} />
-        </button>
+        {text.trim() ? (
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={busy}
+            aria-label="Send message"
+            className={`flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent text-black transition-colors hover:bg-hover-accent disabled:cursor-not-allowed ${
+              busy ? 'opacity-50' : ''
+            }`}
+          >
+            <FaArrowUp size={12} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            aria-label="Voice mode"
+            className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent text-black transition-colors hover:bg-hover-accent"
+          >
+            <VoiceIcon size={18} />
+          </button>
+        )}
       </div>
       <div className="relative flex items-center justify-between pr-2">
         <span className="flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs text-secondary transition-colors hover:bg-hover-secondary hover:text-primary">
@@ -129,7 +142,12 @@ export default function ChatInput({ onSend, busy = false }: ChatInputProps) {
               : 'text-secondary hover:bg-hover-secondary hover:text-primary'
           }`}
         >
-          <FiCpu size={12} />
+          <ModelIcon
+            modelId={selectedModel?.model?.id}
+            modelRef={selectedRef}
+            providerId={selectedModel?.provider_id}
+            size={12}
+          />
           {displayName}
         </button>
         {modelOpen && (

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { IoSearch } from 'react-icons/io5'
-import { FiCpu } from 'react-icons/fi'
 import { useChatModels } from '../../domains/models/hooks'
+import { ModelIcon } from '../../lib/modelIcons'
 
 type ModelPickerProps = {
   selectedRef?: string | null
@@ -65,7 +65,13 @@ export default function ModelPicker({ selectedRef, onSelect, onClose }: ModelPic
                     selectedRef === m.ref ? 'bg-hover-secondary text-primary' : 'text-primary'
                   }`}
                 >
-                  <FiCpu size={12} className="text-secondary" />
+                  <ModelIcon
+                    modelId={m.model?.id}
+                    modelRef={m.ref}
+                    providerId={m.provider_id}
+                    size={16}
+                    className="text-secondary"
+                  />
                   {m.model?.name ?? m.ref}
                 </button>
               ))}

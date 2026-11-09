@@ -12,10 +12,11 @@ import AgentListItem from './AgentListItem'
 type SidebarProps = {
   mode?: 'main' | 'settings'
   onToggleSettings?: () => void
+  onOpenIntegrations?: () => void
   onSignOut?: () => void
 }
 
-export default function Sidebar({ mode = 'main', onToggleSettings, onSignOut }: SidebarProps) {
+export default function Sidebar({ mode = 'main', onToggleSettings, onOpenIntegrations, onSignOut }: SidebarProps) {
   const { data: account } = useAccount()
   const { data: agentProfile } = useAgentProfile('default')
   const { data: messages = [] } = useChatMessages('default')
@@ -113,6 +114,7 @@ export default function Sidebar({ mode = 'main', onToggleSettings, onSignOut }: 
             </button>
             <button
               type="button"
+              onClick={() => { onOpenIntegrations?.(); setOpen(false) }}
               className="flex w-full items-center gap-2 rounded-xl px-2 py-1.5 text-sm text-primary transition-colors hover:bg-hover-primary"
             >
               <IoExtensionPuzzleOutline size={14} />
