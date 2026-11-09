@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/anyscapelabs/argus/Net"
 	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Protocol/Anthropic"
 	"github.com/anyscapelabs/argus/Protocol/Gemini"
@@ -20,12 +21,6 @@ import (
 
 const errorBodyCap = 1 << 20
 
-var client = &http.Client{
-	CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		return fmt.Errorf("redirects are not allowed for model calls")
-	},
-}
-
 type Router struct{}
 
 func New() *Router {
@@ -33,13 +28,13 @@ func New() *Router {
 }
 
 type FixedQuirks struct {
-	ChatPath               string `json:"chat_path,omitempty"`
-	MaxTokensField         string `json:"max_tokens_field,omitempty"`
-	SystemRole             string `json:"system_role,omitempty"`
-	StreamUsage            bool   `json:"stream_usage,omitempty"`
-	ReasoningField         string `json:"reasoning_field,omitempty"`
-	ParallelTools          bool   `json:"parallel_tools,omitempty"`
-	GeminiSchemaCleanup    bool   `json:"gemini_schema_cleanup,omitempty"`
+	ChatPath            string `json:"chat_path,omitempty"`
+	MaxTokensField      string `json:"max_tokens_field,omitempty"`
+	SystemRole          string `json:"system_role,omitempty"`
+	StreamUsage         bool   `json:"stream_usage,omitempty"`
+	ReasoningField      string `json:"reasoning_field,omitempty"`
+	ParallelTools       bool   `json:"parallel_tools,omitempty"`
+	GeminiSchemaCleanup bool   `json:"gemini_schema_cleanup,omitempty"`
 }
 
 type TargetOptions struct {
@@ -143,7 +138,7 @@ func (r *Router) Run(ctx context.Context, req *Protocol.Request, target *Protoco
 			g.fail(Protocol.CancelledError())
 			return
 		}
-		resp, err := client.Do(httpReq)
+		resp, err := Net.Client(Net.Stream).Do(httpReq)
 		if trace != nil {
 			trace.FirstByteAt = time.Now().UnixMilli()
 		}
