@@ -25,6 +25,7 @@ func (db *DB) migrate() error {
 		migration11,
 		migration12,
 		migration13,
+		migration14,
 	}
 
 	for i := version; i < len(migrations); i++ {
@@ -369,6 +370,55 @@ func migration13(db *DB) error {
 	)`
 	if _, err := db.conn.Exec(stmt); err != nil {
 		return err
+	}
+	return nil
+}
+
+// migration14 adds the attachments table (files the user uploaded into a chat)
+// and lets artifacts describe slide decks.
+//
+// An attachment is the metadata for one uploaded file. The bytes live on disk,
+// never in SQLite: a 10 MB scan does not belong in a row next to message text.
+// data_path names that file, and extracted_text is what the agent actually reads
+// for a PDF or DOCX — held here so the same upload can be replayed into history
+// without re-parsing the file every turn.
+//
+// The artifacts change widens the single "markdown" authoring format to include
+// slide decks. A deck is authored as slide JSON, but its stored body is the same
+// body column (JSON there, not markdown); file_path holds the generated .pptx so
+// the user can save it without LibreOffice re-rendering it each time.
+func migration14(db *DB) error {
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS attachments (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL REFERENCES agent_profiles(id) ON DELETE CASCADE,
+			filename TEXT NOT NULL,
+			mime_type TEXT NOT NULL,
+			size_bytes INTEGER NOT NULL DEFAULT 0,
+			data_path TEXT NOT NULL,
+			extracted_text TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_attachments_agent ON attachments(agent_id, created_at DESC)`,
+	}
+	for _, q := range statements {
+		if _, err := db.conn.Exec(q); err != nil {
+			return err
+		}
+	}
+	// kind is "document" (the default) or "deck". file_path is where a derived
+	// binary — the generated .pptx — was stored, empty for plain documents.
+	alters := []string{
+		`ALTER TABLE artifacts ADD COLUMN kind TEXT NOT NULL DEFAULT 'document'`,
+		`ALTER TABLE artifacts ADD COLUMN file_path TEXT NOT NULL DEFAULT ''`,
+	}
+	for _, stmt := range alters {
+		if _, err := db.conn.Exec(stmt); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				continue
+			}
+			return err
+		}
 	}
 	return nil
 }

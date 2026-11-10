@@ -314,6 +314,7 @@ func artifactView(a Storage.Artifact, withBody bool) Shared.ArtifactView {
 		AgentID:   a.AgentID,
 		Title:     a.Title,
 		Format:    a.Format,
+		Kind:      a.Kind,
 		Meta:      DecodeMeta(a.Meta),
 		Words:     a.Words,
 		Bytes:     a.Bytes,

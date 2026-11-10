@@ -124,4 +124,22 @@ describe('weaveTranscript', () => {
     )
     expect(out.some((i) => i.kind === 'notice')).toBe(false)
   })
+
+  it('places a voice message note where the call happened', () => {
+    const out = weaveTranscript(
+      base({
+        messages: [msg('m1', 'user', T1), msg('m2', 'assistant', T3)],
+        voiceNotes: [{ id: 'v1', created_at: T2, seconds: 152 }],
+      }),
+    )
+    const voice = out.find((i) => i.kind === 'voiceMsg')
+    expect(voice).toBeDefined()
+    if (voice?.kind === 'voiceMsg') expect(voice.seconds).toBe(152)
+    const idx = out.findIndex((i) => i.kind === 'voiceMsg')
+    const msgIdxs = out
+      .map((i, ix) => (i.kind === 'msg' ? ix : -1))
+      .filter((i) => i >= 0)
+    expect(idx).toBeGreaterThan(msgIdxs[0])
+    expect(idx).toBeLessThan(msgIdxs[1])
+  })
 })

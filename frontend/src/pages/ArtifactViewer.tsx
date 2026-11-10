@@ -10,7 +10,8 @@ import { linkify, linkLabel } from '../lib/linkify'
 import remarkGfm from 'remark-gfm'
 import CodeBlock from '../components/chat/CodeBlock'
 import WebsiteCard, { isHttpUrl } from '../components/chat/WebsiteCard'
-import { useArtifact, useExportArtifact, useExportFormats, type ExportFormatView } from '../domains/artifacts/hooks'
+import { useArtifact, useExportArtifact, useExportDeck, useExportFormats, type ExportFormatView } from '../domains/artifacts/hooks'
+import DeckViewer from '../components/chat/DeckViewer'
 
 type ArtifactViewerProps = {
   onBack?: () => void
@@ -51,8 +52,10 @@ export default function ArtifactViewer({ onBack, artifactID }: ArtifactViewerPro
   const { data: artifact, isLoading, error } = useArtifact(artifactID)
   const { data: formats } = useExportFormats()
   const exportArtifact = useExportArtifact()
+  const exportDeck = useExportDeck()
   const [exportOpen, setExportOpen] = useState(false)
   const [notice, setNotice] = useState<{ text: string; tone: 'ok' | 'bad' } | null>(null)
+  const isDeck = artifact?.kind === 'deck'
 
   // The menu belongs to a document, not to the app: opening another one without
   // closing this view must not leave the previous menu hanging open.
@@ -90,6 +93,19 @@ export default function ArtifactViewer({ onBack, artifactID }: ArtifactViewerPro
     }
   }
 
+  // A deck has a single file — its .pptx — so "export" is one direct action,
+  // not a menu of targets.
+  const runDeckExport = async () => {
+    if (!artifact) return
+    try {
+      const res = await exportDeck.mutateAsync({ artifactID: artifact.id, title: artifact.title })
+      if (!res) return
+      setNotice({ text: `Saved ${baseName(res.path)}`, tone: 'ok' })
+    } catch (err) {
+      setNotice({ text: `Could not save the deck: ${(err as Error).message}`, tone: 'bad' })
+    }
+  }
+
   const body = artifact?.body ?? ''
 
   return (
@@ -110,15 +126,27 @@ export default function ArtifactViewer({ onBack, artifactID }: ArtifactViewerPro
           <FaChevronDown size={10} />
         </button>
         <div className="relative flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            disabled={!artifact}
-            onClick={(e) => { e.stopPropagation(); setExportOpen((v) => !v); }}
-            className="flex items-center gap-1 rounded-lg bg-accent px-2 py-1 text-sm font-medium transition-opacity hover:opacity-90 cursor-pointer disabled:cursor-default disabled:opacity-40"
-          >
-            <TfiDownload size={12} className="text-foreground" />
-            <span className="text-foreground">Export</span>
-          </button>
+          {isDeck ? (
+            <button
+              type="button"
+              disabled={!artifact || exportDeck.isPending}
+              onClick={(e) => { e.stopPropagation(); void runDeckExport(); }}
+              className="flex items-center gap-1 rounded-lg bg-accent px-2 py-1 text-sm font-medium transition-opacity hover:opacity-90 cursor-pointer disabled:cursor-default disabled:opacity-40"
+            >
+              <TfiDownload size={12} className="text-foreground" />
+              <span className="text-foreground">{exportDeck.isPending ? 'Saving…' : 'Save .pptx'}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={!artifact}
+              onClick={(e) => { e.stopPropagation(); setExportOpen((v) => !v); }}
+              className="flex items-center gap-1 rounded-lg bg-accent px-2 py-1 text-sm font-medium transition-opacity hover:opacity-90 cursor-pointer disabled:cursor-default disabled:opacity-40"
+            >
+              <TfiDownload size={12} className="text-foreground" />
+              <span className="text-foreground">Export</span>
+            </button>
+          )}
           {exportOpen && (
             <div className="absolute right-0 top-8 z-50 w-44 overflow-hidden rounded-lg border border-secondary bg-secondary p-1 shadow-lg">
               {(formats ?? []).map((f) => (
@@ -175,10 +203,15 @@ export default function ArtifactViewer({ onBack, artifactID }: ArtifactViewerPro
           {!isLoading && error && (
             <div className="text-sm text-red-400">{String((error as Error).message ?? error)}</div>
           )}
-          {!isLoading && !error && body === '' && (
+          {!isLoading && !error && isDeck && artifact && (
+            <div className="flex h-[60vh] flex-col">
+              <DeckViewer artifact={artifact} />
+            </div>
+          )}
+          {!isLoading && !error && !isDeck && body === '' && (
             <div className="text-sm text-secondary">This document is empty.</div>
           )}
-          {body !== '' && (
+          {!isDeck && body !== '' && (
             <div className="markdown doc">
               <Markdown
                 remarkPlugins={[remarkGfm]}

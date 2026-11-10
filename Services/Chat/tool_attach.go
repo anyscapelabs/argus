@@ -43,7 +43,7 @@ func (s *Service) baseToolDefs() []Protocol.ToolDef {
 	defs := []Protocol.ToolDef{terminalToolDef, readFileToolDef, writeFileToolDef, grepFilesToolDef,
 		webSearchToolDef, timeLocationToolDef, rememberToolDef, forgetToolDef,
 		scheduleReminderToolDef, createRoutineToolDef, listScheduledToolDef, cancelScheduledToolDef,
-		writeArtifactToolDef, conversationReadToolDef, s.connectToolDef()}
+		writeArtifactToolDef, createSlidesToolDef, conversationReadToolDef, s.connectToolDef()}
 	if s.Browser != nil {
 		if ok, _ := s.Browser.Available(); ok {
 			defs = append(defs, browserToolDef)

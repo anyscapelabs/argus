@@ -22,11 +22,20 @@ import PermissionCard from '../components/chat/PermissionCard'
 import MCPConnectCard from '../components/mcp/MCPConnectCard'
 import TakeoverCard from '../components/browser/TakeoverCard'
 import Notifier from '../components/chat/Notifier'
+import VoiceNotifier from '../components/chat/VoiceNotifier'
+import VoiceIcon from '../components/chat/VoiceIcon'
 const RightPanel = lazy(() => import('../components/layout/RightPanel'))
 import ArtifactCard from '../components/chat/ArtifactCard'
-import { weaveTranscript } from '../lib/transcript'
+import { weaveTranscript, type VoiceNote } from '../lib/transcript'
+import { useLiveCall } from '../domains/live/useLiveCall'
 
 type PendingSend = { id: number; text: string; modelRef: string | null }
+
+// formatVoiceTime renders a duration in seconds as MM:SS, like a voice note.
+function formatVoiceTime(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds))
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+}
 
 export default function Chat({
   pendingSend,
@@ -66,6 +75,24 @@ export default function Chat({
     fetchNextPage,
   } = useChatMessages('default')
   const send = useSendMessage('default')
+  const voice = useLiveCall({ agentID: 'default' })
+  const [voiceHistory, setVoiceHistory] = useState<VoiceNote[]>([])
+  const voiceActive = voice.status !== 'idle' && voice.status !== 'ended'
+  // When a call finishes, record it in the transcript as a notifier so the chat
+  // shows "Voice message · 02:32" where the call happened, same as a notice.
+  const lastPushedVoice = useRef<number | null>(null)
+  useEffect(() => {
+    if (voice.status !== 'ended') return
+    if (voice.lastSeconds <= 0) return
+    // A fresh call resets lastSeconds to 0, so any new positive value is a call
+    // that just finished; dedupe against the last one we recorded.
+    if (lastPushedVoice.current === voice.lastSeconds) return
+    lastPushedVoice.current = voice.lastSeconds
+    setVoiceHistory((prev) => [
+      ...prev,
+      { id: `voice-${Date.now()}`, created_at: Date.now(), seconds: voice.lastSeconds },
+    ])
+  }, [voice.status, voice.lastSeconds])
   const pendingConsumedId = useRef<number | null>(null)
   const {
     status,
@@ -75,16 +102,32 @@ export default function Chat({
     beginThink,
   } = useRunIndicator((key) => qc.invalidateQueries({ queryKey: key }))
 
-  const handleSend = (text: string, _modelRef: string | null) => {
+  const handleSend = (
+    text: string,
+    _modelRef: string | null,
+    attachments?: { id: string; filename: string; kind: string; dataUrl?: string }[],
+  ) => {
     if (send.isPending || runActive) return
     setRunActive(true)
     beginThink()
-    send.mutate(text, {
-      onError: (err: any) => {
-        console.error('send failed', err)
-        setRunActive(false)
+    send.mutate(
+      {
+        text,
+        attachmentIDs: attachments?.map((a) => a.id),
+        attachments: attachments?.map((a) => ({
+          id: a.id,
+          filename: a.filename,
+          kind: a.kind,
+          dataUrl: a.dataUrl,
+        })),
       },
-    })
+      {
+        onError: (err: any) => {
+          console.error('send failed', err)
+          setRunActive(false)
+        },
+      },
+    )
   }
 
   useEffect(() => {
@@ -95,12 +138,15 @@ export default function Chat({
     onPendingConsumed?.()
     setRunActive(true)
     beginThink()
-    send.mutate(pendingSend.text, {
-      onError: (err: any) => {
-        console.error('send failed', err)
-        setRunActive(false)
+    send.mutate(
+      { text: pendingSend.text },
+      {
+        onError: (err: any) => {
+          console.error('send failed', err)
+          setRunActive(false)
+        },
       },
-    })
+    )
   }, [pendingSend])
 
   // The turn in flight has a database row but is deliberately not drawn until it
@@ -128,8 +174,9 @@ export default function Chat({
         takeover,
         mcpConnect,
         inFlightTs,
+        voiceNotes: voiceHistory,
       }),
-    [messages, artifacts, takeover, mcpConnect, inFlightTs],
+    [messages, artifacts, takeover, mcpConnect, inFlightTs, voiceHistory],
   )
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -229,6 +276,16 @@ export default function Chat({
                       )
                     }
                   />
+                ) : item.kind === 'voiceMsg' ? (
+                  <Notifier
+                    key={item.id}
+                    text={`Voice message · ${formatVoiceTime(item.seconds)}`}
+                    icon={
+                      <div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary">
+                        <VoiceIcon size={9} className="text-secondary" />
+                      </div>
+                    }
+                  />
                 ) : item.kind === 'mcpCard' ? (
                   mcpConnect && (
                     <MCPConnectCard
@@ -259,12 +316,13 @@ export default function Chat({
                       title={item.artifact.title}
                       words={item.artifact.words}
                       version={item.artifact.version}
+                      kind={item.artifact.kind}
                       onClick={() => onOpenArtifact?.(item.artifact.id)}
                     />
                   </div>
                 ) : item.msg.role === 'user' ? (
                   <motion.div key={item.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: 'easeOut' }}>
-                    <UserBubble content={item.msg.text} />
+                    <UserBubble content={item.msg.text} blocks={item.msg.blocks} />
                   </motion.div>
                 ) : (
                   <motion.div key={item.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: 'easeOut' }}>
@@ -302,7 +360,31 @@ export default function Chat({
           )}
         </div>
         <div className="shrink-0">
-          <ChatInput onSend={handleSend} busy={send.isPending} />
+          <div className="relative">
+            {/* Floating voice card, live while the call is running. */}
+            {voiceActive && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-full z-20 mb-2 flex justify-center">
+                <div className="pointer-events-auto">
+                  <VoiceNotifier
+                    status={voice.status}
+                    time={voice.display()}
+                    paused={voice.paused}
+                    onTogglePause={() => voice.togglePause()}
+                    onEnd={() => voice.end()}
+                  />
+                </div>
+              </div>
+            )}
+            {voice.error && !voiceActive && (
+              <div className="mb-1 text-center text-xs text-red-400">{voice.error}</div>
+            )}
+            <ChatInput
+              onSend={handleSend}
+              busy={send.isPending}
+              onStartVoice={() => void voice.start()}
+              voiceActive={voiceActive}
+            />
+          </div>
         </div>
       </div>
       <AnimatePresence>

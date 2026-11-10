@@ -26,6 +26,14 @@ export function Export(artifactID: string, format: string, destPath: string): $C
 }
 
 /**
+ * ExportDeckPPTX writes the deck's generated PowerPoint where the user chose,
+ * re-rendering it if the stored file was lost. The consent is the save dialog.
+ */
+export function ExportDeckPPTX(artifactID: string, destPath: string): $CancellablePromise<Shared$0.ArtifactExportResult> {
+    return $Call.ByID(1011737316, artifactID, destPath);
+}
+
+/**
  * Formats is the export menu: every target, with the ones this machine cannot
  * produce reported as unavailable and why.
  */
@@ -55,4 +63,15 @@ export function List(agentID: string): $CancellablePromise<Shared$0.ArtifactsRes
  */
 export function Save(agentID: string, artifactID: string, title: string, body: string, appendBody: boolean): $CancellablePromise<Shared$0.ArtifactWriteResult> {
     return $Call.ByID(3213532898, agentID, artifactID, title, body, appendBody);
+}
+
+/**
+ * SaveDeck stores a presentation the agent authored. The deck JSON is validated
+ * by the slides engine, rendered to a .pptx through LibreOffice, and recorded as
+ * an artifact of kind "deck" whose stored body is the deck JSON and whose file
+ * path points at the generated PowerPoint. The pptx is produced up front so the
+ * user can save it later without the conversion happening again on demand.
+ */
+export function SaveDeck(agentID: string, deckJSON: string): $CancellablePromise<Shared$0.DeckWriteResult> {
+    return $Call.ByID(2774709387, agentID, deckJSON);
 }

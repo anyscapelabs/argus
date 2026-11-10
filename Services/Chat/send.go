@@ -33,7 +33,16 @@ const wrapUpDirective = "You have reached the tool-round limit for this run. Do 
 	"Tell the user plainly what you already did, what you learned, and what could not be finished."
 
 func (s *Service) Send(agentID, text string) Shared.SendResult {
-	return s.send(agentID, text, false, "")
+	return s.send(agentID, text, nil, false, "")
+}
+
+// SendWithAttachments starts a turn the way Send does, but with uploaded files
+// folded into the user message: images become vision blocks, documents become
+// extracted text. The attachment ids were returned by the uploads service; a
+// missing or unknown id fails the send rather than being silently dropped, so
+// the frontend cannot think a file was attached when it was not.
+func (s *Service) SendWithAttachments(agentID, text string, attachmentIDs []string) Shared.SendResult {
+	return s.send(agentID, text, attachmentIDs, false, "")
 }
 
 // SendScheduledWake starts the turn a scheduled task's fire produces. It is
@@ -43,7 +52,7 @@ func (s *Service) Send(agentID, text string) Shared.SendResult {
 // no one watching still works. The wake text the scheduler passes is
 // phrased as the job description it is, not as something a person said.
 func (s *Service) SendScheduledWake(agentID, text string) Shared.SendResult {
-	return s.send(agentID, text, true, Storage.MessageKindScheduled)
+	return s.send(agentID, text, nil, true, Storage.MessageKindScheduled)
 }
 
 // Steer starts a run on a row the person did not type. The connector uses it
@@ -56,13 +65,14 @@ func (s *Service) SendScheduledWake(agentID, text string) Shared.SendResult {
 // It is deliberately not exposed to the frontend: nothing but the app's own
 // services should be able to speak as the user.
 func (s *Service) Steer(agentID, text string) Shared.SendResult {
-	return s.send(agentID, text, false, Storage.MessageKindSteering)
+	return s.send(agentID, text, nil, false, Storage.MessageKindSteering)
 }
 
 // unattended drives the permission gate; kind drives the row's visibility.
 // Only "", Storage.MessageKindSteering and Storage.MessageKindScheduled are
-// written today.
-func (s *Service) send(agentID, text string, unattended bool, kind string) Shared.SendResult {
+// written today. attachmentIDs are uploaded files to fold into the user
+// message; images become vision blocks, documents become extracted text.
+func (s *Service) send(agentID, text string, attachmentIDs []string, unattended bool, kind string) Shared.SendResult {
 	log.Printf("Send called agent=%s unattended=%v kind=%s", agentID, unattended, kind)
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.SendResult{Error: aerr}
@@ -165,14 +175,25 @@ func (s *Service) send(agentID, text string, unattended bool, kind string) Share
 	rid, _ := uuid.NewV7()
 	runID := rid.String()
 
+	userBlocks, aerr := s.attachmentBlocks(agentID, attachmentIDs)
+	if aerr != nil {
+		release()
+		return Shared.SendResult{Error: aerr}
+	}
+	userBlocks = append([]Protocol.Block{{Type: Protocol.BlockText, Text: text}}, userBlocks...)
+	// The transcript text is what the user typed — attachment contents ride in
+	// the blocks for the model and are drawn as file chips, never dumped into
+	// the visible chat.
+	userText := text
+
 	userMsg := Storage.Message{
 		ID:          userID,
 		AgentID:     agentID,
 		Seq:         userSeq,
 		Role:        "user",
 		Kind:        kind,
-		BlocksJSON:  mustMarshal([]Protocol.Block{{Type: Protocol.BlockText, Text: text}}),
-		Text:        text,
+		BlocksJSON:  mustMarshal(userBlocks),
+		Text:        userText,
 		Status:      "complete",
 		CreatedAt:   nowUnixMs(),
 		CompletedAt: nowUnixMs(),
@@ -203,6 +224,9 @@ func (s *Service) send(agentID, text string, unattended bool, kind string) Share
 	// conversation_read. Every model the router allows can call tools, so there
 	// is no long-replay fallback.
 	history := s.buildHistory(agentID, userSeq, s.historyBudgetTokens(profile.ModelRef, providerID, modelID), recentHistoryMessages)
+	// Drop image blocks for a model that cannot see them, so a vision-only
+	// attachment never becomes a wire-format error on a text-only model.
+	history = scrubImagesForNonVision(history, &target)
 
 	req := Protocol.Request{
 		Model:           modelID,

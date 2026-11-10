@@ -20,6 +20,7 @@ import (
 	servicepermission "github.com/anyscapelabs/argus/Services/Permission"
 	serviceprovider "github.com/anyscapelabs/argus/Services/Provider"
 	servicescheduler "github.com/anyscapelabs/argus/Services/Scheduler"
+	serviceuploads "github.com/anyscapelabs/argus/Services/Uploads"
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
 
@@ -78,6 +79,7 @@ func main() {
 	mcp := &servicemcp.Service{Core: core}
 	mcpConnect := &servicemcpconnect.Service{Core: core, MCP: mcp}
 	artifacts := &serviceartifacts.Service{Core: core}
+	uploads := &serviceuploads.Service{Core: core}
 	browser := &servicebrowser.Service{}
 	chat := &servicechat.Service{Core: core, Permissions: permissions, MCP: mcp, MCPConnect: mcpConnect, Artifacts: artifacts, Browser: browser}
 	// When a sign-in settles, the connector hands the turn back to the agent
@@ -106,6 +108,7 @@ func main() {
 			application.NewService(mcp),
 			application.NewService(mcpConnect),
 			application.NewService(artifacts),
+			application.NewService(uploads),
 			application.NewService(chat),
 			application.NewService(notifier),
 			application.NewService(scheduler),

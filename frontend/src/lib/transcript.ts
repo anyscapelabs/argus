@@ -16,6 +16,12 @@ export type TranscriptItem =
   | { kind: 'artifactCard'; id: string; artifact: ArtifactView }
   | { kind: 'takeoverCard'; id: string }
   | { kind: 'mcpCard'; id: string }
+  | { kind: 'voiceMsg'; id: string; seconds: number }
+
+// VoiceNote is a finished voice call recorded into the transcript: when it
+// happened and how long it lasted. It renders as a notifier under the chat the
+// way a permission notice does.
+export type VoiceNote = { id: string; created_at: number; seconds: number }
 
 // Time chips woven into the transcript: a chip opens the conversation and
 // every new local day, and repeats the clock whenever an hour or more has
@@ -35,6 +41,7 @@ export function weaveTranscript({
   takeover,
   mcpConnect,
   inFlightTs,
+  voiceNotes,
 }: {
   messages: any[]
   noticeLines: any[]
@@ -42,8 +49,16 @@ export function weaveTranscript({
   takeover: TakeoverRequestView | null
   mcpConnect: MCPConnectRequestView | null
   inFlightTs: number
+  voiceNotes?: VoiceNote[]
 }): TranscriptItem[] {
-  type Extra = { id: string; ts: number; notice?: any; artifact?: ArtifactView; takeover?: TakeoverRequestView }
+  type Extra = {
+    id: string
+    ts: number
+    notice?: any
+    artifact?: ArtifactView
+    takeover?: TakeoverRequestView
+    voice?: VoiceNote
+  }
   const items: TranscriptItem[] = []
   let prevTs = 0
   let ni = 0
@@ -51,6 +66,7 @@ export function weaveTranscript({
     if (e.notice) items.push({ kind: 'notice', id: e.id, notice: e.notice })
     else if (e.takeover) items.push({ kind: 'takeoverCard', id: e.id })
     else if (e.artifact) items.push({ kind: 'artifactCard', id: e.id, artifact: e.artifact })
+    else if (e.voice) items.push({ kind: 'voiceMsg', id: e.id, seconds: e.voice.seconds })
   }
   // One boundary for the whole weave: when a message *started*. A card or a
   // notice raised in the middle of a turn belongs under that turn's bubble, and
@@ -75,6 +91,11 @@ export function weaveTranscript({
   for (const n of noticeLines) {
     if (n.kind === 'mcp' && held(n.created_at)) continue
     extras.push({ id: `notice-${n.id}`, ts: n.created_at, notice: n })
+  }
+  // A finished voice call is a note in the conversation: it happened at a moment
+  // and belongs between the messages around it, exactly like a notice.
+  for (const v of voiceNotes ?? []) {
+    extras.push({ id: `voice-${v.id}`, ts: v.created_at, voice: v })
   }
   // A document is written in the middle of a conversation, so its card needs
   // one to belong to. With no messages on screen there is nowhere to put it,
