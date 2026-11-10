@@ -8,6 +8,22 @@ const targetRate = 16000
 // outputRate is the sample rate Gemini Live sends back: 24 kHz PCM mono. Playing
 // it as 16 kHz makes the voice slow and deep.
 const outputRate = 24000
+// playbackLeadSec is the small head start given to model audio whenever playback
+// (re)starts from silence. Chunks arrive over a websocket with uneven timing; with
+// no lead, a chunk that lands a few milliseconds late leaves a hole in the
+// speech — heard as a word clipped off mid-sentence.
+const playbackLeadSec = 0.15
+// echoGuardTailSec keeps the mic guard up briefly after the model stops
+// speaking, so the room's reverb of its last words is not heard as the user.
+const echoGuardTailSec = 0.3
+// bargeInRMS is the loudness (0..1) the mic must reach WHILE the model is
+// speaking before it is forwarded as real speech. Speaker echo that leaks past
+// the webview's echo canceller stays below it; a user talking over the model
+// does not. Raise it if the model still cuts itself off, lower it if barge-in
+// stops working.
+const bargeInRMS = 0.05
+// voiceName is the prebuilt Gemini voice used for every call.
+const voiceName = 'Alnilam'
 // The single tool the voice model may call. No history is replayed and no other
 // tools are attached; when the model needs earlier context it calls this.
 // Gemini 3.8 Live defaults to asynchronous (NON_BLOCKING) function calling; the
@@ -81,15 +97,23 @@ function pcm16(input: Float32Array): Int16Array {
   return out
 }
 
-// createAudioCtx opens an AudioContext, preferring the model's 16 kHz rate but
-// falling back to the hardware default when the webview rejects it — the
-// downsample path handles any input rate. Webviews also start contexts
-// suspended until a gesture resumes them, so resume() is fired right away.
-function createAudioCtx(): AudioContext {
+// rms is the root-mean-square loudness of a mic buffer, 0 (silence) to 1.
+function rms(input: Float32Array): number {
+  let sum = 0
+  for (let i = 0; i < input.length; i++) sum += input[i] * input[i]
+  return Math.sqrt(sum / Math.max(1, input.length))
+}
+
+// createAudioCtx opens an AudioContext at the requested rate (16 kHz for the mic,
+// 24 kHz for playback so the model's audio is not resampled down), falling back
+// to the hardware default when the webview rejects it — the downsample path
+// handles any input rate. Webviews also start contexts suspended until a gesture
+// resumes them, so resume() is fired right away.
+function createAudioCtx(rate: number = targetRate): AudioContext {
   const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
   let ctx: AudioContext
   try {
-    ctx = new AudioCtx({ sampleRate: targetRate })
+    ctx = new AudioCtx({ sampleRate: rate })
   } catch {
     ctx = new AudioCtx()
   }
@@ -165,7 +189,12 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
     const src = ctx.createBufferSource()
     src.buffer = buffer
     src.connect(ctx.destination)
-    const startAt = Math.max(ctx.currentTime, nextPlayTimeRef.current)
+    // Keep chaining onto the running clock while audio is queued; if playback
+    // has run dry (first chunk of a reply, or an underrun) restart a beat ahead
+    // so the next late chunk has room to land instead of leaving a gap.
+    const now = ctx.currentTime
+    let startAt = nextPlayTimeRef.current
+    if (startAt <= now) startAt = now + playbackLeadSec
     src.start(startAt)
     nextPlayTimeRef.current = startAt + buffer.duration
     playingRef.current.add(src)
@@ -257,8 +286,14 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
         console.debug(`[voice] server frame ${frameCountRef.current}:`, Object.keys(frame).join(','))
       }
       if (frame.setupComplete) {
-        // The upstream session now exists: the mic may start sending.
+        // The upstream session now exists: the mic may start sending, and this is
+        // the moment the call has actually connected, so the clock starts here
+        // (not while the socket is still opening).
         setupDoneRef.current = true
+        startRef.current = Date.now()
+        setElapsed(0)
+        if (timerRef.current) clearInterval(timerRef.current)
+        timerRef.current = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 250)
         setStatus((s) => (s === 'connecting' ? 'live' : s))
         return
       }
@@ -316,6 +351,17 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
           firstChunk = false
           console.debug(`[voice] mic streaming at ${ctx.sampleRate}Hz, state=${ctx.state}`)
         }
+        // Echo guard. While the model is talking (plus a short tail) the speakers
+        // feed its own voice back into the mic; the server hears that as the user
+        // barging in, cuts the reply off mid-word, and then picks it back up. Quiet
+        // mic audio in that window is replaced with silence so the stream stays
+        // continuous but carries no echo; a user speaking over the model is loud
+        // enough to pass and still interrupts it.
+        const playback = playbackCtxRef.current
+        const modelSpeaking = !!playback && playback.currentTime < nextPlayTimeRef.current + echoGuardTailSec
+        if (modelSpeaking && rms(ch) < bargeInRMS) {
+          pcm.fill(0)
+        }
         // Gemini 3.x takes mic audio in `realtimeInput.audio`. The legacy
         // `mediaChunks` array is deprecated and must not be used.
         send({
@@ -341,6 +387,8 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
     setPaused(false)
     pausedRef.current = false
     setupDoneRef.current = false
+    startRef.current = 0
+    stopTimer()
     frameCountRef.current = 0
     flushAudio()
     setStatus('connecting')
@@ -350,8 +398,9 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
       }
       const cfg = configRef.current
       // The playback context exists before the socket so the connect beep can
-      // fire the instant the server accepts the call.
-      playbackCtxRef.current = createAudioCtx()
+      // fire the instant the server accepts the call. It runs at the model's
+      // 24 kHz output rate so the voice is not resampled down on the way out.
+      playbackCtxRef.current = createAudioCtx(outputRate)
       const ws = new WebSocket(cfg.ws_url)
       // Server frames can arrive as binary blobs as well as text; both carry
       // the same JSON.
@@ -367,7 +416,7 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
           setup: {
             generationConfig: {
               responseModalities: ['AUDIO'],
-              speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
+              speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
             },
             systemInstruction: { parts: [{ text: systemPromptRef.current }] },
             tools: [conversationReadTool],
@@ -408,10 +457,8 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
       })
       micStreamRef.current = stream
       await attachMic(stream)
-      startRef.current = Date.now()
-      // Status stays 'connecting' until setupComplete flips it to 'live'.
-      stopTimer()
-      timerRef.current = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 250)
+      // Status stays 'connecting' and the clock stays at zero until setupComplete
+      // arrives; handleServerFrame starts both.
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not start the voice call')
       setStatus('ended')
@@ -421,7 +468,9 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
 
   const end = useCallback(() => {
     stopTimer()
-    setLastSeconds(Math.max(0, Math.floor((Date.now() - startRef.current) / 1000)))
+    // A call that never connected (startRef still 0) has no duration to record.
+    setLastSeconds(startRef.current ? Math.max(0, Math.floor((Date.now() - startRef.current) / 1000)) : 0)
+    startRef.current = 0
     processorRef.current?.disconnect()
     processorRef.current = null
     micStreamRef.current?.getTracks().forEach((t) => t.stop())

@@ -237,7 +237,8 @@ export default function Chat({
       <div className="flex flex-1 flex-col min-h-0">
         <Toolbar scrolled={scrolled} />
         <div className="relative flex flex-1 min-h-0 flex-col">
-          <div className="absolute left-1/2 -top-10 z-30 -translate-x-1/2">
+          {/* Profile pill with the live voice card stacked just below it. */}
+          <div className="absolute left-1/2 -top-10 z-30 flex -translate-x-1/2 flex-col items-center gap-2">
             <motion.button
               type="button"
               onClick={() => setRightOpen((v) => !v)}
@@ -248,8 +249,22 @@ export default function Chat({
               <span className="text-sm font-medium text-primary">{agentProfile?.agent_name || 'Argus'}</span>
               <FiChevronRight size={14} className="w-0 overflow-hidden opacity-0 transition-all duration-300 ease-out group-hover:w-4 group-hover:translate-x-1 group-hover:opacity-100" />
             </motion.button>
+            {voiceActive && (
+              <VoiceNotifier
+                status={voice.status}
+                time={voice.display()}
+                paused={voice.paused}
+                onTogglePause={() => voice.togglePause()}
+                onEnd={() => voice.end()}
+              />
+            )}
           </div>
-          <div ref={scrollRef} onScroll={onScroll} className="flex-1 min-h-0 overflow-y-auto px-6 pt-6 pb-24">
+          {/* Extra top padding while the voice card is showing so messages start below it. */}
+          <div
+            ref={scrollRef}
+            onScroll={onScroll}
+            className={`flex-1 min-h-0 overflow-y-auto px-6 pb-24 transition-[padding] duration-200 ${voiceActive ? 'pt-24' : 'pt-6'}`}
+          >
             <div className="mx-auto flex max-w-3xl flex-col gap-3">
               {!isLoading && messagesError && <div className="text-xs text-red-400">{String(messagesError)}</div>}
               {!isLoading && send.isError && (
@@ -361,20 +376,6 @@ export default function Chat({
         </div>
         <div className="shrink-0">
           <div className="relative">
-            {/* Floating voice card, live while the call is running. */}
-            {voiceActive && (
-              <div className="pointer-events-none absolute inset-x-0 bottom-full z-20 mb-2 flex justify-center">
-                <div className="pointer-events-auto">
-                  <VoiceNotifier
-                    status={voice.status}
-                    time={voice.display()}
-                    paused={voice.paused}
-                    onTogglePause={() => voice.togglePause()}
-                    onEnd={() => voice.end()}
-                  />
-                </div>
-              </div>
-            )}
             {voice.error && !voiceActive && (
               <div className="mb-1 text-center text-xs text-red-400">{voice.error}</div>
             )}
