@@ -29,18 +29,29 @@ const (
 // front matter as a JSON object — the metadata the exporters honour and the
 // body cannot carry.
 type Artifact struct {
-	ID        string
-	AgentID   string
-	Title     string
-	Format    string
+	ID      string
+	AgentID string
+	Title   string
+	Format  string
+	// Kind is "document" (the default) or "deck". A deck's Body holds the slide
+	// JSON the agent authored rather than markdown; its FilePath points at a
+	// derived .pptx when one has been generated.
+	Kind      string
 	Body      string
 	Meta      string
 	Words     int
 	Bytes     int
 	Version   int
+	FilePath  string
 	CreatedAt int64
 	UpdatedAt int64
 }
+
+// Artifact kinds.
+const (
+	ArtifactKindDocument = "document"
+	ArtifactKindDeck     = "deck"
+)
 
 // ArtifactVersion is one superseded body, kept so an edit can be undone.
 type ArtifactVersion struct {
@@ -84,6 +95,9 @@ func (db *DB) InsertArtifact(a Artifact) error {
 	if a.Format == "" {
 		a.Format = ArtifactFormat
 	}
+	if a.Kind == "" {
+		a.Kind = ArtifactKindDocument
+	}
 	if strings.TrimSpace(a.Meta) == "" {
 		a.Meta = "{}"
 	}
@@ -93,9 +107,9 @@ func (db *DB) InsertArtifact(a Artifact) error {
 		a.Version = 1
 	}
 	_, err := db.conn.Exec(
-		`INSERT INTO artifacts (id, agent_id, title, format, body, meta, words, bytes, version, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.ID, a.AgentID, a.Title, a.Format, a.Body, a.Meta, a.Words, a.Bytes, a.Version, a.CreatedAt, a.UpdatedAt,
+		`INSERT INTO artifacts (id, agent_id, title, format, kind, body, meta, words, bytes, version, file_path, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.ID, a.AgentID, a.Title, a.Format, a.Kind, a.Body, a.Meta, a.Words, a.Bytes, a.Version, a.FilePath, a.CreatedAt, a.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("storage: artifact insert failed: %w", err)
@@ -103,7 +117,7 @@ func (db *DB) InsertArtifact(a Artifact) error {
 	return nil
 }
 
-const artifactColumns = `id, agent_id, title, format, body, meta, words, bytes, version, created_at, updated_at`
+const artifactColumns = `id, agent_id, title, format, kind, body, meta, words, bytes, version, file_path, created_at, updated_at`
 
 // rowScanner lets scanArtifact serve both QueryRow and Rows without the call
 // sites knowing which one they hold.
@@ -112,8 +126,8 @@ type rowScanner interface {
 }
 
 func scanArtifact(s rowScanner, dest *Artifact) error {
-	return s.Scan(&dest.ID, &dest.AgentID, &dest.Title, &dest.Format, &dest.Body, &dest.Meta,
-		&dest.Words, &dest.Bytes, &dest.Version, &dest.CreatedAt, &dest.UpdatedAt)
+	return s.Scan(&dest.ID, &dest.AgentID, &dest.Title, &dest.Format, &dest.Kind, &dest.Body, &dest.Meta,
+		&dest.Words, &dest.Bytes, &dest.Version, &dest.FilePath, &dest.CreatedAt, &dest.UpdatedAt)
 }
 
 func (db *DB) GetArtifact(id string) (Artifact, bool, error) {
@@ -136,7 +150,7 @@ func (db *DB) ListArtifacts(agentID string, limit int) ([]Artifact, error) {
 		limit = 50
 	}
 	rows, err := db.conn.Query(
-		`SELECT id, agent_id, title, format, '', meta, words, bytes, version, created_at, updated_at
+		`SELECT id, agent_id, title, format, kind, '', meta, words, bytes, version, file_path, created_at, updated_at
 		 FROM artifacts WHERE agent_id = ? ORDER BY updated_at DESC, id DESC LIMIT ?`, agentID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("storage: artifact listing failed: %w", err)
@@ -215,6 +229,19 @@ func (db *DB) UpdateArtifact(id, title, body, meta string, updatedAt int64) (Art
 	current.Version = newVersion
 	current.UpdatedAt = updatedAt
 	return current, nil
+}
+
+// SetArtifactFilePath records where a derived binary (the .pptx of a deck) was
+// stored, without rewriting the body or bumping the version.
+func (db *DB) SetArtifactFilePath(id, filePath string) error {
+	res, err := db.conn.Exec(`UPDATE artifacts SET file_path = ? WHERE id = ?`, filePath, id)
+	if err != nil {
+		return fmt.Errorf("storage: artifact file path update failed: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("storage: artifact %s not found", id)
+	}
+	return nil
 }
 
 // PruneArtifactVersions keeps the newest n snapshots of one artifact.

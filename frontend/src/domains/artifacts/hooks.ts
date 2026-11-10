@@ -3,6 +3,7 @@ import { Events } from '@wailsio/runtime'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   exportArtifact,
+  exportDeckPPTX,
   exportFormats,
   getArtifact,
   listArtifacts,
@@ -69,6 +70,17 @@ export function useExportArtifact() {
     title: string
   }>({
     mutationFn: ({ artifactID, format, title }) => exportArtifact(artifactID, format, title),
+  })
+}
+
+// Saves a deck's .pptx. Resolves with the file that landed, or null when the
+// user backed out of the save dialog.
+export function useExportDeck() {
+  return useMutation<ArtifactExportResult | null, Error, {
+    artifactID: string
+    title: string
+  }>({
+    mutationFn: ({ artifactID, title }) => exportDeckPPTX(artifactID, title),
   })
 }
 

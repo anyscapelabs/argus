@@ -19,12 +19,35 @@ export function Active(): $CancellablePromise<string[] | null> {
     return $Call.ByID(1626669752);
 }
 
+/**
+ * ConversationRead is the conversation_read tool exposed to the live voice
+ * session. The voice model is given only this one tool (no history replay, no
+ * other tools), so when it needs earlier context it calls this and the frontend
+ * returns the resulting text as a function response. It mirrors the agent tool
+ * so a voice turn reads history exactly as a typed turn would.
+ */
+export function ConversationRead(agentID: string, query: string): $CancellablePromise<Shared$0.ConversationReadResult> {
+    return $Call.ByID(2305936981, agentID, query);
+}
+
 export function GetChat(agentID: string, beforeSeq: number, limit: number): $CancellablePromise<Shared$0.GetChatResult> {
     return $Call.ByID(1523637396, agentID, beforeSeq, limit);
 }
 
 export function ListRequests(agentID: string, limit: number): $CancellablePromise<Shared$0.ListRequestsResult> {
     return $Call.ByID(709374876, agentID, limit);
+}
+
+/**
+ * LiveConfig returns a ready-to-open WebSocket URL for a live voice call. The
+ * desktop deliberately does not name a model: the router resolves the configured
+ * default (the JSON entry flagged `default`) and injects it into the setup frame
+ * itself, so the app never has to know a model id. The account key rides in the
+ * URL's query because a WebSocket client (the webview) cannot set custom headers
+ * and the browser cannot read the OS keyring.
+ */
+export function LiveConfig(): $CancellablePromise<Shared$0.LiveConfigResult> {
+    return $Call.ByID(3819504154);
 }
 
 /**
@@ -86,6 +109,17 @@ export function Send(agentID: string, text: string): $CancellablePromise<Shared$
  */
 export function SendScheduledWake(agentID: string, text: string): $CancellablePromise<Shared$0.SendResult> {
     return $Call.ByID(4182612855, agentID, text);
+}
+
+/**
+ * SendWithAttachments starts a turn the way Send does, but with uploaded files
+ * folded into the user message: images become vision blocks, documents become
+ * extracted text. The attachment ids were returned by the uploads service; a
+ * missing or unknown id fails the send rather than being silently dropped, so
+ * the frontend cannot think a file was attached when it was not.
+ */
+export function SendWithAttachments(agentID: string, text: string, attachmentIDs: string[] | null): $CancellablePromise<Shared$0.SendResult> {
+    return $Call.ByID(3670157150, agentID, text, attachmentIDs);
 }
 
 /**

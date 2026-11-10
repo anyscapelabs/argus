@@ -14,7 +14,6 @@ import (
 	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Services/Browser"
 	"github.com/anyscapelabs/argus/Services/Permission"
-	"github.com/anyscapelabs/argus/Services/Search"
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
 
@@ -59,7 +58,7 @@ func (s *Service) runBrowser(
 	// click through — which is also the page most likely to bot-check it.
 	note := ""
 	if (action == "open" || action == "tab_new") && input.URL != "" && !Browser.IsDirectAddress(input.URL) {
-		found := Search.Search(ctx, input.URL, 3)
+		found := s.webSearch(ctx, input.URL, 3)
 		if found.Err != "" || len(found.Results) == 0 {
 			activity("tool_started", input.URL)
 			activity("tool_finished", input.URL)

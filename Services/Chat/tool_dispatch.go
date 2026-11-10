@@ -42,6 +42,7 @@ var toolRunners = map[string]toolRunner{
 	"connect_mcp":           runConnectMCPTool,
 	"conversation_read":     runConversationReadTool,
 	"write_artifact":        runWriteArtifactTool,
+	"create_slides":         runCreateSlidesToolDispatch,
 	"browser":               runBrowserTool,
 	Permission.TerminalTool: runTerminalTool,
 }
@@ -101,6 +102,20 @@ func runConversationReadTool(
 	activity activityFn,
 ) Protocol.Block {
 	return s.runConversationRead(agentID, call, result, activity)
+}
+
+// runCreateSlidesToolDispatch adapts the slides tool to the registry signature.
+func runCreateSlidesToolDispatch(
+	s *Service,
+	_ context.Context,
+	_ string,
+	agentID string,
+	_ string,
+	call Protocol.ToolCall,
+	result resultFn,
+	activity activityFn,
+) Protocol.Block {
+	return s.runCreateSlidesTool(call, agentID, result, activity)
 }
 
 // runWriteArtifactTool adapts the artifact tool to the registry signature.

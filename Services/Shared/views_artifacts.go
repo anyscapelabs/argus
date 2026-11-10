@@ -8,7 +8,11 @@ type ArtifactView struct {
 	// stays in the row because the export targets are formats a document can
 	// become, never formats it is written in.
 	Format string `json:"format"`
-	Body   string `json:"body,omitempty"`
+	// Kind is "document" (the default) or "deck". A deck is a presentation the
+	// agent authored as slide JSON; the frontend renders it as slides and offers
+	// to save it as .pptx.
+	Kind string `json:"kind"`
+	Body string `json:"body,omitempty"`
 	// Meta is the document's front matter — title, author, date, language,
 	// paper, orientation — the fields the exporters honour.
 	Meta      map[string]string `json:"meta,omitempty"`
@@ -56,6 +60,15 @@ type ExportFormatView struct {
 type ExportFormatsResult struct {
 	Formats []ExportFormatView `json:"formats"`
 	Error   *ActionError       `json:"error,omitempty"`
+}
+
+// DeckWriteResult is the reply to a create_slides call. SlideCount is how many
+// pages the deck has, reported back to the agent; a refused deck fails with
+// Error because nothing was stored.
+type DeckWriteResult struct {
+	Artifact   ArtifactView `json:"artifact"`
+	SlideCount int          `json:"slide_count"`
+	Error      *ActionError `json:"error,omitempty"`
 }
 
 // ArtifactExportResult reports where the derived file landed. Path is absolute,

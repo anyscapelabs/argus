@@ -13,6 +13,16 @@ export async function sendMessage(agentID: string, text: string): Promise<SendRe
   return res
 }
 
+export async function sendMessageWithAttachments(
+  agentID: string,
+  text: string,
+  attachmentIDs: string[],
+): Promise<SendResult> {
+  const res = await ChatService.SendWithAttachments(agentID, text, attachmentIDs)
+  if (res?.error) throw new Error(res.error.message)
+  return res
+}
+
 export async function getChat(agentID: string, beforeSeq = 0, limit = 100): Promise<GetChatResult> {
   const res = await ChatService.GetChat(agentID, beforeSeq, limit)
   if (res?.error) throw new Error(res.error.message)

@@ -1,6 +1,13 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
-import { sendMessage, getChat, getUsage } from './api'
+import { sendMessage, sendMessageWithAttachments, getChat, getUsage } from './api'
 import type { GetChatResult, ChatMessage } from '../../../bindings/github.com/anyscapelabs/argus/Services/Shared/models'
+import { dataOf, mediaTypeOf, type PendingAttachment } from '../uploads/api'
+
+export type SendPayload = {
+  text: string
+  attachmentIDs?: string[]
+  attachments?: PendingAttachment[]
+}
 
 export function useChatHistory(agentID: string) {
   return useInfiniteQuery({
@@ -46,8 +53,13 @@ export function useSendMessage(agentID: string) {
   const messagesKey = ['chat', agentID, 'history']
   const usageKey = ['chat', agentID, 'usage']
   return useMutation({
-    mutationFn: (text: string) => sendMessage(agentID, text),
-    onMutate: async (text: string) => {
+    mutationFn: ({ text, attachmentIDs }: SendPayload) => {
+      if (attachmentIDs && attachmentIDs.length > 0) {
+        return sendMessageWithAttachments(agentID, text, attachmentIDs)
+      }
+      return sendMessage(agentID, text)
+    },
+    onMutate: async ({ text, attachments }: SendPayload) => {
       await qc.cancelQueries({ queryKey: messagesKey })
       const previous = qc.getQueryData<InfiniteData<GetChatResult>>(messagesKey)
       const stamp = Date.now()
@@ -55,6 +67,9 @@ export function useSendMessage(agentID: string) {
       // replaces it when the message event invalidates the history.
       qc.setQueryData<InfiniteData<GetChatResult>>(messagesKey, (old) => {
         if (!old || old.pages.length === 0) return old
+        const blocks = (attachments ?? [])
+          .filter((a) => a.kind === 'image' && a.dataUrl)
+          .map((a) => ({ type: 'image', image: { media_type: mediaTypeOf(a.dataUrl!), data: dataOf(a.dataUrl!) } }))
         const pending: ChatMessage = {
           id: `pending-user-${stamp}`,
           agent_id: agentID,
@@ -63,6 +78,7 @@ export function useSendMessage(agentID: string) {
           text,
           status: 'complete',
           created_at: stamp,
+          blocks,
         } as ChatMessage
         const pages = [...old.pages]
         pages[0] = { ...pages[0], messages: [...(pages[0].messages ?? []), pending] }
@@ -70,7 +86,7 @@ export function useSendMessage(agentID: string) {
       })
       return { previous }
     },
-    onError: (_err, _text, ctx) => {
+    onError: (_err, _payload, ctx) => {
       if (ctx?.previous) qc.setQueryData(messagesKey, ctx.previous)
     },
     onSuccess: () => {

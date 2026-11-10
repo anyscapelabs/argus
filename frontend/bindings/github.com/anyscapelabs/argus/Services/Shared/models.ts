@@ -78,6 +78,13 @@ export interface ArtifactView {
      * become, never formats it is written in.
      */
     "format": string;
+
+    /**
+     * Kind is "document" (the default) or "deck". A deck is a presentation the
+     * agent authored as slide JSON; the frontend renders it as slides and offers
+     * to save it as .pptx.
+     */
+    "kind": string;
     "body"?: string;
 
     /**
@@ -109,6 +116,41 @@ export interface ArtifactsResult {
     "error"?: ActionError | null;
 }
 
+/**
+ * AttachmentResult is the reply to one upload or delete. A refused upload
+ * (bad type, too large) fails with Error rather than a row: nothing was stored.
+ */
+export interface AttachmentResult {
+    "attachment"?: AttachmentView | null;
+    "error"?: ActionError | null;
+}
+
+/**
+ * AttachmentView is the wire shape of an uploaded file. DataURL carries the
+ * file's bytes base64 — present so the chat can render an image thumbmail; the
+ * backend never persists it (bytes live on disk), it is rebuilt on request.
+ */
+export interface AttachmentView {
+    "id": string;
+    "agent_id": string;
+    "filename": string;
+    "mime_type": string;
+    "size_bytes": number;
+
+    /**
+     * Kind is "image" or "document": images are sent to the model as vision
+     * blocks, documents as extracted text.
+     */
+    "kind": string;
+    "data_url"?: string;
+    "created_at": number;
+}
+
+export interface AttachmentsResult {
+    "attachments": AttachmentView[] | null;
+    "error"?: ActionError | null;
+}
+
 export interface ChatMessage {
     "id": string;
     "agent_id": string;
@@ -131,6 +173,15 @@ export interface ChatModel {
     "model": ModelView;
 }
 
+/**
+ * ConversationReadResult is the text a voice session's conversation_read tool
+ * call should see. Text is the tool_result body the model reads.
+ */
+export interface ConversationReadResult {
+    "text": string;
+    "error"?: ActionError | null;
+}
+
 export interface CustomModelInput {
     "provider_id": string;
     "model_id": string;
@@ -143,6 +194,17 @@ export interface CustomModelInput {
     "price_known": boolean;
     "price_input"?: number | null;
     "price_output"?: number | null;
+}
+
+/**
+ * DeckWriteResult is the reply to a create_slides call. SlideCount is how many
+ * pages the deck has, reported back to the agent; a refused deck fails with
+ * Error because nothing was stored.
+ */
+export interface DeckWriteResult {
+    "artifact": ArtifactView;
+    "slide_count": number;
+    "error"?: ActionError | null;
 }
 
 /**
@@ -246,6 +308,22 @@ export interface KeyStatusResult {
 
 export interface ListRequestsResult {
     "requests": ModelRequestView[] | null;
+    "error"?: ActionError | null;
+}
+
+/**
+ * LiveConfig is everything the frontend needs to open a live voice call: a
+ * ready-to-open WebSocket URL (the key is already in its query, since the
+ * browser cannot read the OS keyring). The model is deliberately not part of it
+ * — the router resolves its configured default and injects it into the setup
+ * frame, so the desktop never has to know a model id.
+ */
+export interface LiveConfig {
+    "ws_url": string;
+}
+
+export interface LiveConfigResult {
+    "config"?: LiveConfig | null;
     "error"?: ActionError | null;
 }
 

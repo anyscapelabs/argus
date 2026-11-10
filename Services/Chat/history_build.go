@@ -47,6 +47,11 @@ func (s *Service) buildHistory(agentID string, throughSeq int, budgetTokens int6
 				switch b.Type {
 				case Protocol.BlockText:
 					userBlocks = append(userBlocks, Protocol.Block{Type: Protocol.BlockText, Text: b.Text})
+				case Protocol.BlockImage:
+					// An uploaded image survives into history so a follow-up
+					// turn still sees the picture the user attached. Without
+					// it, "the chart I sent you" would be an empty pointer.
+					userBlocks = append(userBlocks, b.Clone())
 				case Protocol.BlockToolResult:
 					if n := len(out); n > 0 && carriesToolUse(out[n-1]) {
 						userBlocks = append(userBlocks, b)

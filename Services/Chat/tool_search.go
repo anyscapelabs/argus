@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/anyscapelabs/argus/Protocol"
-	"github.com/anyscapelabs/argus/Services/Search"
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
 
@@ -34,7 +33,7 @@ func runWebSearchTool(
 	}
 
 	activity("tool_started", query)
-	answer := Search.Search(ctx, query, input.MaxResults)
+	answer := s.webSearch(ctx, query, input.MaxResults)
 	// The indicator consumes the found sites right away (favicon plus
 	// result titles) instead of echoing the query back to the user.
 	s.Core.EmitEvent(Shared.EventActivity, Shared.ActivityView{

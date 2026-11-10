@@ -32,6 +32,25 @@ export async function exportFormats(): Promise<ExportFormatView[]> {
   return res.formats ?? []
 }
 
+// exportDeckPPTX writes a deck's PowerPoint where the user chose. A deck has no
+// menu of formats — it is one file, a .pptx — so this is a single action rather
+// than one of several targets.
+export async function exportDeckPPTX(
+  artifactID: string,
+  title: string,
+): Promise<ArtifactExportResult | null> {
+  const dest = await Dialogs.SaveFile({
+    Title: 'Save presentation',
+    Filename: `${fileStem(title)}.pptx`,
+    CanCreateDirectories: true,
+    Filters: [{ DisplayName: 'PowerPoint', Pattern: '*.pptx' }],
+  })
+  if (!dest) return null
+  const res = await ArtifactsService.ExportDeckPPTX(artifactID, dest)
+  if (res?.error) throw new Error(res.error.message)
+  return res
+}
+
 // fileStem is the title made safe to be a filename. Only what would actually
 // break a path is removed — spaces and punctuation stay, because a document
 // called "Q3 report (draft)" should export as "Q3 report (draft).pdf".
