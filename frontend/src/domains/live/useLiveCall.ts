@@ -3,20 +3,26 @@ import { getLiveConfig, conversationRead } from './api'
 
 export type VoiceStatus = 'idle' | 'connecting' | 'live' | 'ended'
 
-// targetRate is the sample rate Gemini Live expects: 16 kHz PCM mono.
+// targetRate is the sample rate Gemini Live expects for INPUT: 16 kHz PCM mono.
 const targetRate = 16000
+// outputRate is the sample rate Gemini Live sends back: 24 kHz PCM mono. Playing
+// it as 16 kHz makes the voice slow and deep.
+const outputRate = 24000
 // The single tool the voice model may call. No history is replayed and no other
 // tools are attached; when the model needs earlier context it calls this.
+// Gemini 3.8 Live defaults to asynchronous (NON_BLOCKING) function calling; the
+// model keeps talking while the tool runs and picks the result up when it lands.
 const conversationReadTool = {
   functionDeclarations: [
     {
       name: 'conversation_read',
       description:
         'Searches this chat for earlier messages and returns numbered snippets, so you can recall what was said before. Call it when the user references something from earlier in the conversation.',
+      behavior: 'NON_BLOCKING',
       parameters: {
-        type: 'object',
+        type: 'OBJECT',
         properties: {
-          query: { type: 'string', description: 'Words to search for in the earlier conversation.' },
+          query: { type: 'STRING', description: 'Words to search for in the earlier conversation.' },
         },
         required: ['query'],
       },
@@ -116,6 +122,13 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const startRef = useRef(0)
   const pausedRef = useRef(false)
+  // setupDoneRef flips once Google answers the setup frame with setupComplete.
+  // No audio may leave before then: the session does not exist upstream yet.
+  const setupDoneRef = useRef(false)
+  // nextPlayTimeRef/playingRef queue model audio back to back instead of
+  // starting every chunk at once, and let an interruption cut playback cleanly.
+  const nextPlayTimeRef = useRef(0)
+  const playingRef = useRef<Set<AudioBufferSourceNode>>(new Set())
   const configRef = useRef<{ ws_url: string } | null>(null)
   // frameCountRef caps the one-time server-frame diagnostics to the first few.
   const frameCountRef = useRef(0)
@@ -135,13 +148,16 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
     }
   }, [])
 
-  // scheduleAudio appends a 16 kHz PCM chunk to the playback context, which
-  // resamples to the hardware rate.
+  // scheduleAudio queues a 24 kHz PCM chunk (the model's output rate) on the
+  // playback context, which resamples to the hardware rate. Chunks are chained
+  // on a running clock so they play in order without overlapping.
   const scheduleAudio = useCallback((pcm: ArrayBuffer) => {
     const ctx = playbackCtxRef.current
     if (!ctx) return
-    const int16 = new Int16Array(pcm)
-    const buffer = ctx.createBuffer(1, int16.length, targetRate)
+    // Whole 16-bit samples only; a stray odd byte would make Int16Array throw.
+    const int16 = new Int16Array(pcm, 0, Math.floor(pcm.byteLength / 2))
+    if (int16.length === 0) return
+    const buffer = ctx.createBuffer(1, int16.length, outputRate)
     const data = buffer.getChannelData(0)
     for (let i = 0; i < int16.length; i++) {
       data[i] = int16[i] / 0x8000
@@ -149,7 +165,26 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
     const src = ctx.createBufferSource()
     src.buffer = buffer
     src.connect(ctx.destination)
-    src.start()
+    const startAt = Math.max(ctx.currentTime, nextPlayTimeRef.current)
+    src.start(startAt)
+    nextPlayTimeRef.current = startAt + buffer.duration
+    playingRef.current.add(src)
+    src.onended = () => playingRef.current.delete(src)
+  }, [])
+
+  // flushAudio drops everything queued for playback. Google sends
+  // serverContent.interrupted when the user barges in; the model has stopped
+  // generating, so the audio already queued must stop too.
+  const flushAudio = useCallback(() => {
+    for (const src of playingRef.current) {
+      try {
+        src.stop()
+      } catch {
+        // already stopped
+      }
+    }
+    playingRef.current.clear()
+    nextPlayTimeRef.current = 0
   }, [])
 
   // connectBeep plays the two rising tones that mark the moment the call is
@@ -177,6 +212,35 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
     }
   }, [])
 
+  // handleFunctionCall runs one tool the model asked for and answers it.
+  //
+  // Wire contract (Gemini Live): the model asks for tools in a TOP-LEVEL
+  // `toolCall.functionCalls` frame — never inside serverContent.modelTurn — and
+  // the client answers with a `toolResponse` frame whose entries carry the call's
+  // `id` AND its `name`. Anything else leaves the model waiting for a result that
+  // never arrives, which from the outside looks like a call that went silent.
+  const handleFunctionCall = useCallback(
+    async (call: { id: string; name: string; args?: Record<string, unknown> }) => {
+      let result = ''
+      if (call.name === 'conversation_read') {
+        const query = String(call.args?.query ?? '').trim()
+        try {
+          result = await conversationRead(agentID, query)
+        } catch (err) {
+          result = `could not read the conversation: ${(err as Error).message}`
+        }
+      } else {
+        result = `Unknown tool ${call.name}`
+      }
+      send({
+        toolResponse: {
+          functionResponses: [{ id: call.id, name: call.name, response: { output: result } }],
+        },
+      })
+    },
+    [agentID, send],
+  )
+
   // handleServerFrame processes a message from the model.
   const handleServerFrame = useCallback(
     (raw: string) => {
@@ -186,17 +250,27 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
       } catch {
         return
       }
-      if (frameCountRef.current < 3) {
+      if (frameCountRef.current < 5) {
         // The first frames say everything about why a call is silent:
         // setupComplete, an error, or audio.
         frameCountRef.current++
         console.debug(`[voice] server frame ${frameCountRef.current}:`, Object.keys(frame).join(','))
       }
       if (frame.setupComplete) {
+        // The upstream session now exists: the mic may start sending.
+        setupDoneRef.current = true
         setStatus((s) => (s === 'connecting' ? 'live' : s))
         return
       }
+      if (frame.toolCall?.functionCalls) {
+        for (const call of frame.toolCall.functionCalls) {
+          void handleFunctionCall(call)
+        }
+      }
       const sc = frame.serverContent
+      if (sc?.interrupted) {
+        flushAudio()
+      }
       if (sc?.modelTurn?.parts) {
         for (const part of sc.modelTurn.parts) {
           if (part.inlineData?.data) {
@@ -207,8 +281,6 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
           } else if (part.text) {
             // Model transcript text (also mirrored to onTranscript if wired).
             setStatus((s) => (s === 'connecting' ? 'live' : s))
-          } else if (part.functionCall) {
-            void handleFunctionCall(part.functionCall)
           }
         }
       }
@@ -220,33 +292,7 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
         setStatus('ended')
       }
     },
-    [scheduleAudio],
-  )
-
-  const handleFunctionCall = useCallback(
-    async (call: any) => {
-      const query = call.name === 'conversation_read' ? String(call.args?.query ?? '').trim() : ''
-      let result = ''
-      if (call.name === 'conversation_read') {
-        try {
-          result = await conversationRead(agentID, query)
-        } catch (err) {
-          result = `could not read the conversation: ${(err as Error).message}`
-        }
-      } else {
-        result = `Unknown tool ${call.name}`
-      }
-      // Tool answers go back in a toolCall frame keyed by the call's id — that
-      // is the wire shape the Live model waits on before it speaks again.
-      send({
-        toolCall: {
-          functionResponses: [
-            { id: call.id, response: { output: result } },
-          ],
-        },
-      })
-    },
-    [agentID, send],
+    [scheduleAudio, flushAudio, handleFunctionCall],
   )
 
   // attachMic captures the microphone and streams 16 kHz PCM to the model.
@@ -261,16 +307,20 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
       const processor = ctx.createScriptProcessor(4096, 1, 1)
       let firstChunk = true
       processor.onaudioprocess = (e) => {
-        if (pausedRef.current) return
+        // Hold audio until Google confirms the session with setupComplete; frames
+        // sent before that point are not part of a live session yet.
+        if (pausedRef.current || !setupDoneRef.current) return
         const ch = e.inputBuffer.getChannelData(0)
         const pcm = downsampleTo16k(ch, ctx.sampleRate)
         if (firstChunk) {
           firstChunk = false
           console.debug(`[voice] mic streaming at ${ctx.sampleRate}Hz, state=${ctx.state}`)
         }
+        // Gemini 3.x takes mic audio in `realtimeInput.audio`. The legacy
+        // `mediaChunks` array is deprecated and must not be used.
         send({
           realtimeInput: {
-            mediaChunks: [{ mimeType: 'audio/pcm;rate=16000', data: base64FromBytes(pcm.buffer) }],
+            audio: { mimeType: 'audio/pcm;rate=16000', data: base64FromBytes(pcm.buffer) },
           },
         })
       }
@@ -290,6 +340,9 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
     setLastSeconds(0)
     setPaused(false)
     pausedRef.current = false
+    setupDoneRef.current = false
+    frameCountRef.current = 0
+    flushAudio()
     setStatus('connecting')
     try {
       if (!configRef.current) {
@@ -329,22 +382,34 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
         setError('Could not connect to the voice service')
         setStatus('ended')
       }
-      ws.onclose = () => {
+      ws.onclose = (ev) => {
+        // Google's own reason for hanging up (bad frame, bad model, auth…) rides
+        // in the close code/reason; without this a rejected call just goes quiet.
+        console.warn(`[voice] socket closed code=${ev.code} reason=${ev.reason || '(none)'}`)
+        if (ev.code !== 1000 && ev.code !== 1005) {
+          // Keep the first error if one was already reported (it is more specific).
+          setError((prev) => prev ?? `The voice service closed the call (${ev.code}${ev.reason ? `: ${ev.reason}` : ''})`)
+        }
         setStatus((s) => (s === 'live' || s === 'connecting' ? 'ended' : s))
         stopTimer()
       }
 
-      // Start the microphone once the socket is open (after setup). A webview
-      // without mediaDevices (missing permission plumbing) fails here loudly
-      // instead of running a call the model can never hear.
+      // Open the microphone now so the permission prompt happens up front, but
+      // attachMic only streams once setupComplete has arrived. A webview without
+      // mediaDevices (missing permission plumbing) fails here loudly instead of
+      // running a call the model can never hear.
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error('Microphone access is not available in this window. Check the app permissions.')
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const stream = await navigator.mediaDevices.getUserMedia({
+        // Echo cancellation matters here: the model's own voice leaking back
+        // into the mic reads as the user barging in.
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      })
       micStreamRef.current = stream
       await attachMic(stream)
       startRef.current = Date.now()
-      setStatus('live')
+      // Status stays 'connecting' until setupComplete flips it to 'live'.
       stopTimer()
       timerRef.current = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 250)
     } catch (err) {
@@ -352,7 +417,7 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
       setStatus('ended')
       void end()
     }
-  }, [attachMic, connectBeep, handleServerFrame, send])
+  }, [attachMic, connectBeep, flushAudio, handleServerFrame, send])
 
   const end = useCallback(() => {
     stopTimer()
@@ -369,6 +434,9 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
       void playbackCtxRef.current.close()
       playbackCtxRef.current = null
     }
+    playingRef.current.clear()
+    nextPlayTimeRef.current = 0
+    setupDoneRef.current = false
     if (wsRef.current) {
       wsRef.current.onclose = null
       wsRef.current.close()
@@ -383,7 +451,10 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
   const togglePause = useCallback(() => {
     pausedRef.current = !pausedRef.current
     setPaused(pausedRef.current)
-  }, [])
+    // Muting mid-sentence would leave the server waiting on an unfinished
+    // utterance; audioStreamEnd tells it the audio stream paused so it flushes.
+    if (pausedRef.current) send({ realtimeInput: { audioStreamEnd: true } })
+  }, [send])
 
   useEffect(() => () => end(), [end])
 
