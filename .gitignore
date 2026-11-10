@@ -17,3 +17,6 @@ tools/calendar/creds/
 .env
 config/google.json
 google.json
+
+# Node tooling caches at the repo root
+node_modules/
