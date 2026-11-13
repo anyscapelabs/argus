@@ -116,6 +116,21 @@ export interface ArtifactsResult {
     "error"?: ActionError | null;
 }
 
+export interface AskUserListResult {
+    "requests": AskUserRequestView[] | null;
+    "error"?: ActionError | null;
+}
+
+export interface AskUserRequestView {
+    "request_id": string;
+    "agent_id": string;
+    "agent_name"?: string;
+    "run_id": string;
+    "question": string;
+    "choices": string[] | null;
+    "created_at": number;
+}
+
 /**
  * AttachmentResult is the reply to one upload or delete. A refused upload
  * (bad type, too large) fails with Error rather than a row: nothing was stored.
@@ -156,14 +171,18 @@ export interface ChatMessage {
     "agent_id": string;
     "seq": number;
     "role": string;
+    "kind"?: string;
     "text": string;
     "status": string;
     "error_message"?: string;
+    "error_code"?: string;
     "stop_reason"?: string;
     "model_ref"?: string;
     "created_at": number;
     "completed_at"?: number;
     "blocks"?: Protocol$0.Block[] | null;
+    "file_write"?: Protocol$0.FileWrite | null;
+    "reaction"?: string;
 }
 
 export interface ChatModel {
@@ -171,15 +190,6 @@ export interface ChatModel {
     "provider_id": string;
     "provider_name": string;
     "model": ModelView;
-}
-
-/**
- * ConversationReadResult is the text a voice session's conversation_read tool
- * call should see. Text is the tool_result body the model reads.
- */
-export interface ConversationReadResult {
-    "text": string;
-    "error"?: ActionError | null;
 }
 
 export interface CustomModelInput {
@@ -320,11 +330,26 @@ export interface ListRequestsResult {
  */
 export interface LiveConfig {
     "ws_url": string;
+    "session_id": string;
+    "system_instruction": string;
+    "tools": LiveFunctionDeclaration[] | null;
 }
 
 export interface LiveConfigResult {
     "config"?: LiveConfig | null;
     "error"?: ActionError | null;
+}
+
+/**
+ * LiveFunctionDeclaration is one of the deliberately small gateway functions
+ * sent at Live setup. The full tool catalog stays in the backend and is reached
+ * lazily through search_tools and invoke_tool.
+ */
+export interface LiveFunctionDeclaration {
+    "name": string;
+    "description": string;
+    "behavior": string;
+    "parameters": { [_ in string]?: any } | null;
 }
 
 export interface LiveModel {
@@ -338,6 +363,17 @@ export interface LiveResults {
     "ByID": { [_ in string]?: LiveModel } | null;
     "FetchedAt": string;
     "Stale": boolean;
+}
+
+/**
+ * LiveToolResult is the backend's answer to one Live function call. Tool-level
+ * failures are returned to the model through Output/IsError; Error is reserved
+ * for application failures the frontend should surface.
+ */
+export interface LiveToolResult {
+    "output": string;
+    "is_error": boolean;
+    "error"?: ActionError | null;
 }
 
 export interface MCPConnectRequestView {
@@ -363,6 +399,13 @@ export interface MCPConnectRequestView {
      * following every newer message to the bottom.
      */
     "created_at": number;
+}
+
+export interface MessageReactionResult {
+    "ok": boolean;
+    "message_id": string;
+    "reaction"?: string;
+    "error"?: ActionError | null;
 }
 
 export interface ModelRequestView {
@@ -636,4 +679,24 @@ export interface UsageResult {
     "requests": number;
     "failed": number;
     "error"?: ActionError | null;
+}
+
+/**
+ * VoiceCallResult reports whether a finished voice call was persisted.
+ */
+export interface VoiceCallResult {
+    "ok": boolean;
+    "error"?: ActionError | null;
+}
+
+/**
+ * VoiceTurn is one spoken side of a voice call: what the user said or what
+ * the assistant said, transcribed by the live session.
+ */
+export interface VoiceTurn {
+    /**
+     * "user" or "model"
+     */
+    "role": string;
+    "text": string;
 }

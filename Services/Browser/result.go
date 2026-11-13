@@ -75,6 +75,7 @@ func (s *Service) captureStable(ctx context.Context, page *Page) (*Snapshot, err
 	var snap *Snapshot
 	var err error
 	prev, cur := -1, 0
+	changedOnLastRead := false
 	for i, pause := range ladder {
 		if i > 0 {
 			select {
@@ -96,13 +97,14 @@ func (s *Service) captureStable(ctx context.Context, page *Page) (*Snapshot, err
 			return nil, err
 		}
 		cur = len(snap.Elements)
+		changedOnLastRead = prev >= 0 && cur != prev
 		if settledRead(prev, cur, snap, i) {
 			return snap, nil
 		}
 		prev = cur
 	}
 	if snap != nil {
-		snap.Growing = cur != prev
+		snap.Growing = changedOnLastRead
 	}
 	return snap, nil
 }

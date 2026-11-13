@@ -41,4 +41,10 @@ export async function listRequests(agentID: string, limit = 100): Promise<ListRe
   return res
 }
 
+export async function setMessageReaction(agentID: string, messageID: string, reaction: string) {
+  const res = await ChatService.SetMessageReaction(agentID, messageID, reaction)
+  if (res?.error) throw new Error(res.error.message)
+  return res
+}
+
 export type { ChatMessage }

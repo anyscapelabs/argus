@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -61,7 +62,9 @@ func (m *Manager) ConnectRemote(ctx context.Context, spec RemoteSpec, interactiv
 	} else {
 		cfg.DynamicClientRegistrationConfig = &auth.DynamicClientRegistrationConfig{
 			Metadata: &oauthex.ClientRegistrationMetadata{
-				ClientName:    "Argus",
+				ClientName:    oauthClientName(),
+				ClientURI:     strings.TrimSpace(os.Getenv("ARGUS_OAUTH_CLIENT_URI")),
+				LogoURI:       strings.TrimSpace(os.Getenv("ARGUS_OAUTH_CLIENT_LOGO_URI")),
 				RedirectURIs:  []string{redirectURL},
 				GrantTypes:    []string{"authorization_code", "refresh_token"},
 				ResponseTypes: []string{"code"},
@@ -181,6 +184,13 @@ func resultText(res *mcp.CallToolResult) string {
 		}
 	}
 	return "no detail returned"
+}
+
+func oauthClientName() string {
+	if name := strings.TrimSpace(os.Getenv("ARGUS_OAUTH_CLIENT_NAME")); name != "" {
+		return name
+	}
+	return "Argus"
 }
 
 func (m *Manager) IsConnected(id string) bool {

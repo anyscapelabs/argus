@@ -68,7 +68,7 @@ func (a *Adapter) MapError(status int, body []byte, retryAfter time.Duration) *P
 
 func ApplyErrorDefaults(e *Protocol.Error, status int, retryAfter time.Duration) {
 	e.Status = status
-	if status == 429 {
+	if status == 429 && !Protocol.IsUsageLimit(e.Code) {
 		e.Retryable = true
 	}
 	if e.Code == Protocol.CodeProviderError && status >= 500 {
@@ -93,8 +93,12 @@ func MapErrorInto(status int, body []byte, retryAfter time.Duration) *Protocol.E
 		if probe.Error.Type != "" {
 			e.Raw = probe.Error.Type
 		}
+		var wireCode string
+		if len(probe.Error.Code) > 0 && json.Unmarshal(probe.Error.Code, &wireCode) == nil && Protocol.IsUsageLimit(wireCode) {
+			e.Code = wireCode
+		}
 	}
-	if e.Raw != "" {
+	if e.Raw != "" && !Protocol.IsUsageLimit(e.Code) {
 		if typed := mapWireErrorType(e.Raw); typed != Protocol.CodeProviderError && status != 401 && status != 403 && status != 429 {
 			e.Code = typed
 		}

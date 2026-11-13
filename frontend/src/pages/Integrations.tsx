@@ -8,7 +8,7 @@ export default function Integrations() {
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'discover' | 'yours'>('discover')
   const { data: integrations = [], isLoading } = useIntegrations()
-  const { states, connect, clear } = useIntegrationConnect()
+  const { states, connect, clear, disconnect } = useIntegrationConnect()
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -106,6 +106,7 @@ export default function Integrations() {
                     onConnect={() => void connect(it.id)}
                     onDeny={state === 'failed' ? () => clear(it.id) : undefined}
                     onCancel={() => clear(it.id)}
+                    onRemove={state === 'connected' ? () => void disconnect(it.id) : undefined}
                     denyLabel="Dismiss"
                     className="max-w-none"
                   />

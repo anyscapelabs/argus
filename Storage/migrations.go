@@ -26,6 +26,9 @@ func (db *DB) migrate() error {
 		migration12,
 		migration13,
 		migration14,
+		migration15,
+		migration16,
+		migration17,
 	}
 
 	for i := version; i < len(migrations); i++ {
@@ -419,6 +422,95 @@ func migration14(db *DB) error {
 			}
 			return err
 		}
+	}
+	return nil
+}
+
+// migration15 adds structured, agent-scoped memories, records which memories a
+// request actually saw, and persists one reversible reaction per message.
+func migration15(db *DB) error {
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS memory_items (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL REFERENCES agent_profiles(id) ON DELETE CASCADE,
+			key TEXT NOT NULL,
+			value TEXT NOT NULL,
+			scope TEXT NOT NULL CHECK (scope IN ('always','contextual')),
+			confidence REAL NOT NULL CHECK (confidence >= 0 AND confidence <= 1),
+			source_type TEXT NOT NULL,
+			source_message_id TEXT NOT NULL DEFAULT '',
+			source_run_id TEXT NOT NULL DEFAULT '',
+			revision INTEGER NOT NULL DEFAULT 1,
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL,
+			UNIQUE(agent_id, key)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_memory_items_agent ON memory_items(agent_id, updated_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS memory_exposures (
+			request_id TEXT NOT NULL REFERENCES model_requests(id) ON DELETE CASCADE,
+			memory_id TEXT NOT NULL REFERENCES memory_items(id) ON DELETE CASCADE,
+			memory_revision INTEGER NOT NULL,
+			position INTEGER NOT NULL,
+			score INTEGER NOT NULL,
+			estimated_tokens INTEGER NOT NULL,
+			created_at INTEGER NOT NULL,
+			PRIMARY KEY(request_id, memory_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_memory_exposures_item ON memory_exposures(memory_id, memory_revision)`,
+		`CREATE TABLE IF NOT EXISTS message_reactions (
+			message_id TEXT PRIMARY KEY REFERENCES messages(id) ON DELETE CASCADE,
+			emoji TEXT NOT NULL CHECK (emoji <> ''),
+			signal INTEGER NOT NULL DEFAULT 0 CHECK (signal IN (-1,0,1)),
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_message_reactions_updated ON message_reactions(updated_at DESC)`,
+		`INSERT OR IGNORE INTO agent_profiles (id, avatar, agent_name, updated_at)
+		 SELECT 'default', '/logo.png', 'Argus', CURRENT_TIMESTAMP
+		 WHERE EXISTS (SELECT 1 FROM user_memories)`,
+		`INSERT OR IGNORE INTO memory_items (
+			id, agent_id, key, value, scope, confidence, source_type,
+			source_message_id, source_run_id, revision, created_at, updated_at
+		) SELECT 'legacy:default:' || key, 'default', key, value, 'always', 0.70,
+			'legacy', '', '', 1, created_at, updated_at FROM user_memories
+			WHERE EXISTS (SELECT 1 FROM agent_profiles WHERE id = 'default')`,
+	}
+	for _, q := range statements {
+		if _, err := db.conn.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migration16 adds the per-agent seq counter the send path allocates message
+// sequence numbers from. Before this, NextSeq computed MAX(seq)+1 on every
+// insert — one full index scan per row written. The counter is initialised
+// from the current maximum so existing agents keep their numbering.
+func migration16(db *DB) error {
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS seq_counters (
+			agent_id TEXT PRIMARY KEY,
+			next_seq INTEGER NOT NULL DEFAULT 1
+		)`,
+		`INSERT OR IGNORE INTO seq_counters (agent_id, next_seq)
+			SELECT agent_id, MAX(seq) + 1 FROM messages GROUP BY agent_id`,
+	}
+	for _, q := range statements {
+		if _, err := db.conn.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migration17(db *DB) error {
+	stmt := `ALTER TABLE messages ADD COLUMN error_code TEXT NOT NULL DEFAULT ''`
+	if _, err := db.conn.Exec(stmt); err != nil {
+		if strings.Contains(err.Error(), "duplicate column name") {
+			return nil
+		}
+		return err
 	}
 	return nil
 }

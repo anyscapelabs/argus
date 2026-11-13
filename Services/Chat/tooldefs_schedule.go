@@ -10,7 +10,7 @@ var scheduleReminderToolDef = Protocol.ToolDef{
 	Description: "Create a one-time reminder the app fires on its own schedule, even if this chat is closed. " +
 		"Use for any single future request: \"remind me at 5\", \"tomorrow at 9 do X\", \"on Friday check Y\". " +
 		"Free, no approval. Call get_time_and_location first and compute an absolute local time. " +
-		"The prompt must be self-contained: it runs later, unattended, with nobody to ask.",
+		"The prompt must be a self-contained action to perform when it fires, without timing or scheduling language; it runs later unattended with nobody to ask.",
 	Schema: json.RawMessage(`{
 		"type": "object",
 		"properties": {
@@ -20,7 +20,7 @@ var scheduleReminderToolDef = Protocol.ToolDef{
 			},
 			"prompt": {
 				"type": "string",
-				"description": "The instruction to run at that time, self-contained, e.g. \"Remind the user their dentist appointment is in 30 minutes\""
+				"description": "Action to perform when it fires, with no timing/scheduling language, e.g. \"Tell the user their dentist appointment is in 30 minutes\""
 			},
 			"at": {
 				"type": "string",
@@ -35,7 +35,7 @@ var createRoutineToolDef = Protocol.ToolDef{
 	Name: "create_routine",
 	Description: "Create a recurring routine the app runs on its own schedule, even if this chat is closed. " +
 		"Use for anything repeating: \"every morning\", \"weekdays at 8:30\", \"every 2 hours\", \"mondays and Thursdays\". " +
-		"Free, no approval. Times are local wall clock. The prompt runs unattended: it must stand alone, " +
+		"Free, no approval. Times are local wall clock. The prompt is only the action for one occurrence, with no recurrence wording; it must stand alone and runs unattended, " +
 		"and if it needs the terminal the user must have granted Allow Always beforehand or the command is refused.",
 	Schema: json.RawMessage(`{
 		"type": "object",
@@ -46,7 +46,7 @@ var createRoutineToolDef = Protocol.ToolDef{
 			},
 			"prompt": {
 				"type": "string",
-				"description": "The instruction to run each time, self-contained"
+				"description": "Action for one occurrence, self-contained and without timing or recurrence wording"
 			},
 			"freq": {
 				"type": "string",

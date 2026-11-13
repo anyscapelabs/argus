@@ -36,20 +36,20 @@ func TestMCPServersReferencedFindsOnlyUsedServers(t *testing.T) {
 	}
 }
 
-// A request with no MCP usage in history carries the loader and nothing else:
-// a "hello" must not pay for 200+ integration schemas.
-func TestAttachToolsWithoutMCPUsageShipsLoaderOnly(t *testing.T) {
-	s := &Service{} // no MCP service: loader reports "not connected" at call time
+// Every request carries only the compact gateway. Static and integration
+// schemas are returned by search_tools only when the run needs them.
+func TestAttachToolsShipsCompactGatewayOnly(t *testing.T) {
+	s := &Service{}
 	req := Protocol.Request{}
-	// The capability probe needs a real adapter; openai-compat is generic.
 	s.attachTools(&req, &Protocol.Target{Family: Protocol.FamilyOpenAICompat}, nil)
-	if _, ok := toolNames(req.Tools)[mcpLoadToolName]; !ok {
-		t.Fatal("the loader must be in the tool list")
-	}
-	for name := range toolNames(req.Tools) {
-		if strings.Contains(name, "__") {
-			t.Fatalf("an integration schema rode along without being referenced: %s", name)
+	names := toolNames(req.Tools)
+	for _, name := range []string{"conversation_read", "web_search", "search_tools", "invoke_tool"} {
+		if !names[name] {
+			t.Errorf("gateway is missing %s", name)
 		}
+	}
+	if len(names) != 4 {
+		t.Fatalf("provider received %d tools instead of the four-tool gateway: %v", len(names), names)
 	}
 }
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Events } from '@wailsio/runtime'
 import { useQueryClient } from '@tanstack/react-query'
-import { respondMCPConnect, pendingMCPConnects, listIntegrations, registerMCPConnect, type MCPConnectRequestView, type MCPConnectState } from './api'
+import { respondMCPConnect, pendingMCPConnects, listIntegrations, registerMCPConnect, disconnectIntegration, type MCPConnectRequestView, type MCPConnectState } from './api'
 import { useQuery } from '@tanstack/react-query'
 
 // The connector flow: the pending sign-in card(s) the backend holds, their
@@ -169,5 +169,18 @@ export function useIntegrationConnect() {
     return next
   })
 
-  return { states, connect, clear }
+  const disconnect = async (serverId: string) => {
+    try {
+      await disconnectIntegration(serverId)
+      clear(serverId)
+      await qc.invalidateQueries({ queryKey: ['mcp', 'integrations'] })
+    } catch (err: any) {
+      setStates((cur) => ({
+        ...cur,
+        [serverId]: { state: 'failed', error: err?.message || 'Could not remove connector' },
+      }))
+    }
+  }
+
+  return { states, connect, clear, disconnect }
 }

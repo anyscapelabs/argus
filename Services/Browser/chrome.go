@@ -80,12 +80,17 @@ func findChrome() string {
 // browser experiment out of the user's real config, and a user with a small home
 // partition can point it somewhere roomier.
 const ProfileDirEnv = "ARGUS_BROWSER_PROFILE_DIR"
+const profileMarker = ".argus-browser-profile"
 
 // profileDir is the agent's own browser profile, next to the database.
 func profileDir() (string, error) {
 	if override := strings.TrimSpace(os.Getenv(ProfileDirEnv)); override != "" {
+		override = filepath.Join(override, profileDirName)
 		if err := os.MkdirAll(override, 0o700); err != nil {
 			return "", fmt.Errorf("browser: could not create the profile dir: %w", err)
+		}
+		if err := os.WriteFile(filepath.Join(override, profileMarker), []byte("argus browser profile\n"), 0o600); err != nil {
+			return "", fmt.Errorf("browser: could not mark the profile dir: %w", err)
 		}
 		return override, nil
 	}
@@ -96,6 +101,9 @@ func profileDir() (string, error) {
 	dir := filepath.Join(base, "argus", profileDirName)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("browser: could not create the profile dir: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, profileMarker), []byte("argus browser profile\n"), 0o600); err != nil {
+		return "", fmt.Errorf("browser: could not mark the profile dir: %w", err)
 	}
 	return dir, nil
 }
@@ -127,6 +135,9 @@ func removeProfile() error {
 	dir, err := profileDir()
 	if err != nil {
 		return err
+	}
+	if _, err := os.Stat(filepath.Join(dir, profileMarker)); err != nil {
+		return fmt.Errorf("browser: refusing to clear an unmarked profile directory")
 	}
 	if err := os.RemoveAll(dir); err != nil {
 		return fmt.Errorf("browser: could not clear the profile: %w", err)

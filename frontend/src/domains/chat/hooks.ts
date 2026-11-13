@@ -1,7 +1,9 @@
+import { useMemo } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
-import { sendMessage, sendMessageWithAttachments, getChat, getUsage } from './api'
+import { sendMessage, sendMessageWithAttachments, getChat, getUsage, setMessageReaction } from './api'
 import type { GetChatResult, ChatMessage } from '../../../bindings/github.com/anyscapelabs/argus/Services/Shared/models'
 import { dataOf, mediaTypeOf, type PendingAttachment } from '../uploads/api'
+import { messageReaction, patchMessageReaction, rollbackMessageReaction } from './reactions'
 
 export type SendPayload = {
   text: string
@@ -35,9 +37,10 @@ export function flattenHistory(data: InfiniteData<GetChatResult> | undefined): C
 
 export function useChatMessages(agentID: string) {
   const history = useChatHistory(agentID)
+  const messages = useMemo(() => flattenHistory(history.data), [history.data])
   return {
     ...history,
-    data: flattenHistory(history.data),
+    data: messages,
   }
 }
 
@@ -92,6 +95,33 @@ export function useSendMessage(agentID: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: messagesKey })
       qc.invalidateQueries({ queryKey: usageKey })
+    },
+  })
+}
+
+export function useSetMessageReaction(agentID: string) {
+  const qc = useQueryClient()
+  const queryKey = ['chat', agentID, 'history']
+  return useMutation({
+    mutationFn: ({ messageID, reaction }: { messageID: string; reaction: string }) =>
+      setMessageReaction(agentID, messageID, reaction),
+    onMutate: async ({ messageID, reaction }) => {
+      await qc.cancelQueries({ queryKey })
+      const current = qc.getQueryData<InfiniteData<GetChatResult>>(queryKey)
+      const previousReaction = messageReaction(current, messageID)
+      qc.setQueryData(queryKey, patchMessageReaction(current, messageID, reaction))
+      return { messageID, reaction, previousReaction }
+    },
+    onError: (_error, _variables, context) => {
+      if (!context) return
+      qc.setQueryData<InfiniteData<GetChatResult>>(queryKey, (current) =>
+        rollbackMessageReaction(current, context.messageID, context.reaction, context.previousReaction),
+      )
+    },
+    onSuccess: (result) => {
+      qc.setQueryData<InfiniteData<GetChatResult>>(queryKey, (current) =>
+        patchMessageReaction(current, result.message_id, result.reaction ?? ''),
+      )
     },
   })
 }

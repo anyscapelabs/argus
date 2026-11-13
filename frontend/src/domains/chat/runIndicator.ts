@@ -54,6 +54,8 @@ export function useRunIndicator(invalidate: (key: string[]) => void): RunIndicat
             // The query itself is noise here; the found sites speak instead.
             setSearchSources([])
             line.set('Searching the web', 'tool')
+          } else if (payload.tool === 'ask_user') {
+            line.set('Waiting for your answer', 'tool')
           } else if (isBrowser) {
             // The site is the interesting part and it is not known yet; the
             // tool_results event names it as soon as Chrome has answered.

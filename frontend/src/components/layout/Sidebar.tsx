@@ -7,6 +7,8 @@ import { CgArrowsScrollV } from 'react-icons/cg'
 import { useAccount } from '../../domains/account/hooks'
 import { useAgentProfile } from '../../domains/models/hooks'
 import { useChatMessages } from '../../domains/chat/hooks'
+import { voiceMessagePreview } from '../../lib/voice'
+import VoiceIcon from '../chat/VoiceIcon'
 import AgentListItem from './AgentListItem'
 
 type SidebarProps = {
@@ -33,7 +35,8 @@ export default function Sidebar({
   const [open, setOpen] = useState(false)
   const agentAvatar = '/argus-logo.svg'
   const lastMsg = messages.length ? messages[messages.length - 1] : null
-  const lastText = lastMsg?.text ?? ''
+  const lastIsVoice = lastMsg?.kind === 'voice'
+  const lastText = lastIsVoice ? voiceMessagePreview(lastMsg?.text ?? '') : (lastMsg?.text ?? '')
   const lastTime = lastMsg?.created_at ? new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
   const agentName = agentProfile?.agent_name || 'Argus'
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -98,6 +101,7 @@ export default function Sidebar({
           avatar={agentAvatar}
           name={agentName}
           lastMessage={lastText}
+          lastMessageIcon={lastIsVoice ? <VoiceIcon size={11} className="shrink-0" /> : undefined}
           time={lastTime}
           active={agentActive}
           onClick={onOpenChat}

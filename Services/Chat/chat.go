@@ -47,9 +47,15 @@ type Service struct {
 	cancels  map[string]context.CancelFunc
 	agentRun map[string]string // agentID -> runID
 
+	// liveSessions own the cancellable, serialized execution context behind the
+	// Live API's compact search_tools/invoke_tool gateway.
+	liveMu       sync.Mutex
+	liveSessions map[string]*liveToolSession
+
 	// takeovers is the browser human-takeover card state: one live card per
 	// agent, plus when a captcha was last asked about. See takeover.go.
 	takeoverStore Shared.InteractionStore[*userTakeover]
+	askUserStore  Shared.InteractionStore[*pendingUserQuestion]
 	captchaAskAt  map[string]time.Time
 	captchaMu     sync.Mutex
 
@@ -123,6 +129,7 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 // ServiceShutdown(ctx) variant is silently never called.
 func (s *Service) ServiceShutdown() error {
 	s.StopAll()
+	s.endAllLiveSessions()
 	if s.Browser != nil {
 		// Cancelling the runs above can leave a click mid-flight; by now it has
 		// returned, and Chrome must go with the app rather than outlive it.

@@ -1,59 +1,63 @@
-# Welcome to Your New Wails3 Project!
+# Argus Agent (desktop)
 
-Congratulations on generating your Wails3 application! This README will guide you through the next steps to get your project up and running.
+AI agent desktop app: chat with durable history, artifacts, voice, MCP tools
+and browser automation. Wails v3 (Go) backend + React 18 frontend.
 
-## Getting Started
+## Develop
 
-1. Navigate to your project directory in the terminal.
+Requirements: Go 1.25+, Node 24+, [`wails3`](https://v3.wails.io/).
 
-2. To run your application in development mode, use the following command:
+```sh
+# frontend
+cd frontend && npm install
 
-   ```
-   wails3 dev
-   ```
+# run the app with hot reload
+wails3 dev -config ./build/config.yml -port 9245
+```
 
-   This will start your application and enable hot-reloading for both frontend and backend changes.
+## Build / test
 
-3. To build your application for production, use:
+```sh
+wails3 build                     # production binary for the host OS
+go test $(go list ./... | grep -v build/ios)
+cd frontend && npm test          # vitest suite (also: task test:frontend)
+```
 
-   ```
-   wails3 build
-   ```
+## Architecture
 
-   This will create a production-ready executable in the `build` directory.
+- `frontend/` — React UI. Pairs with the backend over generated Wails
+  bindings (`frontend/bindings`, regenerated after Go signature changes with
+  `wails3 generate bindings`).
+- `Storage/` — SQLite store (WAL; one writer). Message history, artifacts,
+  memories, scheduled tasks, seq counters, etc.
+- `Services/` — domain services: chat (history builder, streaming), models,
+  account (pairing/entitlements), MCP, integrations, uploads, scheduler.
+- `Provider/` — the single embedded provider overlay (`argus-router`,
+  OpenAI-compatible) targeted at the Anyscape Gateway.
 
-## Exploring Wails3 Features
+## Pairing the agent
 
-Now that you have your project set up, it's time to explore the features that Wails3 offers:
+1. Create a service-account key in the Anyscape Gateway console
+   (Settings → Service Accounts).
+2. Paste it into the app's sign-in screen. The key is verified against the
+   gateway and stored in the OS keyring — never on disk in plaintext.
+3. The app works offline for up to 7 days on the last synced entitlement.
 
-1. **Check out the examples**: The best way to learn is by example. Visit the `examples` directory in the `v3/examples` directory to see various sample applications.
+## Configuration
 
-2. **Run an example**: To run any of the examples, navigate to the example's directory and use:
+- `frontend/.env`: `VITE_ANYSCAPE_GATEWAY_URL` — gateway origin the desktop
+  pairs with (default `http://localhost:8080`). `VITE_ARGUS_API_URL` is a
+  deprecated alias. **Build-time** — model traffic follows the gateway the
+  key paired against (persisted as the provider-config base-URL override at
+  pair time), not this file alone.
+- `ARGUS_LOAD_DOTENV=1` — opt-in: also loads `.env` files for local OAuth
+  client ids during development. Off in packaged builds.
 
-   ```
-   go run .
-   ```
+## Security model
 
-   Note: Some examples may be under development during the alpha phase.
-
-3. **Explore the documentation**: Visit the [Wails3 documentation](https://v3.wails.io/) for in-depth guides and API references.
-
-4. **Join the community**: Have questions or want to share your progress? Join the [Wails Discord](https://discord.gg/JDdSxwjhGf) or visit the [Wails discussions on GitHub](https://github.com/wailsapp/wails/discussions).
-
-## Project Structure
-
-Take a moment to familiarize yourself with your project structure:
-
-- `frontend/`: Contains your frontend code (HTML, CSS, JavaScript/TypeScript)
-- `main.go`: The entry point of your Go backend
-- `app.go`: Define your application structure and methods here
-- `wails.json`: Configuration file for your Wails project
-
-## Next Steps
-
-1. Modify the frontend in the `frontend/` directory to create your desired UI.
-2. Add backend functionality in `main.go`.
-3. Use `wails3 dev` to see your changes in real-time.
-4. When ready, build your application with `wails3 build`.
-
-Happy coding with Wails3! If you encounter any issues or have questions, don't hesitate to consult the documentation or reach out to the Wails community.
+- Keys never leave the OS keyring; the frontend only sees presence/status.
+- The gateway is the only model origin; per-plan allowlists are enforced
+  server-side (and fail closed).
+- Sign-out clears entitlements + provider override; pairing a *different*
+  account wipes account-scoped local data (chats, memories, artifacts) —
+  the previous tenant never leaks into the next.

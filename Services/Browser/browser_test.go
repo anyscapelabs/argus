@@ -359,7 +359,7 @@ func firstRef(s *Snapshot) int {
 
 func TestNeedsApprovalFreeVerbs(t *testing.T) {
 	buyer := element(1, 0, "button", "Buy now")
-	for _, action := range []string{"open", "read", "find", "text", "scroll", "back", "wait", "tabs", "screenshot", "reset", "hide", "show"} {
+	for _, action := range []string{"open", "read", "find", "text", "scroll", "back", "wait", "tabs", "screenshot", "hide", "show"} {
 		if required, why := NeedsApproval(action, "amazon.com", &buyer); required {
 			t.Errorf("%s should be free, got %q", action, why)
 		}
@@ -444,27 +444,21 @@ func TestNeedsApprovalUnknownVerbDefaultsToAsking(t *testing.T) {
 	}
 }
 
-// A script is the one verb that can do anything a click can without a control to
-// read, so it has to be judged on where it runs and what it names.
+// Arbitrary JavaScript can hide side effects behind computed property names and
+// indirect calls, so every script requires approval.
 func TestScriptRisk(t *testing.T) {
-	free := []struct{ host, script string }{
+	cases := []struct{ host, script string }{
 		{"news.ycombinator.com", "document.title"},
 		{"blog.example", "[...document.querySelectorAll('article h2')].map(h=>h.textContent)"},
 		{"docs.example", "window.scrollTo(0, 500)"},
 	}
-	for _, c := range free {
-		if required, why := ScriptRisk(c.host, c.script); required {
-			t.Errorf("reading on %s should be free: %q", c.host, why)
-		}
-	}
-
-	gated := []struct{ host, script string }{
+	cases = append(cases, []struct{ host, script string }{
 		{"mail.google.com", "document.querySelector('.inbox').textContent"},
 		{"paypal.com", "location.href"},
 		{"shop.example", "fetch('/checkout', {method:'POST'})"},
 		{"blog.example", "document.querySelector('button').click() // send the post"},
-	}
-	for _, c := range gated {
+	}...)
+	for _, c := range cases {
 		if required, why := ScriptRisk(c.host, c.script); !required {
 			t.Errorf("a script on %s must ask", c.host)
 		} else if !strings.Contains(why, c.host) {

@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Block, BlockType } from '../../../bindings/github.com/anyscapelabs/argus/Protocol/models'
@@ -6,6 +7,7 @@ type UserBubbleProps = {
   content?: string
   children?: string
   blocks?: Block[] | null
+  align?: 'left' | 'right'
   /** Extra class names for the bubble container. */
   className?: string
 }
@@ -25,10 +27,11 @@ function attachedFilename(text: string): string | null {
   return text.slice(attachMarker.length, end)
 }
 
-export default function UserBubble({
+function UserBubble({
   content,
   children,
   blocks,
+  align = 'right',
   className = '',
 }: UserBubbleProps) {
   const raw = content ?? children ?? ''
@@ -43,7 +46,7 @@ export default function UserBubble({
   const text = markerAt === -1 ? raw : raw.slice(0, markerAt).trim()
   return (
     <div
-      className={`ml-auto flex w-fit max-w-xl select-text flex-col gap-2 break-words rounded-xl border border-primary bg-secondary px-2 py-1 text-sm font-medium text-primary ${className}`}
+      className={`${align === 'left' ? 'mr-auto' : 'ml-auto'} flex w-fit max-w-xl select-text flex-col gap-2 break-words rounded-xl border border-primary bg-secondary px-2 py-1 text-sm font-medium text-primary ${className}`}
     >
       {images.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-1">
@@ -80,3 +83,5 @@ export default function UserBubble({
     </div>
   )
 }
+
+export default memo(UserBubble)

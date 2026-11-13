@@ -5,7 +5,7 @@ import (
 )
 
 // messageCols is the column list scanMessages expects, in scan order.
-const messageCols = `SELECT m.id, m.agent_id, m.seq, m.role, m.kind, m.blocks_json, m.text, m.status, m.error_message, m.stop_reason, m.model_ref, m.created_at, m.completed_at`
+const messageCols = `SELECT m.id, m.agent_id, m.seq, m.role, m.kind, m.blocks_json, m.text, m.status, m.error_message, m.error_code, m.stop_reason, m.model_ref, m.created_at, m.completed_at`
 
 // likeEscape neutralises the LIKE wildcards in a search word so "100%" or
 // "snake_case" match literally.

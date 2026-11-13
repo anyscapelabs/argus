@@ -157,11 +157,12 @@ func TestSaveFallsBackToTheDocumentsOwnTitle(t *testing.T) {
 		t.Errorf("title = %q, want the first heading", res.Artifact.Title)
 	}
 	res := write(db, "", "Just prose, no heading.\n", false)
-	if res.Artifact.Title != "Untitled document" {
-		t.Errorf("title = %q, want the placeholder", res.Artifact.Title)
+	if !res.Rejected || res.Artifact.ID != "" {
+		t.Errorf("headingless document was stored: %+v", res)
 	}
 	// A rewrite that names no title takes the document's own new heading.
-	kept := write(db, res.Artifact.ID, "# Renamed\n\nText.\n", false)
+	first := write(db, "", "# Original\n\nText.\n", false)
+	kept := write(db, first.Artifact.ID, "# Renamed\n\nText.\n", false)
 	if kept.Artifact.Title != "Renamed" {
 		t.Errorf("title = %q, want the new heading to take over", kept.Artifact.Title)
 	}
@@ -170,7 +171,7 @@ func TestSaveFallsBackToTheDocumentsOwnTitle(t *testing.T) {
 func TestSaveWarnsButStillStores(t *testing.T) {
 	db := openTempDB(t)
 
-	res := write(db, "", "See ![logo](https://example.com/logo.png) for the brand.\n", false)
+	res := write(db, "", "# Brand\n\nSee ![logo](https://example.com/logo.png) for the brand.\n", false)
 	if res.Error != nil || res.Rejected {
 		t.Fatalf("a warning must not block a write: %+v", res)
 	}

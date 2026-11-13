@@ -163,7 +163,7 @@ func TestErrorReplyCountsAsAnAnswer(t *testing.T) {
 	}
 	// The failure arrives the way the send path writes it: the reserved row is
 	// finalised, and error_message is only ever set there.
-	if err := db.FinalizeMessage("e2", []Protocol.Block{}, "", "error", "", "", "provider returned 429", 11); err != nil {
+	if err := db.FinalizeMessage("e2", []Protocol.Block{}, "", "error", "", "", "provider returned 429", "", 11); err != nil {
 		t.Fatalf("finalize: %v", err)
 	}
 	n, err := db.UnansweredTurns("default")

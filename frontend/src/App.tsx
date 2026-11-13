@@ -12,7 +12,8 @@ const Chat = lazy(() => import('./pages/Chat'))
 const Integrations = lazy(() => import('./pages/Integrations'))
 const ArtifactViewer = lazy(() => import('./pages/ArtifactViewer'))
 import { getChat } from './domains/chat/api'
-import { usePairing } from './domains/account/hooks'
+import { usePairing, useAccount } from './domains/account/hooks'
+import { FiWifiOff } from 'react-icons/fi'
 import Spinner from './components/Spinner'
 
 // Blank black canvas.
@@ -35,6 +36,7 @@ export default function App() {
   // later states emerge from this one source of truth, so every route read of
   // `pairing` stays decisive.
   const { pairing, leave } = usePairing(true)
+  const { data: account } = useAccount()
   const [page, setPage] = useState<'onboarding' | 'signin' | 'home' | 'chat' | 'settings' | 'integrations'>('onboarding');
   // Which document is open full screen, by id. Not a boolean: the chat card, the
   // panel list and the viewer all need to agree on *which* document the user
@@ -43,7 +45,12 @@ export default function App() {
   const [sidebarMode, setSidebarMode] = useState<'main' | 'settings'>('main');
   const [settingsReturn, setSettingsReturn] = useState<'home' | 'chat'>('home');
   const [integrationsReturn, setIntegrationsReturn] = useState<'home' | 'chat'>('chat');
-  const [pendingSend, setPendingSend] = useState<{ id: number; text: string; modelRef: string | null } | null>(null);
+  const [pendingSend, setPendingSend] = useState<{
+    id: number
+    text: string
+    modelRef: string | null
+    attachments: { id: string; filename: string; kind: string; dataUrl?: string }[]
+  } | null>(null)
 
   // Boot: hold the shell on the black canvas until the keyring check settles.
   // A pairing that exists but no longer proves (revoked key, or the backend
@@ -135,6 +142,15 @@ export default function App() {
       ref={canvasRef}
       className="flex min-h-dvh w-full flex-col bg-primary text-grey-100"
     >
+      {account?.offline && (
+        <div
+          role="status"
+          className="flex shrink-0 items-center justify-center gap-2 bg-yellow-500/15 px-3 py-1 text-xs text-yellow-200"
+        >
+          <FiWifiOff size={12} aria-hidden="true" />
+          Offline — showing your last synced plan and identity. Changes sync when the backend is reachable.
+        </div>
+      )}
       <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Spinner /></div>}>
         {page === 'onboarding' ? (
         <>
@@ -157,8 +173,8 @@ export default function App() {
               setPage('settings')
             }
           }} onOpenIntegrations={() => { setIntegrationsReturn('home'); setPage('integrations'); setSidebarMode('main') }} onOpenChat={() => setPage('chat')} agentActive={false} onSignOut={() => { void leave.mutateAsync() }} />
-          <Home onSend={(text: string, modelRef: string | null) => {
-            setPendingSend({ id: Date.now(), text, modelRef });
+          <Home onSend={(text: string, modelRef: string | null, attachments: { id: string; filename: string; kind: string; dataUrl?: string }[]) => {
+            setPendingSend({ id: Date.now(), text, modelRef, attachments: attachments ?? [] });
             setPage('chat');
           }} onOpenArtifact={(id) => setOpenArtifact(id)} />
           {artifactOverlay}

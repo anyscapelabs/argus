@@ -9,6 +9,7 @@ void init({ data })
 
 const REACTION_EMOJIS = [
   { id: '+1', label: 'Thumbs up', native: '👍' },
+  { id: '-1', label: 'Thumbs down', native: '👎' },
   { id: 'heart', label: 'Heart', native: '❤️' },
   { id: 'joy', label: 'Laughing', native: '😂' },
   { id: 'open_mouth', label: 'Surprised', native: '😮' },
@@ -22,9 +23,10 @@ type ReactionPickerProps = {
   reaction: string | null
   onReactionChange: (emoji: string | null) => void
   onOpenChange?: (open: boolean) => void
+  disabled?: boolean
 }
 
-export function ReactionPicker({ reaction, onReactionChange, onOpenChange }: ReactionPickerProps) {
+export function ReactionPicker({ reaction, onReactionChange, onOpenChange, disabled = false }: ReactionPickerProps) {
   const [open, setOpen] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -57,6 +59,7 @@ export function ReactionPicker({ reaction, onReactionChange, onOpenChange }: Rea
     <div ref={ref} className="relative">
       <button
         type="button"
+        disabled={disabled}
         onClick={() => setOpenState(!open)}
         aria-label="React"
         aria-expanded={open}
@@ -73,6 +76,7 @@ export function ReactionPicker({ reaction, onReactionChange, onOpenChange }: Rea
                 <button
                   key={id}
                   type="button"
+                  disabled={disabled}
                   onClick={() => selectReaction(native)}
                   aria-label={active ? `Remove ${label} reaction` : `React with ${label}`}
                   aria-pressed={active}
@@ -86,6 +90,7 @@ export function ReactionPicker({ reaction, onReactionChange, onOpenChange }: Rea
             })}
             <button
               type="button"
+              disabled={disabled}
               onClick={() => setShowEmojiPicker(true)}
               aria-label="More reactions"
               className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-secondary transition-colors hover:bg-hover-secondary hover:text-primary"

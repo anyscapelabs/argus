@@ -21,6 +21,7 @@ type Message struct {
 	Text         string
 	Status       string
 	ErrorMessage string
+	ErrorCode    string
 	StopReason   string
 	ModelRef     string
 	CreatedAt    int64
@@ -40,6 +41,15 @@ const MessageKindSteering = "steering"
 // which is why the send path that writes it marks the run unattended.
 const MessageKindScheduled = "scheduled"
 
+// MessageKindToolRound marks intermediate assistant tool calls and their result
+// carriers. They remain model history but never become loose chat bubbles; the
+// final assistant row is the only user-facing result of a turn.
+const MessageKindToolRound = "tool_round"
+
+// MessageKindFileWrite is a sanitized, visible projection of a successful
+// write_file result. It carries metadata only, never the written content.
+const MessageKindFileWrite = "file_write"
+
 func (m Message) Blocks() []Protocol.Block {
 	var blocks []Protocol.Block
 	if m.BlocksJSON == "" {
@@ -49,7 +59,51 @@ func (m Message) Blocks() []Protocol.Block {
 	return blocks
 }
 
+// NextSeq allocates the next sequence number for an agent from the counter
+// table (migration16) — one atomic read-modify-write per allocation instead
+// of a MAX() scan of the messages index on every insert. The counter is
+// initialised lazily for agents that predate the table.
+//
+// The handed-out seq is verified unoccupied before it is returned. A counter
+// can fall behind reality — a database written before the counter existed
+// under a MAX()+1 scheme, or a crash between allocation and insert — and an
+// occupied handout would surface as a UNIQUE constraint failure in the
+// caller's insert. Skipping past occupied values heals that drift in place.
 func (db *DB) NextSeq(agentID string) (int, error) {
+	if _, err := db.conn.Exec(
+		`INSERT OR IGNORE INTO seq_counters (agent_id, next_seq)
+		 SELECT ?, COALESCE(MAX(seq), 0) + 1 FROM messages WHERE agent_id = ?`,
+		agentID, agentID,
+	); err != nil {
+		// A pre-migration database would not have the table; fall back to
+		// the old MAX+1 shape rather than fail the send.
+		return nextSeqFallback(db, agentID)
+	}
+	for {
+		var seq int
+		err := db.conn.QueryRow(
+			`UPDATE seq_counters SET next_seq = next_seq + 1 WHERE agent_id = ? RETURNING next_seq - 1`,
+			agentID,
+		).Scan(&seq)
+		if err != nil {
+			return 0, fmt.Errorf("storage: next seq failed: %w", err)
+		}
+		var taken bool
+		if err := db.conn.QueryRow(
+			`SELECT EXISTS(SELECT 1 FROM messages WHERE agent_id = ? AND seq = ?)`,
+			agentID, seq,
+		).Scan(&taken); err != nil {
+			return 0, fmt.Errorf("storage: next seq failed: %w", err)
+		}
+		if !taken {
+			return seq, nil
+		}
+		// Occupied: the counter is behind the rows. Bump past and retry;
+		// every pass consumes one stale value, so this terminates.
+	}
+}
+
+func nextSeqFallback(db *DB, agentID string) (int, error) {
 	row := db.conn.QueryRow(`SELECT COALESCE(MAX(seq), 0) + 1 FROM messages WHERE agent_id = ?`, agentID)
 	var seq int
 	if err := row.Scan(&seq); err != nil {
@@ -76,7 +130,7 @@ func (db *DB) InsertMessage(m Message) error {
 	return nil
 }
 
-func (db *DB) FinalizeMessage(id string, blocks []Protocol.Block, text, status, stopReason, modelRef, errorMessage string, completedAt int64) error {
+func (db *DB) FinalizeMessage(id string, blocks []Protocol.Block, text, status, stopReason, modelRef, errorMessage, errorCode string, completedAt int64) error {
 	blocksJSON, err := json.Marshal(blocks)
 	if err != nil {
 		return fmt.Errorf("storage: message marshal failed: %w", err)
@@ -85,10 +139,10 @@ func (db *DB) FinalizeMessage(id string, blocks []Protocol.Block, text, status, 
 		completedAt = nowUnixMs()
 	}
 	_, err = db.conn.Exec(
-		`UPDATE messages SET blocks_json = ?, text = ?, status = ?, stop_reason = ?, model_ref = ?, error_message = ?, completed_at = ?
+		`UPDATE messages SET blocks_json = ?, text = ?, status = ?, stop_reason = ?, model_ref = ?, error_message = ?, error_code = ?, completed_at = ?
 		 WHERE id = ?`,
 		string(blocksJSON), text, status, nullString(stopReason), nullString(modelRef),
-		shortError(errorMessage), completedAt, id,
+		shortError(errorMessage), errorCode, completedAt, id,
 	)
 	if err != nil {
 		return fmt.Errorf("storage: message finalize failed: %w", err)
@@ -142,10 +196,18 @@ func (db *DB) UpdateMessageStatus(id, status string) error {
 // reserved reply row behind the tool-round rows written during the run, so
 // history replays in real execution order.
 func (db *DB) ReseqMessage(id string, seq int) error {
-	_, err := db.conn.Exec(`UPDATE messages SET seq = ? WHERE id = ?`, seq, id)
-	if err != nil {
+	if _, err := db.conn.Exec(`UPDATE messages SET seq = ? WHERE id = ?`, seq, id); err != nil {
 		return fmt.Errorf("storage: message reseq failed: %w", err)
 	}
+	// Keep the seq counter ahead of any relocated row, so an allocation
+	// cannot collide with a message that moved up.
+	_, _ = db.conn.Exec(
+		`INSERT INTO seq_counters (agent_id, next_seq)
+			SELECT agent_id, ? FROM messages WHERE id = ?
+		ON CONFLICT(agent_id) DO UPDATE
+		SET next_seq = MAX(seq_counters.next_seq, excluded.next_seq)`,
+		seq+1, id,
+	)
 	return nil
 }
 
@@ -153,12 +215,12 @@ func (db *DB) ReseqMessage(id string, seq int) error {
 // text for a notification body after a scheduled run finishes.
 func (db *DB) GetMessage(id string) (Message, bool, error) {
 	row := db.conn.QueryRow(
-		`SELECT id, agent_id, seq, role, kind, blocks_json, text, status, error_message, stop_reason, model_ref, created_at, completed_at
+		`SELECT id, agent_id, seq, role, kind, blocks_json, text, status, error_message, error_code, stop_reason, model_ref, created_at, completed_at
 		 FROM messages WHERE id = ?`, id)
 	var m Message
-	var errorMessage, stopReason, modelRef sql.NullString
+	var errorMessage, errorCode, stopReason, modelRef sql.NullString
 	var completedAt sql.NullInt64
-	err := row.Scan(&m.ID, &m.AgentID, &m.Seq, &m.Role, &m.Kind, &m.BlocksJSON, &m.Text, &m.Status, &errorMessage, &stopReason, &modelRef, &m.CreatedAt, &completedAt)
+	err := row.Scan(&m.ID, &m.AgentID, &m.Seq, &m.Role, &m.Kind, &m.BlocksJSON, &m.Text, &m.Status, &errorMessage, &errorCode, &stopReason, &modelRef, &m.CreatedAt, &completedAt)
 	if err == sql.ErrNoRows {
 		return Message{}, false, nil
 	}
@@ -166,6 +228,7 @@ func (db *DB) GetMessage(id string) (Message, bool, error) {
 		return Message{}, false, fmt.Errorf("storage: message get failed: %w", err)
 	}
 	m.ErrorMessage = errorMessage.String
+	m.ErrorCode = errorCode.String
 	m.StopReason = stopReason.String
 	m.ModelRef = modelRef.String
 	if completedAt.Valid {
@@ -226,9 +289,9 @@ func (db *DB) listStmt(agentID string, beforeSeq, limit int, visibleOnly bool) (
 		limit = 100
 	}
 	visible := `
-	  AND m.kind = ''
-	  AND NOT (m.role = 'user' AND TRIM(m.text) = '')
-	  AND NOT (m.role = 'assistant' AND m.status <> 'streaming'
+	  AND (m.kind = '' OR m.kind = 'voice' OR m.kind = 'file_write')
+	  AND NOT (m.role = 'user' AND m.kind = '' AND TRIM(m.text) = '')
+	  AND NOT (m.role = 'assistant' AND m.kind = '' AND m.status <> 'streaming'
 	           AND TRIM(COALESCE(m.text, '')) = '' AND TRIM(COALESCE(m.error_message, '')) = '')`
 	if !visibleOnly {
 		visible = ""
@@ -240,7 +303,7 @@ func (db *DB) listStmt(agentID string, beforeSeq, limit int, visibleOnly bool) (
 		args = append(args, beforeSeq)
 	}
 	args = append(args, limit)
-	stmt := `SELECT m.id, m.agent_id, m.seq, m.role, m.kind, m.blocks_json, m.text, m.status, m.error_message, m.stop_reason, m.model_ref, m.created_at, m.completed_at
+	stmt := `SELECT m.id, m.agent_id, m.seq, m.role, m.kind, m.blocks_json, m.text, m.status, m.error_message, m.error_code, m.stop_reason, m.model_ref, m.created_at, m.completed_at
 		 FROM messages m
 		 WHERE m.agent_id = ?` + cursor + visible + `
 		 ORDER BY m.seq DESC LIMIT ?`
@@ -256,12 +319,13 @@ func scanMessages(rows *sql.Rows, err error) ([]Message, error) {
 	var out []Message
 	for rows.Next() {
 		var m Message
-		var errorMessage, stopReason, modelRef sql.NullString
+		var errorMessage, errorCode, stopReason, modelRef sql.NullString
 		var completedAt sql.NullInt64
-		if err := rows.Scan(&m.ID, &m.AgentID, &m.Seq, &m.Role, &m.Kind, &m.BlocksJSON, &m.Text, &m.Status, &errorMessage, &stopReason, &modelRef, &m.CreatedAt, &completedAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.AgentID, &m.Seq, &m.Role, &m.Kind, &m.BlocksJSON, &m.Text, &m.Status, &errorMessage, &errorCode, &stopReason, &modelRef, &m.CreatedAt, &completedAt); err != nil {
 			return nil, fmt.Errorf("storage: message scan failed: %w", err)
 		}
 		m.ErrorMessage = errorMessage.String
+		m.ErrorCode = errorCode.String
 		m.StopReason = stopReason.String
 		m.ModelRef = modelRef.String
 		if completedAt.Valid {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/anyscapelabs/argus/Protocol"
@@ -14,7 +13,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *Service) runTurn(runID string, ctx context.Context, cancel context.CancelFunc, agentID, assistantID, modelRef string, req Protocol.Request, target *Protocol.Target, profile Storage.AgentProfile, mr Storage.ModelRequest) {
+func (s *Service) runTurn(runID string, ctx context.Context, cancel context.CancelFunc, agentID, assistantID, modelRef, internalKind string, req Protocol.Request, target *Protocol.Target, profile Storage.AgentProfile, mr Storage.ModelRequest) {
 	defer cancel()
 	trace := &Router.Trace{}
 	total := Protocol.Usage{}
@@ -26,6 +25,7 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	// the turn's visible text is checked against the stored documents so a model
 	// that pastes the document into the chat as well cannot leak it.
 	wroteArtifact := false
+	discoveredTools := map[string]bool{}
 
 	// runModelTurn asks the model for one turn and re-asks on retryable
 	// provider failures. The request is stateless, so a retry simply re-runs
@@ -70,32 +70,27 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 		// families translate back into their own wire format.
 		result.Message = dropUnnamedCalls(result.Message)
 		req.Messages = append(req.Messages, result.Message)
-		loadedMCP := map[string]bool{}
 		roundResults := make([]Protocol.Block, 0, len(calls))
 		for _, call := range calls {
-			if call.Name == writeArtifactToolDef.Name {
+			innerName := call.Name
+			var block Protocol.Block
+			if call.Name == liveSearchToolsDef.Name || call.Name == liveInvokeToolDef.Name {
+				block, innerName = s.runTypedGatewayTool(ctx, runID, agentID, profile.AgentName, discoveredTools, call)
+			} else {
+				block = s.runTool(ctx, runID, agentID, profile.AgentName, call)
+			}
+			if !block.IsError && (innerName == writeArtifactToolDef.Name || innerName == createSlidesToolDef.Name) {
 				wroteArtifact = true
 			}
-			if call.Name == mcpLoadToolName {
-				serverID, defs, block := s.runMCPLoad(call, loadedMCP)
-				roundResults = append(roundResults, block)
-				// The schemas belong to the next model round, not this
-				// one; a repeat load must not stack a second copy.
-				if len(defs) > 0 && !loadedMCP[serverID] {
-					loadedMCP[serverID] = true
-					req.Tools = append(req.Tools, defs...)
-				}
-				continue
-			}
-			roundResults = append(roundResults, s.runTool(ctx, runID, agentID, profile.AgentName, call))
+			roundResults = append(roundResults, block)
 		}
 		if len(roundResults) > 0 {
 			req.Messages = append(req.Messages, Protocol.Message{Role: Protocol.RoleUser, Blocks: roundResults})
-			persisted := result.Message
+			persisted := redactPersistedToolInputs(result.Message)
 			if wroteArtifact {
 				persisted.Blocks, _ = s.withoutArtifactEcho(agentID, mr.StartedAt, persisted.Blocks, "round")
 			}
-			s.persistRound(agentID, modelRef, persisted, roundResults)
+			s.persistRound(agentID, modelRef, internalKind, persisted, roundResults)
 		}
 		rounds++
 	}
@@ -153,14 +148,11 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	}
 
 	blocks := stripToolUses(result.Message.Blocks)
-	if wroteArtifact && msgStatus == "complete" {
-		var dropped int
-		blocks, dropped = s.withoutArtifactEcho(agentID, mr.StartedAt, blocks, "reply")
-		// The reply was only the document. Leave one line so the turn does not end
-		// on a card with no words, which GetChat would otherwise hide as empty.
-		if dropped > 0 && strings.TrimSpace(flattenText(blocks)) == "" {
-			blocks = append(blocks, Protocol.Block{Type: Protocol.BlockText, Text: artifactEchoFallback})
-		}
+	if wroteArtifact {
+		// The artifact card is the document's delivery surface. A generated line
+		// is the only reliable boundary: fuzzy matching cannot catch every
+		// reformatted or earlier-round copy of model-authored content.
+		blocks = []Protocol.Block{{Type: Protocol.BlockText, Text: artifactEchoFallback}}
 	}
 	text := flattenText(blocks)
 	// The reply row was reserved before any round existed; move it behind
@@ -177,10 +169,12 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 		stopReason = result.Stop.Raw
 	}
 	errorMessage := ""
+	errorCode := ""
 	if result.Error != nil {
 		errorMessage = result.Error.Message
+		errorCode = result.Error.Code
 	}
-	if err := s.Core.DB.FinalizeMessage(assistantID, blocks, text, msgStatus, stopReason, modelRef, errorMessage, nowUnixMs()); err != nil {
+	if err := s.Core.DB.FinalizeMessage(assistantID, blocks, text, msgStatus, stopReason, modelRef, errorMessage, errorCode, nowUnixMs()); err != nil {
 		log.Printf("chat: could not finalize message %s: %v", assistantID, err)
 	}
 
@@ -255,14 +249,25 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 // results. Carriers have no visible text and are hidden by GetChat, but
 // buildHistory replays them, which is exactly what makes past actions visible
 // to future turns.
-func (s *Service) persistRound(agentID, modelRef string, assistantMsg Protocol.Message, results []Protocol.Block) {
+func (s *Service) persistRound(agentID, modelRef, internalKind string, assistantMsg Protocol.Message, results []Protocol.Block) {
 	aid, _ := uuid.NewV7()
 	uid, _ := uuid.NewV7()
+	roundKind := internalKind
+	if roundKind == "" {
+		roundKind = Storage.MessageKindToolRound
+	}
+	carrierKind := roundKind
+	for _, block := range results {
+		if !block.IsError && block.FileWrite != nil {
+			carrierKind = Storage.MessageKindFileWrite
+			break
+		}
+	}
 	rows := []Storage.Message{
-		{ID: aid.String(), AgentID: agentID, Role: "assistant",
+		{ID: aid.String(), AgentID: agentID, Role: "assistant", Kind: roundKind,
 			BlocksJSON: mustMarshal(assistantMsg.Blocks), Text: flattenText(assistantMsg.Blocks),
 			Status: "complete", ModelRef: modelRef, CreatedAt: nowUnixMs(), CompletedAt: nowUnixMs()},
-		{ID: uid.String(), AgentID: agentID, Role: "user",
+		{ID: uid.String(), AgentID: agentID, Role: "user", Kind: carrierKind,
 			BlocksJSON: mustMarshal(results), Text: "",
 			Status: "complete", CreatedAt: nowUnixMs(), CompletedAt: nowUnixMs()},
 	}
@@ -277,7 +282,6 @@ func (s *Service) persistRound(agentID, modelRef string, assistantMsg Protocol.M
 			log.Printf("chat: round persist failed for agent %s: %v", agentID, err)
 			return
 		}
-		s.Core.EmitEvent(Shared.EventChatMessage, map[string]any{"agent_id": agentID, "message_id": row.ID})
 	}
 }
 

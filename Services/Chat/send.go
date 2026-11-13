@@ -33,7 +33,7 @@ const wrapUpDirective = "You have reached the tool-round limit for this run. Do 
 	"Tell the user plainly what you already did, what you learned, and what could not be finished."
 
 func (s *Service) Send(agentID, text string) Shared.SendResult {
-	return s.send(agentID, text, nil, false, "")
+	return s.send(agentID, text, nil, false, "", nil)
 }
 
 // SendWithAttachments starts a turn the way Send does, but with uploaded files
@@ -42,7 +42,7 @@ func (s *Service) Send(agentID, text string) Shared.SendResult {
 // missing or unknown id fails the send rather than being silently dropped, so
 // the frontend cannot think a file was attached when it was not.
 func (s *Service) SendWithAttachments(agentID, text string, attachmentIDs []string) Shared.SendResult {
-	return s.send(agentID, text, attachmentIDs, false, "")
+	return s.send(agentID, text, attachmentIDs, false, "", nil)
 }
 
 // SendScheduledWake starts the turn a scheduled task's fire produces. It is
@@ -51,8 +51,8 @@ func (s *Service) SendWithAttachments(agentID, text string, attachmentIDs []stri
 // steering row — and the run is unattended, so a routine at 7am on a desk with
 // no one watching still works. The wake text the scheduler passes is
 // phrased as the job description it is, not as something a person said.
-func (s *Service) SendScheduledWake(agentID, text string) Shared.SendResult {
-	return s.send(agentID, text, nil, true, Storage.MessageKindScheduled)
+func (s *Service) SendScheduledWake(agentID, text string, prepared func(Shared.SendResult)) Shared.SendResult {
+	return s.send(agentID, text, nil, true, Storage.MessageKindScheduled, prepared)
 }
 
 // Steer starts a run on a row the person did not type. The connector uses it
@@ -65,14 +65,14 @@ func (s *Service) SendScheduledWake(agentID, text string) Shared.SendResult {
 // It is deliberately not exposed to the frontend: nothing but the app's own
 // services should be able to speak as the user.
 func (s *Service) Steer(agentID, text string) Shared.SendResult {
-	return s.send(agentID, text, nil, false, Storage.MessageKindSteering)
+	return s.send(agentID, text, nil, false, Storage.MessageKindSteering, nil)
 }
 
 // unattended drives the permission gate; kind drives the row's visibility.
 // Only "", Storage.MessageKindSteering and Storage.MessageKindScheduled are
 // written today. attachmentIDs are uploaded files to fold into the user
 // message; images become vision blocks, documents become extracted text.
-func (s *Service) send(agentID, text string, attachmentIDs []string, unattended bool, kind string) Shared.SendResult {
+func (s *Service) send(agentID, text string, attachmentIDs []string, unattended bool, kind string, prepared func(Shared.SendResult)) Shared.SendResult {
 	log.Printf("Send called agent=%s unattended=%v kind=%s", agentID, unattended, kind)
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.SendResult{Error: aerr}
@@ -160,13 +160,20 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeBadInput, terr.Error())}
 	}
 
-	// Everything above is now validated: write the message rows.
+	// Everything above is now validated: write the message rows. Both rows
+	// allocate from the counter — deriving the assistant seq as userSeq+1
+	// writes a seq the counter still believes is free, and the next
+	// allocation collides on the (agent_id, seq) unique index.
 	userSeq, serr := s.Core.DB.NextSeq(agentID)
 	if serr != nil {
 		release()
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, serr.Error())}
 	}
-	assistantSeq := userSeq + 1
+	assistantSeq, aserr := s.Core.DB.NextSeq(agentID)
+	if aserr != nil {
+		release()
+		return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, aserr.Error())}
+	}
 
 	uid, _ := uuid.NewV7()
 	userID := uid.String()
@@ -223,7 +230,16 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	// Only a short recent window is replayed; anything older is reached through
 	// conversation_read. Every model the router allows can call tools, so there
 	// is no long-replay fallback.
-	history := s.buildHistory(agentID, userSeq, s.historyBudgetTokens(profile.ModelRef, providerID, modelID), recentHistoryMessages)
+	memorySelection, merr := Memory.Select(s.Core.DB, agentID, text, 500, 8, false)
+	if merr != nil {
+		log.Printf("chat: memory selection failed: %v", merr)
+	}
+	historyBudget := s.historyBudgetTokens(profile.ModelRef, providerID, modelID) - int64(memorySelection.EstimatedTokens)
+	if historyBudget < 1000 {
+		historyBudget = 1000
+	}
+	history := s.buildHistory(agentID, userSeq, historyBudget, recentHistoryMessages)
+	history = prependMemoryContext(history, memorySelection)
 	// Drop image blocks for a model that cannot see them, so a vision-only
 	// attachment never becomes a wire-format error on a text-only model.
 	history = scrubImagesForNonVision(history, &target)
@@ -240,10 +256,18 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	// behind the loader, so a request costs schemas for one integration at
 	// most instead of all of them.
 	withTools := s.attachTools(&req, &target, mcpServersReferenced(history, s.connectedServerIDs()))
+	scheduledFire := kind == Storage.MessageKindScheduled
+	if scheduledFire {
+		req.Tools = withoutScheduleCreationTools(req.Tools)
+	}
 	sysPrompt := systemPromptFor(profile, withTools)
-	// Durable facts the agent saved earlier, re-read every run.
-	if mem := Memory.PromptBlock(s.Core.DB, withTools); mem != "" {
-		sysPrompt += mem
+	if scheduledFire {
+		sysPrompt += "\n## Active background task\nThis turn was started internally by a reminder or routine that is due now. " +
+			"Execute its stored instruction once and return only the user-facing result. " +
+			"Do not create, change, or repeat any schedule; schedule creation tools are disabled for this turn.\n"
+	}
+	if learned := Memory.BehaviorPrompt(s.Core.DB, agentID); learned != "" {
+		sysPrompt += learned
 	}
 	// Timezone and the approximate location — resolved fresh per send so
 	// dates and local reasoning stay correct.
@@ -289,6 +313,18 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 		release()
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
+	if len(memorySelection.Items) > 0 {
+		exposures := make([]Storage.MemoryExposure, 0, len(memorySelection.Items))
+		for i, selected := range memorySelection.Items {
+			exposures = append(exposures, Storage.MemoryExposure{
+				MemoryID: selected.Memory.ID, MemoryRevision: selected.Memory.Revision,
+				Position: i, Score: selected.Score, EstimatedTokens: selected.EstimatedTokens,
+			})
+		}
+		if err := s.Core.DB.RecordMemoryExposures(runID, exposures); err != nil {
+			log.Printf("chat: memory exposure recording failed: %v", err)
+		}
+	}
 
 	s.mu.Lock()
 	if s.cancels == nil {
@@ -299,15 +335,34 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	if unattended {
 		ctx = Shared.WithUnattended(ctx)
 	}
+	if scheduledFire {
+		ctx = Shared.WithScheduledFire(ctx)
+	}
 	s.cancels[runID] = cancel
 	s.mu.Unlock()
 
-	go s.runTurn(runID, ctx, cancel, agentID, assistantID, profile.ModelRef, req, &target, profile, mr)
+	started := Shared.SendResult{Ok: true, RunID: runID, UserMessageID: userID, AssistantMessageID: assistantID}
+	if prepared != nil {
+		prepared(started)
+	}
+	s.Core.EmitEvent(Shared.EventChatRunStarted, map[string]any{"agent_id": agentID, "run_id": runID})
+	go s.runTurn(runID, ctx, cancel, agentID, assistantID, profile.ModelRef, kind, req, &target, profile, mr)
 
 	s.Core.EmitEvent(Shared.EventChatMessage, map[string]any{"agent_id": agentID, "message_id": userID})
 	s.Core.EmitEvent(Shared.EventChatMessage, map[string]any{"agent_id": agentID, "message_id": assistantID})
 
-	return Shared.SendResult{Ok: true, RunID: runID, UserMessageID: userID, AssistantMessageID: assistantID}
+	return started
+}
+
+func withoutScheduleCreationTools(tools []Protocol.ToolDef) []Protocol.ToolDef {
+	out := make([]Protocol.ToolDef, 0, len(tools))
+	for _, tool := range tools {
+		if tool.Name == scheduleReminderToolDef.Name || tool.Name == createRoutineToolDef.Name {
+			continue
+		}
+		out = append(out, tool)
+	}
+	return out
 }
 
 func stripToolUses(blocks []Protocol.Block) []Protocol.Block {

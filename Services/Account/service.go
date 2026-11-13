@@ -73,6 +73,10 @@ func (s *Service) DeleteKey() Shared.SaveAccountKeyResult {
 	}
 	if s.Core != nil && s.Core.DB != nil {
 		_ = s.Core.DB.DeleteAccountEntitlements()
+		// The provider-config row doubles as the "where model traffic goes"
+		// override written at pairing time (D5); clearing it reverts the
+		// backend to the overlay's default until the next pair.
+		_ = s.Core.DB.RemoveProviderConfig(Shared.RouterProviderID)
 	}
 	return Shared.SaveAccountKeyResult{Ok: true}
 }
@@ -120,6 +124,10 @@ func (s *Service) Entitlements(serverURL string) Shared.EntitlementsView {
 			return Shared.EntitlementsView{}, false
 		}
 		view.Offline = true
+		// The offline path still wants model traffic at the paired backend —
+		// the sign-out may have cleared the override, but the pairing key is
+		// still in the keyring and the cached tenant is still valid.
+		_ = s.saveProviderOverride(serverURL)
 		return Shared.EntitlementsView{Account: &view}, true
 	}
 
@@ -202,6 +210,15 @@ func (s *Service) Entitlements(serverURL string) Shared.EntitlementsView {
 		}
 	}
 	view.Offline = false
+
+	// Isolate account tenants before anything else: if this key belongs to a
+	// different account than the one that last paired on this machine, the
+	// previous tenant's local data is gone now — never visible to the new
+	// pairing. Same tenant / fresh install: nothing is purged.
+	_ = s.isolateAccount(view.User.ID)
+	// Point the model-traffic provider at the same backend this key paired
+	// with, honoring VITE_ARGUS_API_URL in dev (D5).
+	_ = s.saveProviderOverride(serverURL)
 
 	// Persist the successful snapshot for offline use.
 	if s.Core != nil && s.Core.DB != nil {

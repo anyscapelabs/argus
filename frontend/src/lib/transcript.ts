@@ -8,6 +8,9 @@ import { HOUR_MS, dayChipLabel, dayKey, msgStamp } from './time'
 import type { ArtifactView } from '../domains/artifacts/hooks'
 import type { TakeoverRequestView } from '../domains/browser/api'
 import type { MCPConnectRequestView } from '../domains/mcp/api'
+import type { VoiceTurn } from '../../bindings/github.com/anyscapelabs/argus/Services/Shared/models.js'
+import type { AskUserRequestView } from '../domains/askUser/api'
+import type { FileWrite } from '../../bindings/github.com/anyscapelabs/argus/Protocol/models.js'
 
 export type TranscriptItem =
   | { kind: 'chip'; id: string; label: string }
@@ -16,12 +19,28 @@ export type TranscriptItem =
   | { kind: 'artifactCard'; id: string; artifact: ArtifactView }
   | { kind: 'takeoverCard'; id: string }
   | { kind: 'mcpCard'; id: string }
-  | { kind: 'voiceMsg'; id: string; seconds: number }
+  | { kind: 'voiceMsg'; id: string; seconds: number; turns?: VoiceTurn[] }
+  | { kind: 'askUserCard'; id: string }
+  | { kind: 'fileWriteCard'; id: string; write: FileWrite }
 
 // VoiceNote is a finished voice call recorded into the transcript: when it
 // happened and how long it lasted. It renders as a notifier under the chat the
 // way a permission notice does.
 export type VoiceNote = { id: string; created_at: number; seconds: number }
+
+// parseVoiceRecord reads the JSON a persisted 'voice' message row carries.
+// Anything unreadable degrades to a bare card with no transcript to open.
+function parseVoiceRecord(text: string): { seconds: number; turns: VoiceTurn[] } {
+  try {
+    const rec = JSON.parse(text)
+    if (rec && Array.isArray(rec.turns)) {
+      return { seconds: typeof rec.seconds === 'number' ? rec.seconds : 0, turns: rec.turns }
+    }
+  } catch {
+    // fall through to the empty record
+  }
+  return { seconds: 0, turns: [] }
+}
 
 // Time chips woven into the transcript: a chip opens the conversation and
 // every new local day, and repeats the clock whenever an hour or more has
@@ -40,6 +59,7 @@ export function weaveTranscript({
   artifacts,
   takeover,
   mcpConnect,
+  askUser,
   inFlightTs,
   voiceNotes,
 }: {
@@ -48,6 +68,7 @@ export function weaveTranscript({
   artifacts: ArtifactView[]
   takeover: TakeoverRequestView | null
   mcpConnect: MCPConnectRequestView | null
+  askUser?: AskUserRequestView | null
   inFlightTs: number
   voiceNotes?: VoiceNote[]
 }): TranscriptItem[] {
@@ -58,6 +79,7 @@ export function weaveTranscript({
     artifact?: ArtifactView
     takeover?: TakeoverRequestView
     voice?: VoiceNote
+    askUser?: AskUserRequestView
   }
   const items: TranscriptItem[] = []
   let prevTs = 0
@@ -67,6 +89,7 @@ export function weaveTranscript({
     else if (e.takeover) items.push({ kind: 'takeoverCard', id: e.id })
     else if (e.artifact) items.push({ kind: 'artifactCard', id: e.id, artifact: e.artifact })
     else if (e.voice) items.push({ kind: 'voiceMsg', id: e.id, seconds: e.voice.seconds })
+    else if (e.askUser) items.push({ kind: 'askUserCard', id: e.id })
   }
   // One boundary for the whole weave: when a message *started*. A card or a
   // notice raised in the middle of a turn belongs under that turn's bubble, and
@@ -96,6 +119,13 @@ export function weaveTranscript({
   // and belongs between the messages around it, exactly like a notice.
   for (const v of voiceNotes ?? []) {
     extras.push({ id: `voice-${v.id}`, ts: v.created_at, voice: v })
+  }
+  if (askUser) {
+    extras.push({
+      id: `ask-user-${askUser.request_id}`,
+      ts: askUser.created_at || Number.MAX_SAFE_INTEGER,
+      askUser,
+    })
   }
   // A document is written in the middle of a conversation, so its card needs
   // one to belong to. With no messages on screen there is nowhere to put it,
@@ -148,6 +178,25 @@ export function weaveTranscript({
     if (m.role !== 'user' && m.status === 'streaming') continue
     const ts = msgStamp(m)
     const start = m.created_at || ts
+    if (m.kind === 'voice') {
+      // A persisted voice call: drawn as a transcript card exactly where the
+      // call happened, carrying its own record of turns and duration.
+      const rec = parseVoiceRecord(m.text || '')
+      if (ts && (!prevTs || dayKey(ts) !== dayKey(prevTs) || ts - prevTs >= HOUR_MS)) {
+        items.push({ kind: 'chip', id: `chip-${m.id}`, label: dayChipLabel(ts) })
+      }
+      items.push({ kind: 'voiceMsg', id: m.id, seconds: rec.seconds, turns: rec.turns })
+      if (ts) prevTs = ts
+      continue
+    }
+    if (m.kind === 'file_write' && m.file_write?.path) {
+      if (ts && (!prevTs || dayKey(ts) !== dayKey(prevTs) || ts - prevTs >= HOUR_MS)) {
+        items.push({ kind: 'chip', id: `chip-${m.id}`, label: dayChipLabel(ts) })
+      }
+      items.push({ kind: 'fileWriteCard', id: m.id, write: m.file_write })
+      if (ts) prevTs = ts
+      continue
+    }
     while (ni < extras.length && (!start || extras[ni].ts < start)) {
       placeBefore(extras[ni].ts, true)
       pushExtra(extras[ni])

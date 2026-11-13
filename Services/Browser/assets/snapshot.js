@@ -247,9 +247,9 @@
 
     var tag = el.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
-      if (tag !== 'SELECT' && el.value && /^(password|email|tel|url|text|search|number)$/.test(lower(el.getAttribute('type')) || 'text')) {
-        return { name: clip(el.value, MAX_NAME), from: 'value' };
-      }
+      // Never serialize what the user typed. After a takeover this can be a
+      // password, OTP, card number, email or other personal data; labels and
+      // placeholders identify the control without sending its value upstream.
       var labelled = labelFor(el, doc);
       if (labelled) return { name: clip(labelled, MAX_NAME), from: 'label' };
       if (el.placeholder) return { name: clip(trimText(el.placeholder), MAX_NAME), from: 'placeholder' };

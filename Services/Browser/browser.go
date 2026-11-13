@@ -28,6 +28,7 @@ const (
 // receives its events through the Core the app already shares.
 type Service struct {
 	mu       sync.Mutex
+	opMu     sync.Mutex
 	instance *instance
 	pages    map[int]*Page
 	order    []int
@@ -39,6 +40,9 @@ type Service struct {
 	// paused means the user is driving: the agent's tool calls are refused
 	// (not queued) so nobody fights a cursor, while Chrome itself stays up.
 	paused atomic.Bool
+	// blocked covers the period between the handover card appearing and the
+	// user deciding. The agent stops immediately, before the user takes control.
+	blocked atomic.Bool
 
 	// screenshotDir is where the screenshot verb writes; empty falls back to the
 	// user cache dir inside the action itself.

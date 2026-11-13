@@ -5,6 +5,7 @@ type Props = {
   request: TakeoverRequestView
   state: TakeoverState
   error?: string
+  busy?: boolean
   onTakeover: () => void
   onDone: () => void
   onDecline: () => void
@@ -22,33 +23,35 @@ function caption(request: TakeoverRequestView, state: TakeoverState, error?: str
   return reason
 }
 
-export default function TakeoverCard({ request, state, error, onTakeover, onDone, onDecline }: Props) {
+export default function TakeoverCard({ request, state, error, busy = false, onTakeover, onDone, onDecline }: Props) {
   const driving = state === 'active'
   const settled = state === 'done' || state === 'declined'
   const where = request.host || 'the page'
   return (
-    <div className="w-full max-w-sm min-h-10 p-2 rounded-xl border border-secondary bg-secondary flex items-center gap-3">
+    <div className="flex w-full max-w-2xl flex-col items-stretch gap-3 rounded-xl border border-secondary bg-secondary p-3">
       {/* The page as the agent sees it. Without this the ask is a sentence
           about a page; with it the user knows which tab and which wall. */}
-      <div className="h-14 w-20 shrink-0 rounded-lg border border-secondary overflow-hidden bg-tertiary">
+      <div className="aspect-[64/45] w-full overflow-hidden rounded-lg border border-secondary bg-tertiary">
         {request.screenshot ? (
-          <img src={request.screenshot} alt={where} className="h-full w-full object-cover object-top" />
+          <img src={request.screenshot} alt={`${request.page_title || where} browser preview`} className="h-full w-full object-contain object-top" />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
-            <FiGlobe size={16} className="text-secondary" />
+            <FiGlobe size={28} className="text-secondary" />
           </div>
         )}
       </div>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm font-medium text-primary">
+      <div className="min-w-0">
+        <div className="truncate text-sm font-medium text-primary">
           {/* Named by the page rather than by the verb: two cards from the same
               run are told apart by where they were raised, not by why. */}
           {driving ? `You're driving ${where}` : where}
-        </span>
-        <span className="truncate text-xs font-medium text-secondary" title={request.page_title || undefined}>
+        </div>
+        {request.page_title && <div className="truncate text-xs text-secondary">{request.page_title}</div>}
+        <div className="mt-1 break-words text-sm text-secondary">
           {caption(request, state, error)}
-        </span>
+        </div>
       </div>
+      <div className="flex w-full items-center justify-end gap-2">
       {settled ? (
         <span className="flex shrink-0 items-center gap-1 px-3 py-1 rounded-full bg-accent text-black text-sm font-medium">
           <FiCheck size={12} />
@@ -57,27 +60,34 @@ export default function TakeoverCard({ request, state, error, onTakeover, onDone
       ) : driving ? (
         <button
           onClick={onDone}
+          type="button"
+          disabled={busy}
           className="shrink-0 px-3 py-1 rounded-full bg-accent text-black text-sm font-medium hover:bg-hover-accent cursor-pointer"
         >
           I'm done
         </button>
       ) : (
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={onDecline}
+            disabled={busy}
             className="px-3 py-1 rounded-full text-sm font-medium text-secondary hover:text-primary cursor-pointer"
           >
-            Not now
+            Deny
           </button>
           <button
+            type="button"
             onClick={onTakeover}
+            disabled={busy}
             className="flex items-center gap-1 px-3 py-1 rounded-full bg-accent text-black text-sm font-medium hover:bg-hover-accent cursor-pointer"
           >
             <FiMousePointer size={12} />
-            Take over
+            Take Over
           </button>
         </div>
       )}
+      </div>
     </div>
   )
 }

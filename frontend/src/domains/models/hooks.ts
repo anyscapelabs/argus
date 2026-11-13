@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 import { getPicker, setProviderSelection, getProviderSelection, getChatModels, getAgentProfile, setAgentModel, saveAgentProfile, defaultPickerOptions } from './api'
 import type { PickerOptions } from '../../../bindings/github.com/anyscapelabs/argus/Services/Shared/models.js'
 
@@ -64,4 +65,27 @@ export function useSaveAgentProfile() {
       qc.invalidateQueries({ queryKey: ['models', 'agent-profile', profile?.id ?? 'default'] })
     },
   })
+}
+
+// ensureDefaultModel settles the agent's model before a send, no matter what
+// state the mounted profile query is in: it re-reads the profile fresh, and
+// only when that read confirms no model is configured does it pick the first
+// chat model and write it. A failed profile read is left alone — guessing a
+// model could stomp a choice the user already made — so the caller treats a
+// throw as "send anyway" and the backend reports a missing model visibly.
+export async function ensureDefaultModel(qc: QueryClient) {
+  const profile = await qc.fetchQuery({
+    queryKey: ['models', 'agent-profile', 'default'],
+    staleTime: 5_000,
+    retry: 1,
+  })
+  if ((profile as { model_ref?: string } | null)?.model_ref) return
+  const chatModels = (await qc.fetchQuery({
+    queryKey: ['models', 'chat'],
+    staleTime: 60_000,
+  })) as { ref: string }[] | undefined
+  const first = chatModels?.[0]?.ref
+  if (!first) return
+  await setAgentModel('default', first)
+  qc.invalidateQueries({ queryKey: ['models', 'agent-profile', 'default'] })
 }

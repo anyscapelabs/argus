@@ -29,7 +29,7 @@ func TestFinalizeNeverStoresAProviderBlob(t *testing.T) {
 	if len(huge) < 50000 {
 		t.Fatalf("the fixture is not big enough to be the bug: %d bytes", len(huge))
 	}
-	if err := db.FinalizeMessage("big", nil, "", "error", "", "google/gemini-2.5-flash", huge, 0); err != nil {
+	if err := db.FinalizeMessage("big", nil, "", "error", "", "google/gemini-2.5-flash", huge, "", 0); err != nil {
 		t.Fatalf("finalize: %v", err)
 	}
 
@@ -59,7 +59,7 @@ func TestFinalizeNeverStoresAProviderBlob(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
-	if err := db.FinalizeMessage("short", nil, "", "error", "", "openrouter/nvidia/nemotron", plain, 0); err != nil {
+	if err := db.FinalizeMessage("short", nil, "", "error", "", "openrouter/nvidia/nemotron", plain, "", 0); err != nil {
 		t.Fatalf("finalize: %v", err)
 	}
 	got, _, err := db.GetMessage("short")

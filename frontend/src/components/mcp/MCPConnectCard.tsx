@@ -9,11 +9,12 @@ type Props = {
   onConnect: () => void
   onDeny?: () => void
   onCancel: () => void
+  onRemove?: () => void
   denyLabel?: string
   className?: string
 }
 
-export default function MCPConnectCard({ request, state, error, onConnect, onDeny, onCancel, denyLabel, className }: Props) {
+export default function MCPConnectCard({ request, state, error, onConnect, onDeny, onCancel, onRemove, denyLabel, className }: Props) {
   const waiting = state === 'authorizing'
   const failed = state === 'failed'
   const connected = state === 'connected'
@@ -37,15 +38,34 @@ export default function MCPConnectCard({ request, state, error, onConnect, onDen
         </span>
       </div>
       {connected ? (
-        // The card stays on screen after a successful sign-in and the action
-        // pill keeps its place, so nothing shifts under the chat.
-        <span
-          aria-label="Connected"
-          title="Connected"
-          className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-black"
-        >
-          <FiCheck size={14} />
-        </span>
+        onRemove ? (
+          <div className="flex items-center gap-2">
+            <span
+              aria-label="Connected"
+              title="Connected"
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-black"
+            >
+              <FiCheck size={14} />
+            </span>
+            <button
+              type="button"
+              onClick={onRemove}
+              className="cursor-pointer rounded-full px-2 py-1 text-sm font-medium text-secondary hover:text-primary"
+            >
+              Remove
+            </button>
+          </div>
+        ) : (
+          // The card stays on screen after a successful sign-in and the action
+          // pill keeps its place, so nothing shifts under the chat.
+          <span
+            aria-label="Connected"
+            title="Connected"
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-black"
+          >
+            <FiCheck size={14} />
+          </span>
+        )
       ) : waiting ? (
         <button onClick={onCancel} className="cursor-pointer rounded-full px-2 py-1 text-sm font-medium text-secondary hover:text-primary">
           Cancel

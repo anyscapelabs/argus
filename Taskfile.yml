@@ -39,6 +39,17 @@ tasks:
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 
+  test:
+    summary: Runs the Go and frontend test suites
+    cmds:
+      - go test $(go list ./... | grep -v build/ios)
+      - task: test:frontend
+
+  test:frontend:
+    summary: Runs the Vitest frontend suite
+    cmds:
+      - cd frontend && npm test
+
   install:msix:tools:
     summary: Installs tools required for Windows MSIX packaging
     cmds:

@@ -112,6 +112,7 @@ func (s *Service) RegisterTakeover(agentID, agentName, reason string) (Shared.Ta
 		}
 		return r.view, fmt.Errorf("browser: the user is already driving the browser")
 	}
+	s.Browser.BlockForTakeover()
 	s.Core.EmitEvent(Shared.EventTakeoverRequested, r.view)
 	return r.view, nil
 }
@@ -125,18 +126,29 @@ func (s *Service) RespondTakeover(requestID, decision string) Shared.ActionResul
 	}
 	switch decision {
 	case "takeover":
+		if r.view.State != takeoverRequested {
+			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeBadInput, "That browser handover is not waiting to be taken over")}
+		}
 		// Hand the window over first; the card only says it is driving once
 		// Chrome has actually come to the front.
 		if err := s.Browser.TakeOver(context.Background()); err != nil {
+			s.Browser.HandBack()
 			s.finishTakeover(r, takeoverDeclined, err.Error())
 			return Shared.ActionResult{Ok: true}
 		}
 		s.emitTakeover(r, takeoverActive, "")
 	case "done":
+		if r.view.State != takeoverActive {
+			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeBadInput, "The browser is not currently handed over")}
+		}
 		s.Browser.HandBack()
 		s.emitTakeover(r, takeoverDone, "")
 		s.steerTakeover(r, takeoverDone)
 	case "decline":
+		if r.view.State != takeoverRequested {
+			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeBadInput, "That handover can no longer be declined")}
+		}
+		s.Browser.CancelTakeover()
 		s.emitTakeover(r, takeoverDeclined, "")
 		s.steerTakeover(r, takeoverDeclined)
 	default:
@@ -181,6 +193,9 @@ func (s *Service) emitTakeover(r *userTakeover, state, msg string) {
 // finishTakeover is for endings that come from the backend side (a failed
 // TakeOver call): the notice row keeps what happened.
 func (s *Service) finishTakeover(r *userTakeover, state, msg string) {
+	if s.Browser != nil {
+		s.Browser.HandBack()
+	}
 	s.emitTakeover(r, state, msg)
 	s.persistTakeoverNotice(r, state, msg)
 	s.takeoverStore.End(r.view.RequestID, r.view.AgentID)

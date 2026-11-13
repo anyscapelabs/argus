@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { weaveTranscript } from './transcript'
+import { weaveTranscript } from '../../../frontend/src/lib/transcript'
 
 // Fixed timestamps: 1 Jan 2026, spaced a day/moments apart.
 const T1 = Date.UTC(2026, 0, 1, 10, 0, 0)
@@ -141,5 +141,54 @@ describe('weaveTranscript', () => {
       .filter((i) => i >= 0)
     expect(idx).toBeGreaterThan(msgIdxs[0])
     expect(idx).toBeLessThan(msgIdxs[1])
+  })
+
+  it('weaves a persisted voice record into a transcript card with turns', () => {
+    const record = JSON.stringify({
+      seconds: 75,
+      turns: [
+        { role: 'user', text: 'what is on my calendar?' },
+        { role: 'model', text: 'You have a call at noon.' },
+      ],
+    })
+    const voiceRow = { ...msg('m9', 'user', T2), kind: 'voice', text: record }
+    const out = weaveTranscript(base({ messages: [msg('m1', 'user', T1), voiceRow] }))
+    const voice = out.find((i) => i.kind === 'voiceMsg')
+    expect(voice).toBeDefined()
+    if (voice?.kind === 'voiceMsg') {
+      expect(voice.seconds).toBe(75)
+      expect(voice.turns).toHaveLength(2)
+      expect(voice.turns?.[1].role).toBe('model')
+    }
+    // The JSON record must never surface as a plain chat message.
+    expect(out.some((i) => i.kind === 'msg' && i.msg.id === 'm9')).toBe(false)
+  })
+
+  it('shows ask_user immediately while the run is still in flight', () => {
+    const out = weaveTranscript(
+      base({
+        messages: [msg('m1', 'user', T1), msg('m2', 'assistant', T3, 'streaming')],
+        inFlightTs: T2,
+        askUser: {
+          request_id: 'ask-1', agent_id: 'default', run_id: 'run-1',
+          question: 'Which environment?', choices: ['Development', 'Production'], created_at: T3,
+        },
+      }),
+    )
+    expect(out.some((item) => item.kind === 'askUserCard')).toBe(true)
+  })
+
+  it('renders sanitized file writes as cards instead of messages', () => {
+    const fileRow = {
+      ...msg('file-1', 'assistant', T2),
+      kind: 'file_write',
+      text: '',
+      file_write: { path: '/tmp/app.ts', action: 'changed', bytes: 120, lines: 8 },
+    }
+    const out = weaveTranscript(base({ messages: [fileRow] }))
+    const card = out.find((item) => item.kind === 'fileWriteCard')
+    expect(card).toBeDefined()
+    if (card?.kind === 'fileWriteCard') expect(card.write.path).toBe('/tmp/app.ts')
+    expect(out.some((item) => item.kind === 'msg' && item.id === 'file-1')).toBe(false)
   })
 })

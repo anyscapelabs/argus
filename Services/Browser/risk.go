@@ -30,7 +30,7 @@ var mutatingVerbs = map[string]bool{
 var freeVerbs = map[string]bool{
 	"open": true, "read": true, "find": true, "text": true, "scroll": true,
 	"back": true, "wait": true, "tabs": true, "tab_new": true, "tab_select": true,
-	"tab_close": true, "screenshot": true, "hide": true, "show": true, "reset": true,
+	"tab_close": true, "screenshot": true, "hide": true, "show": true,
 }
 
 // riskyHost matches sites where an accidental click costs money, sends a message,
@@ -118,13 +118,14 @@ func NeedsApproval(action, host string, target *Element) (bool, string) {
 // worth a second look. Everything else — reading text, measuring, scrolling —
 // stays free, which is what makes the verb usable at all.
 func ScriptRisk(host, script string) (bool, string) {
-	if riskyHost.MatchString(host) {
-		return true, fmt.Sprintf("run a script on %s — the whole site is gated", host)
+	return true, fmt.Sprintf("run arbitrary JavaScript on %s", orHost(host))
+}
+
+func orHost(host string) string {
+	if strings.TrimSpace(host) == "" {
+		return "the current page"
 	}
-	if riskyLabel.MatchString(script) || riskyHref.MatchString(script) {
-		return true, fmt.Sprintf("run a script on %s that mentions an irreversible action", host)
-	}
-	return false, ""
+	return host
 }
 
 // looksLikeComposer identifies the field that sends something: a contenteditable

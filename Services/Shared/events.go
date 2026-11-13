@@ -37,6 +37,8 @@ const (
 	// extended a document, or one was deleted. The Artifacts panel refetches on
 	// it, so a report appears the moment it is stored rather than on remount.
 	EventArtifactUpdated = "artifact:updated"
+	EventAskUserRequested = "ask_user:requested"
+	EventAskUserResolved  = "ask_user:resolved"
 )
 
 const (

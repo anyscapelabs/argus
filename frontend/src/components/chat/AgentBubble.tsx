@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { PiArrowBendUpRightFill } from 'react-icons/pi'
@@ -18,9 +18,11 @@ type AgentBubbleProps = {
   onReply?: () => void
   onReact?: (emoji: string | null) => void
   onMore?: () => void
+  reaction?: string | null
+  reactionPending?: boolean
 }
 
-export default function AgentBubble({
+function AgentBubble({
   content,
   error,
   status,
@@ -29,14 +31,16 @@ export default function AgentBubble({
   onReply,
   onReact,
   onMore,
+  reaction = null,
+  reactionPending = false,
 }: AgentBubbleProps) {
   const text = content ?? children ?? ''
   const failed = status === 'error'
-  const [reaction, setReaction] = useState<string | null>(null)
   const [reactionOpen, setReactionOpen] = useState(false)
 
-  const actions = (
+  const actions = (onReply || onReact || onMore) ? (
     <div className={`flex shrink-0 items-center gap-1 transition-opacity ${reactionOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+      {onReply && (
       <button
         type="button"
         onClick={onReply}
@@ -45,14 +49,16 @@ export default function AgentBubble({
       >
         <PiArrowBendUpRightFill size={14} />
       </button>
+      )}
+      {onReact && (
       <ReactionPicker
         reaction={reaction}
-        onReactionChange={(emoji) => {
-          setReaction(emoji)
-          onReact?.(emoji)
-        }}
+        onReactionChange={onReact}
         onOpenChange={setReactionOpen}
+        disabled={reactionPending}
       />
+      )}
+      {onMore && (
       <button
         type="button"
         onClick={onMore}
@@ -61,8 +67,9 @@ export default function AgentBubble({
       >
         <HiDotsHorizontal size={14} />
       </button>
+      )}
     </div>
-  )
+  ) : null
 
   const reactionBadge = <ReactionBadge reaction={reaction} />
 
@@ -89,7 +96,7 @@ export default function AgentBubble({
     )
   }
   return (
-    <div className={`group flex w-fit max-w-full items-center gap-2 ${className}`}>
+    <div className={`group flex w-fit max-w-full items-start gap-2 ${className}`}>
       <div className="markdown relative max-w-xl select-text break-words rounded-xl border border-primary bg-secondary px-3 py-2 text-sm">
         <Markdown
           remarkPlugins={[remarkGfm]}
@@ -133,3 +140,5 @@ export default function AgentBubble({
     </div>
   )
 }
+
+export default memo(AgentBubble)

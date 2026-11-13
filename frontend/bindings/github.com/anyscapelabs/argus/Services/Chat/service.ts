@@ -20,14 +20,11 @@ export function Active(): $CancellablePromise<string[] | null> {
 }
 
 /**
- * ConversationRead is the conversation_read tool exposed to the live voice
- * session. The voice model is given only this one tool (no history replay, no
- * other tools), so when it needs earlier context it calls this and the frontend
- * returns the resulting text as a function response. It mirrors the agent tool
- * so a voice turn reads history exactly as a typed turn would.
+ * EndLiveSession cancels any tool or permission wait owned by a finished Live
+ * call and removes its discovery state.
  */
-export function ConversationRead(agentID: string, query: string): $CancellablePromise<Shared$0.ConversationReadResult> {
-    return $Call.ByID(2305936981, agentID, query);
+export function EndLiveSession(sessionID: string): $CancellablePromise<boolean> {
+    return $Call.ByID(1069801979, sessionID);
 }
 
 export function GetChat(agentID: string, beforeSeq: number, limit: number): $CancellablePromise<Shared$0.GetChatResult> {
@@ -46,8 +43,8 @@ export function ListRequests(agentID: string, limit: number): $CancellablePromis
  * URL's query because a WebSocket client (the webview) cannot set custom headers
  * and the browser cannot read the OS keyring.
  */
-export function LiveConfig(): $CancellablePromise<Shared$0.LiveConfigResult> {
-    return $Call.ByID(3819504154);
+export function LiveConfig(agentID: string): $CancellablePromise<Shared$0.LiveConfigResult> {
+    return $Call.ByID(3819504154, agentID);
 }
 
 /**
@@ -56,6 +53,10 @@ export function LiveConfig(): $CancellablePromise<Shared$0.LiveConfigResult> {
  */
 export function OnRunFinished(fn: any): $CancellablePromise<void> {
     return $Call.ByID(1076222558, fn);
+}
+
+export function PendingAskUser(agentID: string): $CancellablePromise<Shared$0.AskUserListResult> {
+    return $Call.ByID(2732201049, agentID);
 }
 
 /**
@@ -77,6 +78,10 @@ export function RegisterTakeover(agentID: string, agentName: string, reason: str
     return $Call.ByID(2719783494, agentID, agentName, reason);
 }
 
+export function RespondAskUser(requestID: string, answer: string): $CancellablePromise<Shared$0.ActionResult> {
+    return $Call.ByID(601087915, requestID, answer);
+}
+
 /**
  * RespondTakeover is the binding the card's buttons call. decisions:
  * takeover | done | decline.
@@ -95,6 +100,24 @@ export function RoutineAlreadySpoken(agentID: string, title: string, sp: spec$0.
     return $Call.ByID(514639628, agentID, title, sp);
 }
 
+/**
+ * RunLiveTool is the sole function-call bridge used by the frontend. It keeps
+ * discovery, allowlisting, permissions, execution and output limits in Go; the
+ * webview only relays Gemini's call and this result.
+ */
+export function RunLiveTool(sessionID: string, callID: string, name: string, argsJSON: string): $CancellablePromise<Shared$0.LiveToolResult> {
+    return $Call.ByID(1877709519, sessionID, callID, name, argsJSON);
+}
+
+/**
+ * SaveVoiceCall persists a finished voice call as a single transcript card.
+ * Calls where the live model never answered are handed to the normal text
+ * model by the frontend instead, so they never reach this method.
+ */
+export function SaveVoiceCall(agentID: string, turns: Shared$0.VoiceTurn[] | null, seconds: number): $CancellablePromise<Shared$0.VoiceCallResult> {
+    return $Call.ByID(4021547903, agentID, turns, seconds);
+}
+
 export function Send(agentID: string, text: string): $CancellablePromise<Shared$0.SendResult> {
     return $Call.ByID(109026596, agentID, text);
 }
@@ -107,8 +130,8 @@ export function Send(agentID: string, text: string): $CancellablePromise<Shared$
  * no one watching still works. The wake text the scheduler passes is
  * phrased as the job description it is, not as something a person said.
  */
-export function SendScheduledWake(agentID: string, text: string): $CancellablePromise<Shared$0.SendResult> {
-    return $Call.ByID(4182612855, agentID, text);
+export function SendScheduledWake(agentID: string, text: string, prepared: any): $CancellablePromise<Shared$0.SendResult> {
+    return $Call.ByID(4182612855, agentID, text, prepared);
 }
 
 /**
@@ -120,6 +143,10 @@ export function SendScheduledWake(agentID: string, text: string): $CancellablePr
  */
 export function SendWithAttachments(agentID: string, text: string, attachmentIDs: string[] | null): $CancellablePromise<Shared$0.SendResult> {
     return $Call.ByID(3670157150, agentID, text, attachmentIDs);
+}
+
+export function SetMessageReaction(agentID: string, messageID: string, reaction: string): $CancellablePromise<Shared$0.MessageReactionResult> {
+    return $Call.ByID(3659157130, agentID, messageID, reaction);
 }
 
 /**

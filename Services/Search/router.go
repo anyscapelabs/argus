@@ -1,5 +1,5 @@
 // The router-backed search client. The desktop app's default provider is the
-// Argus Router (see Shared.RouterProviderID), and the router itself owns web
+// Anyscape Gateway (see Shared.RouterProviderID), and the router itself owns web
 // search — it routes each query across Brave, Tavily and Exa with fallback and
 // plan quota. This client is the desktop's half of that contract: it calls the
 // router's /v1/search endpoint with the same service-account key the model calls
@@ -21,7 +21,7 @@ import (
 // "/search" is exactly "http://host:8080/v1/search".
 const routerSearchPath = "/search"
 
-// RouterClient queries the Argus Router's web search endpoint.
+// RouterClient queries the Anyscape Gateway's web search endpoint.
 type RouterClient struct {
 	// Base is the router base URL, including its /v1 suffix.
 	Base string
