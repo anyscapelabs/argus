@@ -41,12 +41,6 @@ type PendingSend = {
   attachments: { id: string; filename: string; kind: string; dataUrl?: string }[]
 }
 
-const USAGE_LIMIT_CODES = ['daily_limit_reached', 'weekly_limit_reached', 'monthly_limit_reached', 'credits_exhausted']
-
-function isUsageLimitMessage(msg: any): boolean {
-  return msg?.role === 'assistant' && USAGE_LIMIT_CODES.includes(msg?.error_code ?? '')
-}
-
 export default function Chat({
   pendingSend,
   onPendingConsumed,
@@ -352,11 +346,16 @@ export default function Chat({
             className={`flex-1 min-h-0 overflow-y-auto px-6 pb-24 [scrollbar-gutter:stable] transition-[padding] duration-200 ${voiceActive ? 'pt-24' : 'pt-6'}`}
           >
             <div className="mx-auto flex max-w-3xl flex-col gap-3">
-              {!isLoading && messagesError && <div className="text-xs text-red-400">{String(messagesError)}</div>}
+              {!isLoading && messagesError && <Notifier text={String(messagesError)} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400"><FiAlertTriangle size={9} className="text-red-400" /></div>} />}
               {!isLoading && send.isError && (
-                <div className="w-fit rounded-xl border border-red-400/40 bg-secondary px-2 py-1 text-xs text-red-400">
-                  {String((send.error as any)?.message ?? send.error)}
-                </div>
+                <Notifier
+                  text={String((send.error as any)?.message ?? send.error)}
+                  icon={
+                    <div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400">
+                      <FiAlertTriangle size={9} className="text-red-400" />
+                    </div>
+                  }
+                />
               )}
               {transcript.map((item) =>
                 item.kind === 'chip' ? (
@@ -442,7 +441,7 @@ export default function Chat({
                   <div key={item.id}>
                     <UserBubble content={item.msg.text} blocks={item.msg.blocks} />
                   </div>
-                ) : isUsageLimitMessage(item.msg) ? (
+                ) : item.msg.error_message ? (
                   <Notifier
                     key={item.id}
                     text={item.msg.error_message}
@@ -497,7 +496,16 @@ export default function Chat({
         <div className="shrink-0">
           <div className="relative">
             {voice.error && !voiceActive && (
-              <div className="mb-1 text-center text-xs text-red-400">{voice.error}</div>
+              <div className="mb-1">
+                <Notifier
+                  text={voice.error}
+                  icon={
+                    <div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400">
+                      <FiAlertTriangle size={9} className="text-red-400" />
+                    </div>
+                  }
+                />
+              </div>
             )}
             <ChatInput
               onSend={handleSend}

@@ -8,7 +8,7 @@ import type { EntitlementsView, KeyStatusResult, SaveAccountKeyResult } from '..
 export const ARGUS_API_URL: string =
   import.meta.env.VITE_ANYSCAPE_GATEWAY_URL ??
   import.meta.env.VITE_ARGUS_API_URL ??
-  'http://localhost:8080'
+  'https://api.anyscapelabs.com'
 
 export async function getKeyStatus(): Promise<KeyStatusResult> {
   return AccountService.GetKeyStatus()

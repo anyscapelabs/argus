@@ -19,7 +19,7 @@
       "id": "argus-router",
       "display_name": "Anyscape Gateway",
       "adapter": "openai_compat",
-      "base_url": "http://localhost:8080/v1",
+      "base_url": "https://api.anyscapelabs.com/v1",
       "models_path": "/models",
       "key_hint": "argus_pk_",
       "key_help_url": "http://localhost:8080/console/settings/service-accounts",
