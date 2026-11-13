@@ -119,14 +119,14 @@ func TestTableDividerMustMatchHeader(t *testing.T) {
 }
 
 func TestPipesInProseAreNotTables(t *testing.T) {
-	r := Validate("The command `a | b` and the sentence with | in it.\n")
+	r := Validate("# Notes\n\nThe command `a | b` and the sentence with | in it.\n")
 	if r.HasErrors() {
 		t.Fatalf("prose rejected: %v", findings(r))
 	}
 }
 
 func TestFencedContentIsNotLinted(t *testing.T) {
-	r := Validate("```html\n<div>x</div>\n[^1]\n```\n")
+	r := Validate("# Example\n\n```html\n<div>x</div>\n[^1]\n```\n")
 	if r.HasErrors() {
 		t.Fatalf("code fence contents were linted: %v", findings(r))
 	}
@@ -169,7 +169,7 @@ func TestMissingImageIsAnErrorRemoteIsAWarning(t *testing.T) {
 	}
 	has(t, r, "image file not found")
 
-	r = Validate("![logo](https://example.com/logo.png)\n")
+	r = Validate("# Logo\n\n![logo](https://example.com/logo.png)\n")
 	if r.HasErrors() {
 		t.Errorf("remote image should be a warning, not an error: %v", findings(r))
 	}
@@ -191,6 +191,16 @@ func TestNormalisationIsStable(t *testing.T) {
 	}
 	if strings.Contains(r.Body, "\r") {
 		t.Error("carriage returns survived")
+	}
+}
+
+func TestDocumentMustStartWithHeadingAfterFrontMatter(t *testing.T) {
+	if r := Validate("Prose first.\n\n# Later\n"); !r.HasErrors() {
+		t.Fatal("headingless start was accepted")
+	}
+	r := Validate("---\ntitle: Report\n---\n# Summary\n\nBody.\n")
+	if r.HasErrors() {
+		t.Fatalf("front matter followed by heading was rejected: %v", findings(r))
 	}
 }
 

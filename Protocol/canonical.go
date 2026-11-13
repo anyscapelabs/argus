@@ -56,6 +56,13 @@ type ToolCall struct {
 	Valid bool   `json:"valid"`
 }
 
+type FileWrite struct {
+	Path   string `json:"path"`
+	Action string `json:"action"`
+	Bytes  int    `json:"bytes"`
+	Lines  int    `json:"lines"`
+}
+
 type Block struct {
 	Type      BlockType       `json:"type"`
 	Text      string          `json:"text,omitempty"`
@@ -66,6 +73,7 @@ type Block struct {
 	IsError   bool            `json:"is_error,omitempty"`
 	Signature string          `json:"signature,omitempty"`
 	Extra     json.RawMessage `json:"extra,omitempty"`
+	FileWrite *FileWrite      `json:"file_write,omitempty"`
 }
 
 func (b Block) Clone() Block {
@@ -79,6 +87,10 @@ func (b Block) Clone() Block {
 	}
 	if b.Extra != nil {
 		b.Extra = append(json.RawMessage(nil), b.Extra...)
+	}
+	if b.FileWrite != nil {
+		write := *b.FileWrite
+		b.FileWrite = &write
 	}
 	return b
 }

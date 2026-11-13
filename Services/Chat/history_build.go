@@ -9,7 +9,7 @@ import (
 )
 
 func (s *Service) buildHistory(agentID string, throughSeq int, budgetTokens int64, maxMessages int) []Protocol.Message {
-	msgs, err := s.Core.DB.ListMessages(agentID, 0, 1000)
+	msgs, err := s.Core.DB.ListMessages(agentID, 0, 256)
 	if err != nil {
 		return nil
 	}
@@ -26,6 +26,13 @@ func (s *Service) buildHistory(agentID string, throughSeq int, budgetTokens int6
 			continue
 		}
 		if m.Status != "complete" {
+			continue
+		}
+		if m.Kind == "voice" {
+			// A persisted voice-call record is UI, not conversation: its text
+			// is a JSON transcript for the transcript card, not words anyone
+			// typed. Replaying it would feed the model a blob of JSON as a
+			// user turn.
 			continue
 		}
 		if m.Kind == "steering" {

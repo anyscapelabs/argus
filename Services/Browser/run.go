@@ -21,7 +21,9 @@ import (
 // takeover flow puts the page in human hands exactly so the agent stops
 // reaching for it.
 func (s *Service) Run(ctx context.Context, call Call, approve Approver) Result {
-	if s.paused.Load() {
+	s.opMu.Lock()
+	defer s.opMu.Unlock()
+	if s.paused.Load() || s.blocked.Load() {
 		return Result{
 			Error: "browser: the user is driving the browser right now — the page can change under you at any moment." +
 				" Stand by without acting; the next turn will tell you when they have handed it back",
@@ -40,6 +42,20 @@ func (s *Service) Run(ctx context.Context, call Call, approve Approver) Result {
 // TakenOver reports whether the user is currently driving the browser.
 func (s *Service) TakenOver() bool { return s.paused.Load() }
 
+func (s *Service) BlockForTakeover() {
+	s.blocked.Store(true)
+	// Wait for an action that entered before blocked was set. Any queued Run
+	// rechecks blocked after this barrier and is refused.
+	s.opMu.Lock()
+	s.opMu.Unlock()
+}
+
+func (s *Service) CancelTakeover() {
+	if !s.paused.Load() {
+		s.blocked.Store(false)
+	}
+}
+
 // TakeOver hands the browser to the user: tool calls stop touching Chrome
 // and the window is brought forward so there is actually something to drive.
 // A page that was sitting minimized becomes visible here — that is the point.
@@ -55,6 +71,7 @@ func (s *Service) TakeOver(ctx context.Context) error {
 		// A takeover with no browser running still needs one — the user is the
 		// one about to use it, and a fresh dedicated Chrome is what we can give.
 		if _, err := s.session(ctx); err != nil {
+			s.paused.Store(false)
 			return err
 		}
 	}
@@ -64,7 +81,10 @@ func (s *Service) TakeOver(ctx context.Context) error {
 }
 
 // HandBack gives control to the agent again.
-func (s *Service) HandBack() { s.paused.Store(false) }
+func (s *Service) HandBack() {
+	s.paused.Store(false)
+	s.blocked.Store(false)
+}
 
 // CaptureForUI returns what a takeover card needs to show the user: the
 // current viewport as a PNG data URL, plus where that viewport is. It reads
@@ -312,14 +332,26 @@ func (s *Service) mutate(ctx context.Context, page *Page, action string, call Ca
 	}
 	var target *Element
 	host := ""
+	snap, err := page.current(ctx)
+	if err != nil {
+		return Result{Error: err.Error(), Elapsed: time.Since(start)}
+	}
+	host = hostOf(snap.URL)
 	if call.Ref > 0 {
-		snap, err := page.current(ctx)
-		if err != nil {
-			return Result{Error: err.Error(), Elapsed: time.Since(start)}
-		}
-		host = hostOf(snap.URL)
 		if e, ok := page.elementAt(call.Ref); ok {
 			target = e
+		}
+	}
+	if action == "press" && call.Ref <= 0 {
+		key := strings.ToLower(strings.TrimSpace(orDefault(call.Key, call.Value)))
+		if key == "enter" || key == "return" || key == "space" {
+			if approve == nil {
+				return Result{Error: "browser: submitting from the focused control needs the user's approval and nobody was there to ask", Elapsed: time.Since(start)}
+			}
+			allowed, reason := approve(host, fmt.Sprintf("press %s on the focused control at %s; this may submit a form", key, orDefault(host, "the current page")))
+			if !allowed {
+				return Result{Error: "the user declined: " + orDefault(reason, "submit the focused form"), Elapsed: time.Since(start)}
+			}
 		}
 	}
 

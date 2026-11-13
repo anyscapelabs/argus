@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { lazy, Suspense } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useAgentProfile } from '../domains/models/hooks'
-import { useChatMessages, useSendMessage } from '../domains/chat/hooks'
+import { useAgentProfile, ensureDefaultModel } from '../domains/models/hooks'
+import { useChatMessages, useSendMessage, useSetMessageReaction } from '../domains/chat/hooks'
 import { noticeText } from '../domains/permission/api'
 import { usePermissionFlow } from '../domains/permission/hooks'
 import { useMCPConnectFlow } from '../domains/mcp/hooks'
@@ -10,7 +10,7 @@ import { useTakeoverFlow } from '../domains/browser/hooks'
 import { useRunIndicator } from '../domains/chat/runIndicator'
 import { useArtifacts } from '../domains/artifacts/hooks'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FiArrowDown, FiChevronRight, FiGlobe, FiLink, FiTerminal } from 'react-icons/fi'
+import { FiAlertTriangle, FiArrowDown, FiChevronRight, FiGlobe, FiLink, FiTerminal } from 'react-icons/fi'
 import Toolbar from '../components/layout/Toolbar'
 import ChatInput from '../components/chat/ChatInput'
 import AgentBubble from '../components/chat/AgentBubble'
@@ -24,17 +24,27 @@ import TakeoverCard from '../components/browser/TakeoverCard'
 import Notifier from '../components/chat/Notifier'
 import VoiceNotifier from '../components/chat/VoiceNotifier'
 import VoiceIcon from '../components/chat/VoiceIcon'
+import VoiceMessage from '../components/chat/VoiceMessage'
 const RightPanel = lazy(() => import('../components/layout/RightPanel'))
 import ArtifactCard from '../components/chat/ArtifactCard'
-import { weaveTranscript, type VoiceNote } from '../lib/transcript'
-import { useLiveCall } from '../domains/live/useLiveCall'
+import { weaveTranscript } from '../lib/transcript'
+import { useLiveCall, type VoiceCallSummary } from '../domains/live/useLiveCall'
+import { saveVoiceCall } from '../domains/live/api'
+import { useAskUserFlow } from '../domains/askUser/hooks'
+import AskUserCard from '../components/chat/AskUserCard'
+import FileWriteCard from '../components/chat/FileWriteCard'
 
-type PendingSend = { id: number; text: string; modelRef: string | null }
+type PendingSend = {
+  id: number
+  text: string
+  modelRef: string | null
+  attachments: { id: string; filename: string; kind: string; dataUrl?: string }[]
+}
 
-// formatVoiceTime renders a duration in seconds as MM:SS, like a voice note.
-function formatVoiceTime(seconds: number): string {
-  const s = Math.max(0, Math.floor(seconds))
-  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+const USAGE_LIMIT_CODES = ['daily_limit_reached', 'weekly_limit_reached', 'monthly_limit_reached', 'credits_exhausted']
+
+function isUsageLimitMessage(msg: any): boolean {
+  return msg?.role === 'assistant' && USAGE_LIMIT_CODES.includes(msg?.error_code ?? '')
 }
 
 export default function Chat({
@@ -58,7 +68,7 @@ export default function Chat({
     noticeKeyText,
   } = usePermissionFlow()
   const { mcpConnect, mcpState, mcpError, decide: decideMCP } = useMCPConnectFlow()
-  const { takeover, takeoverState, takeoverError, decide: decideTakeover } = useTakeoverFlow()
+  const { takeover, takeoverState, takeoverError, takeoverBusy, decide: decideTakeover } = useTakeoverFlow()
   // The documents this agent has written. They come from the table, not from the
   // transcript, because a document outlives the turn that made it: a card woven
   // from tool output would have to be reconstructed from message text, and the
@@ -75,39 +85,80 @@ export default function Chat({
     fetchNextPage,
   } = useChatMessages('default')
   const send = useSendMessage('default')
+  const reaction = useSetMessageReaction('default')
   const voice = useLiveCall({ agentID: 'default' })
-  const [voiceHistory, setVoiceHistory] = useState<VoiceNote[]>([])
+  const askUser = useAskUserFlow('default')
   const voiceActive = voice.status !== 'idle' && voice.status !== 'ended'
-  // When a call finishes, record it in the transcript as a notifier so the chat
-  // shows "Voice message · 02:32" where the call happened, same as a notice.
-  const lastPushedVoice = useRef<number | null>(null)
-  useEffect(() => {
-    if (voice.status !== 'ended') return
-    if (voice.lastSeconds <= 0) return
-    // A fresh call resets lastSeconds to 0, so any new positive value is a call
-    // that just finished; dedupe against the last one we recorded.
-    if (lastPushedVoice.current === voice.lastSeconds) return
-    lastPushedVoice.current = voice.lastSeconds
-    setVoiceHistory((prev) => [
-      ...prev,
-      { id: `voice-${Date.now()}`, created_at: Date.now(), seconds: voice.lastSeconds },
-    ])
-  }, [voice.status, voice.lastSeconds])
+  // The hook hands each call over once; identity alone prevents duplicate
+  // persistence if surrounding query state causes another render.
+  const savedCallRef = useRef<VoiceCallSummary | null>(null)
   const pendingConsumedId = useRef<number | null>(null)
+  const invalidateChat = useCallback(
+    (key: string[]) => void qc.invalidateQueries({ queryKey: key }),
+    [qc],
+  )
   const {
     status,
     chip,
     runActive,
     setRunActive,
     beginThink,
-  } = useRunIndicator((key) => qc.invalidateQueries({ queryKey: key }))
+  } = useRunIndicator(invalidateChat)
 
-  const handleSend = (
+  useEffect(() => {
+    if (voice.status !== 'ended') return
+    const call = voice.lastCall
+    if (!call || call.turns.length === 0 || savedCallRef.current === call) return
+
+    // Only a call containing user audio and no live-model answer falls back to
+    // the normal text model. Any real back-and-forth, including a partial last
+    // answer, remains one voice transcript card and never starts a text run.
+    if (call.unanswered) {
+      if (send.isPending || runActive) return
+      const text = call.turns
+        .filter((turn) => turn.role === 'user')
+        .map((turn) => turn.text.trim())
+        .filter(Boolean)
+        .join(' ')
+      if (!text) return
+      savedCallRef.current = call
+      setRunActive(true)
+      beginThink()
+      send.mutate(
+        { text },
+        {
+          onError: (err: any) => {
+            console.error('voice fallback send failed', err)
+            setRunActive(false)
+          },
+        },
+      )
+      return
+    }
+
+    savedCallRef.current = call
+    void saveVoiceCall('default', call.turns, call.seconds)
+      .then(() => qc.invalidateQueries({ queryKey: ['chat', 'default', 'history'] }))
+      .catch((err) => console.error('saving voice call failed', err))
+  }, [voice.status, voice.lastCall, send, runActive, setRunActive, beginThink, qc])
+
+  // Serialize sends through the async model settle: a second Enter while the
+  // first is still waiting on ensureDefaultModel must not double-send.
+  const sendingRef = useRef(false)
+  const handleSend = async (
     text: string,
     _modelRef: string | null,
     attachments?: { id: string; filename: string; kind: string; dataUrl?: string }[],
   ) => {
-    if (send.isPending || runActive) return
+    if (sendingRef.current || send.isPending || runActive) return
+    sendingRef.current = true
+    // Same settle as the pendingSend path: a send racing ChatInput's one-time
+    // default-model write must not leave with no model configured.
+    try {
+      await ensureDefaultModel(qc)
+    } catch {
+      // the send reports its own error if the model write failed
+    }
     setRunActive(true)
     beginThink()
     send.mutate(
@@ -122,6 +173,9 @@ export default function Chat({
         })),
       },
       {
+        onSettled: () => {
+          sendingRef.current = false
+        },
         onError: (err: any) => {
           console.error('send failed', err)
           setRunActive(false)
@@ -130,24 +184,42 @@ export default function Chat({
     )
   }
 
+  // The first message must never be lost to a startup race. The consumption
+  // does not wait on the mounted profile query (a boot-time error there used
+  // to stall this effect forever and swallow the message); ensureDefaultModel
+  // re-reads the profile fresh, settles the default model when one is truly
+  // missing, and any failure still falls through to the send, whose backend
+  // error is visible instead of silent.
   useEffect(() => {
     if (!pendingSend?.text) return
     if (pendingConsumedId.current === pendingSend.id) return
     if (send.isPending || runActive) return
     pendingConsumedId.current = pendingSend.id
     onPendingConsumed?.()
-    setRunActive(true)
-    beginThink()
-    send.mutate(
-      { text: pendingSend.text },
-      {
-        onError: (err: any) => {
-          console.error('send failed', err)
-          setRunActive(false)
+    const consume = async () => {
+      try {
+        await ensureDefaultModel(qc)
+      } catch (err) {
+        console.warn('default model could not be settled', err)
+      }
+      setRunActive(true)
+      beginThink()
+      send.mutate(
+        {
+          text: pendingSend.text,
+          attachmentIDs: pendingSend.attachments.map((a) => a.id),
+          attachments: pendingSend.attachments,
         },
-      },
-    )
-  }, [pendingSend])
+        {
+          onError: (err: any) => {
+            console.error('send failed', err)
+            setRunActive(false)
+          },
+        },
+      )
+    }
+    void consume()
+  }, [pendingSend, qc, send, runActive, beginThink, setRunActive])
 
   // The turn in flight has a database row but is deliberately not drawn until it
   // finishes, so anything anchored inside that window waits with it: the card and
@@ -173,10 +245,10 @@ export default function Chat({
         artifacts,
         takeover,
         mcpConnect,
+        askUser: askUser.request,
         inFlightTs,
-        voiceNotes: voiceHistory,
       }),
-    [messages, artifacts, takeover, mcpConnect, inFlightTs, voiceHistory],
+    [messages, noticeLines, artifacts, takeover, mcpConnect, askUser.request, inFlightTs],
   )
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -190,7 +262,7 @@ export default function Chat({
   const onScroll = () => {
     const el = scrollRef.current
     if (!el) return
-    const nextPinned = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+    const nextPinned = el.scrollHeight - el.scrollTop - el.clientHeight < 40
     pinnedRef.current = nextPinned
     setPinned(nextPinned)
     setScrolled(el.scrollTop > 0)
@@ -199,7 +271,7 @@ export default function Chat({
       fetchNextPage()
     }
   }
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = scrollRef.current
     const anchor = prependAnchor.current
     if (!el || !anchor || isFetchingNextPage) return
@@ -210,11 +282,25 @@ export default function Chat({
   }, [messages, isFetchingNextPage])
   // Follow the stream: keep the latest message visible while the user is
   // pinned near the bottom; scrolling up to read pauses the auto-follow.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = scrollRef.current
     if (!el || !pinnedRef.current) return
     el.scrollTop = el.scrollHeight
-  }, [messages, permission, noticeKeyText, errorNotice, status, mcpConnect?.request_id, takeover?.request_id, artifacts.length])
+  }, [messages, permission, noticeKeyText, errorNotice, status, mcpConnect?.request_id, takeover?.request_id, askUser.request?.request_id, artifacts.length])
+
+  // Images, markdown cards and fonts can settle after a message commits. Follow
+  // those size changes only while the reader is pinned; never pull them down
+  // after they deliberately scrolled up.
+  useEffect(() => {
+    const viewport = scrollRef.current
+    const content = viewport?.firstElementChild
+    if (!viewport || !content || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => {
+      if (pinnedRef.current) viewport.scrollTop = viewport.scrollHeight
+    })
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [])
 
   const scrollToBottom = () => {
     const el = scrollRef.current
@@ -263,7 +349,7 @@ export default function Chat({
           <div
             ref={scrollRef}
             onScroll={onScroll}
-            className={`flex-1 min-h-0 overflow-y-auto px-6 pb-24 transition-[padding] duration-200 ${voiceActive ? 'pt-24' : 'pt-6'}`}
+            className={`flex-1 min-h-0 overflow-y-auto px-6 pb-24 [scrollbar-gutter:stable] transition-[padding] duration-200 ${voiceActive ? 'pt-24' : 'pt-6'}`}
           >
             <div className="mx-auto flex max-w-3xl flex-col gap-3">
               {!isLoading && messagesError && <div className="text-xs text-red-400">{String(messagesError)}</div>}
@@ -292,15 +378,31 @@ export default function Chat({
                     }
                   />
                 ) : item.kind === 'voiceMsg' ? (
-                  <Notifier
-                    key={item.id}
-                    text={`Voice message · ${formatVoiceTime(item.seconds)}`}
-                    icon={
-                      <div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary">
-                        <VoiceIcon size={9} className="text-secondary" />
-                      </div>
-                    }
-                  />
+                  item.turns && item.turns.length > 0 ? (
+                    <VoiceMessage key={item.id} seconds={item.seconds} turns={item.turns} />
+                  ) : (
+                    <Notifier
+                      key={item.id}
+                      text={`Voice message · ${String(item.seconds).padStart(2, '0')}s`}
+                      icon={
+                        <div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary">
+                          <VoiceIcon size={9} className="text-secondary" />
+                        </div>
+                      }
+                    />
+                  )
+                ) : item.kind === 'askUserCard' ? (
+                  askUser.request && (
+                    <AskUserCard
+                      key={item.id}
+                      request={askUser.request}
+                      submitting={askUser.submitting}
+                      error={askUser.error}
+                      onAnswer={(answer) => void askUser.answer(answer)}
+                    />
+                  )
+                ) : item.kind === 'fileWriteCard' ? (
+                  <FileWriteCard key={item.id} write={item.write} />
                 ) : item.kind === 'mcpCard' ? (
                   mcpConnect && (
                     <MCPConnectCard
@@ -320,6 +422,7 @@ export default function Chat({
                       request={takeover}
                       state={takeoverState}
                       error={takeoverError}
+                      busy={takeoverBusy}
                       onTakeover={() => decideTakeover('takeover')}
                       onDone={() => decideTakeover('done')}
                       onDecline={() => decideTakeover('decline')}
@@ -336,13 +439,30 @@ export default function Chat({
                     />
                   </div>
                 ) : item.msg.role === 'user' ? (
-                  <motion.div key={item.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: 'easeOut' }}>
+                  <div key={item.id}>
                     <UserBubble content={item.msg.text} blocks={item.msg.blocks} />
-                  </motion.div>
+                  </div>
+                ) : isUsageLimitMessage(item.msg) ? (
+                  <Notifier
+                    key={item.id}
+                    text={item.msg.error_message}
+                    icon={
+                      <div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400">
+                        <FiAlertTriangle size={9} className="text-red-400" />
+                      </div>
+                    }
+                  />
                 ) : (
-                  <motion.div key={item.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: 'easeOut' }}>
-                    <AgentBubble content={item.msg.text} status={item.msg.status} error={item.msg.error_message} />
-                  </motion.div>
+                  <div key={item.id}>
+                    <AgentBubble
+                      content={item.msg.text}
+                      status={item.msg.status}
+                      error={item.msg.error_message}
+                      reaction={item.msg.reaction ?? null}
+                      reactionPending={reaction.isPending && reaction.variables?.messageID === item.msg.id}
+                      onReact={(emoji) => reaction.mutate({ messageID: item.msg.id, reaction: emoji ?? '' })}
+                    />
+                  </div>
                 ),
               )}
               {!isLoading && permission && (
@@ -355,10 +475,10 @@ export default function Chat({
                 />
               )}
               {!isLoading && errorNotice && <Notifier text={errorNotice} icon={<div className="flex h-4 w-4 items-center justify-center rounded-md border border-red-400"><FiTerminal size={9} className="text-red-400" /></div>} />}
-              {!isLoading && runActive && (
+              {!isLoading && runActive && (status || chip) && (
                 <div className="flex items-center gap-3">
                   <Argus state={status && status.toLowerCase().includes('typing') ? 'typing' : 'thinking'} size={40} />
-                  <ThinkingIndicator chip={chip} text={chip ? undefined : (status || 'Thinking…')} />
+                  <ThinkingIndicator chip={chip} text={chip ? undefined : status ?? undefined} />
                 </div>
               )}
             </div>
@@ -381,7 +501,7 @@ export default function Chat({
             )}
             <ChatInput
               onSend={handleSend}
-              busy={send.isPending}
+              busy={send.isPending || !!askUser.request}
               onStartVoice={() => void voice.start()}
               voiceActive={voiceActive}
             />

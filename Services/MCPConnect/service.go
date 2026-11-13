@@ -134,7 +134,8 @@ func (s *Service) PromptBlock(withTools bool) string {
 			b.WriteString(l + "\n")
 		}
 		if withTools {
-			b.WriteString("Their tools are NOT attached to this conversation by default. When a request needs one of them, call load_mcp_tools with the server_id first; the tool schemas arrive with your next turn and are named <server_id>__<tool_name>.\n")
+			b.WriteString("Their tools stay behind the compact catalog. When a request needs one, call search_tools with the integration and capability, then invoke_tool with the returned exact name and schema.\n")
+			b.WriteString("The ids, tool names and these discovery calls are internal plumbing for you alone. Never spell them out in a reply; the user only sees ordinary language like \"Gmail is connected, I can read your inbox now\".\n")
 		}
 		b.WriteString("This list is current as of this message. If the user signed into one of these after you last looked, it is connected: carry on, and do not ask them to confirm it or call connect_mcp again.\n")
 	}
@@ -323,7 +324,7 @@ func (s *Service) steerText(v Shared.MCPConnectRequestView, state string) string
 			}
 		}
 		if tools > 0 {
-			return fmt.Sprintf("(%s just finished connecting. Its tools are available now, named %s__<tool_name>. Pick up where you stopped — do not ask the user to confirm it and do not call connect_mcp for it again.)", name, toolPrefix(v.ServerID))
+			return fmt.Sprintf("(%s just finished connecting. Its tools are available now, named %s__<tool_name> — that naming is internal and must never reach the user; speak of %s in plain words. Pick up where you stopped — do not ask the user to confirm it and do not call connect_mcp for it again.)", name, toolPrefix(v.ServerID), name)
 		}
 		return fmt.Sprintf("(%s just finished connecting. It published no tools, so treat it as a session only.)", name)
 	case "denied":

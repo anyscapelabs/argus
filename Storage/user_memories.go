@@ -1,67 +1,174 @@
 package Storage
 
-import "fmt"
+import (
+	"database/sql"
+	"fmt"
 
-// Memory is one durable fact about the user, keyed so an update replaces the
-// old value instead of adding a contradiction.
+	"github.com/google/uuid"
+)
+
 type Memory struct {
-	Key       string
-	Value     string
-	CreatedAt int64
-	UpdatedAt int64
+	ID              string
+	AgentID         string
+	Key             string
+	Value           string
+	Scope           string
+	Confidence      float64
+	SourceType      string
+	SourceMessageID string
+	SourceRunID     string
+	Revision        int
+	CreatedAt       int64
+	UpdatedAt       int64
 }
 
-// Remember upserts by key. created_at survives updates so a fact shows its
-// true age; updated_at is what the prompt sorts and refreshes by.
-func (db *DB) Remember(key, value string) error {
-	_, err := db.conn.Exec(
-		`INSERT INTO user_memories (key, value, created_at, updated_at)
-		 VALUES (?, ?, ?, ?)
-		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-		key, value, nowUnixMs(), nowUnixMs(),
+type MemoryExposure struct {
+	MemoryID        string
+	MemoryRevision  int
+	Position        int
+	Score           int
+	EstimatedTokens int
+}
+
+type RequestSource struct {
+	MessageID string
+	AgentID   string
+	Role      string
+	Kind      string
+	Text      string
+}
+
+const memoryColumns = `id, agent_id, key, value, scope, confidence, source_type, source_message_id, source_run_id, revision, created_at, updated_at`
+
+func scanMemory(scanner interface{ Scan(...any) error }) (Memory, error) {
+	var m Memory
+	err := scanner.Scan(&m.ID, &m.AgentID, &m.Key, &m.Value, &m.Scope, &m.Confidence,
+		&m.SourceType, &m.SourceMessageID, &m.SourceRunID, &m.Revision, &m.CreatedAt, &m.UpdatedAt)
+	return m, err
+}
+
+func (db *DB) UpsertMemory(memory Memory) (Memory, error) {
+	now := nowUnixMs()
+	current, found, err := db.GetMemory(memory.AgentID, memory.Key)
+	if err != nil {
+		return Memory{}, err
+	}
+	if found {
+		memory.ID = current.ID
+		memory.CreatedAt = current.CreatedAt
+		memory.Revision = current.Revision
+		if current.Value != memory.Value || current.Scope != memory.Scope {
+			memory.Revision++
+		}
+	} else {
+		id, _ := uuid.NewV7()
+		memory.ID = id.String()
+		memory.CreatedAt = now
+		memory.Revision = 1
+	}
+	memory.UpdatedAt = now
+	_, err = db.conn.Exec(
+		`INSERT INTO memory_items (`+memoryColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(agent_id, key) DO UPDATE SET
+		 value=excluded.value, scope=excluded.scope, confidence=excluded.confidence,
+		 source_type=excluded.source_type, source_message_id=excluded.source_message_id,
+		 source_run_id=excluded.source_run_id, revision=excluded.revision, updated_at=excluded.updated_at`,
+		memory.ID, memory.AgentID, memory.Key, memory.Value, memory.Scope, memory.Confidence,
+		memory.SourceType, memory.SourceMessageID, memory.SourceRunID, memory.Revision,
+		memory.CreatedAt, memory.UpdatedAt,
 	)
 	if err != nil {
-		return fmt.Errorf("storage: memory save failed: %w", err)
+		return Memory{}, fmt.Errorf("storage: memory save failed: %w", err)
 	}
-	return nil
+	return memory, nil
 }
 
-// ForgetMemory deletes one key and reports whether it existed.
-func (db *DB) ForgetMemory(key string) (bool, error) {
-	res, err := db.conn.Exec(`DELETE FROM user_memories WHERE key = ?`, key)
-	if err != nil {
-		return false, fmt.Errorf("storage: memory delete failed: %w", err)
+func (db *DB) GetMemory(agentID, key string) (Memory, bool, error) {
+	m, err := scanMemory(db.conn.QueryRow(`SELECT `+memoryColumns+` FROM memory_items WHERE agent_id = ? AND key = ?`, agentID, key))
+	if err == sql.ErrNoRows {
+		return Memory{}, false, nil
 	}
-	n, err := res.RowsAffected()
 	if err != nil {
-		return false, fmt.Errorf("storage: memory delete failed: %w", err)
+		return Memory{}, false, fmt.Errorf("storage: memory get failed: %w", err)
 	}
-	return n > 0, nil
+	return m, true, nil
 }
 
-// ListMemories returns the freshest memories first; limit <= 0 means all.
-func (db *DB) ListMemories(limit int) ([]Memory, error) {
-	q := `SELECT key, value, created_at, updated_at FROM user_memories ORDER BY updated_at DESC`
-	args := []any{}
-	if limit > 0 {
-		q += ` LIMIT ?`
-		args = append(args, limit)
-	}
-	rows, err := db.conn.Query(q, args...)
+func (db *DB) ListMemoryCandidates(agentID string) ([]Memory, error) {
+	// Seal the candidate window: memory ranking is top-8 by score over
+	// potentially thousands of rows; the cap keeps a bloated memory store
+	// from turning every send into a full scan.
+	rows, err := db.conn.Query(`SELECT `+memoryColumns+` FROM memory_items WHERE agent_id = ? ORDER BY updated_at DESC LIMIT 200`, agentID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: memory list failed: %w", err)
 	}
 	defer rows.Close()
 	var out []Memory
 	for rows.Next() {
-		var m Memory
-		if err := rows.Scan(&m.Key, &m.Value, &m.CreatedAt, &m.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("storage: memory list failed: %w", err)
+		m, err := scanMemory(rows)
+		if err != nil {
+			return nil, err
 		}
 		out = append(out, m)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("storage: memory list failed: %w", err)
+	return out, rows.Err()
+}
+
+func (db *DB) ForgetMemoryForAgent(agentID, key string) (bool, error) {
+	res, err := db.conn.Exec(`DELETE FROM memory_items WHERE agent_id = ? AND key = ?`, agentID, key)
+	if err != nil {
+		return false, fmt.Errorf("storage: memory delete failed: %w", err)
 	}
-	return out, nil
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+func (db *DB) GetRequestSource(runID string) (RequestSource, bool, error) {
+	var source RequestSource
+	err := db.conn.QueryRow(
+		`SELECT m.id, m.agent_id, m.role, m.kind, m.text
+		 FROM model_requests r JOIN messages m
+		 ON m.agent_id = r.agent_id AND m.seq = r.context_through_seq
+		 WHERE r.id = ?`, runID,
+	).Scan(&source.MessageID, &source.AgentID, &source.Role, &source.Kind, &source.Text)
+	if err == sql.ErrNoRows {
+		return RequestSource{}, false, nil
+	}
+	if err != nil {
+		return RequestSource{}, false, fmt.Errorf("storage: request source failed: %w", err)
+	}
+	return source, true, nil
+}
+
+func (db *DB) RecordMemoryExposures(requestID string, items []MemoryExposure) error {
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	now := nowUnixMs()
+	for _, item := range items {
+		if _, err := tx.Exec(
+			`INSERT OR REPLACE INTO memory_exposures
+			 (request_id, memory_id, memory_revision, position, score, estimated_tokens, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			requestID, item.MemoryID, item.MemoryRevision, item.Position, item.Score, item.EstimatedTokens, now,
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (db *DB) MemoryFeedback(memoryID string, revision int) (positive, negative int, err error) {
+	err = db.conn.QueryRow(
+		`SELECT
+		 COALESCE(SUM(CASE WHEN r.signal = 1 THEN 1 ELSE 0 END), 0),
+		 COALESCE(SUM(CASE WHEN r.signal = -1 THEN 1 ELSE 0 END), 0)
+		 FROM memory_exposures e
+		 JOIN model_requests mr ON mr.id = e.request_id AND mr.status = 'success'
+		 JOIN message_reactions r ON r.message_id = mr.message_id
+		 WHERE e.memory_id = ? AND e.memory_revision = ?`, memoryID, revision,
+	).Scan(&positive, &negative)
+	return
 }

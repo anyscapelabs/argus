@@ -8,7 +8,7 @@ import (
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
 
-// webSearch is the desktop app's web-search path. It prefers the Argus Router
+// webSearch is the desktop app's web-search path. It prefers the Anyscape Gateway
 // (which routes across Brave, Tavily and Exa with plan quota) using the same
 // service-account key the model calls use, and falls back to the bundled
 // SearXNG metasearch client when the router is unreachable, unconfigured or

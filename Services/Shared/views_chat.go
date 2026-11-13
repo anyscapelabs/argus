@@ -50,18 +50,29 @@ type SendResult struct {
 }
 
 type ChatMessage struct {
-	ID           string           `json:"id"`
-	AgentID      string           `json:"agent_id"`
-	Seq          int              `json:"seq"`
-	Role         string           `json:"role"`
-	Text         string           `json:"text"`
-	Status       string           `json:"status"`
-	ErrorMessage string           `json:"error_message,omitempty"`
-	StopReason   string           `json:"stop_reason,omitempty"`
-	ModelRef     string           `json:"model_ref,omitempty"`
-	CreatedAt    int64            `json:"created_at"`
-	CompletedAt  int64            `json:"completed_at,omitempty"`
-	Blocks       []Protocol.Block `json:"blocks,omitempty"`
+	ID           string              `json:"id"`
+	AgentID      string              `json:"agent_id"`
+	Seq          int                 `json:"seq"`
+	Role         string              `json:"role"`
+	Kind         string              `json:"kind,omitempty"`
+	Text         string              `json:"text"`
+	Status       string              `json:"status"`
+	ErrorMessage string              `json:"error_message,omitempty"`
+	ErrorCode    string              `json:"error_code,omitempty"`
+	StopReason   string              `json:"stop_reason,omitempty"`
+	ModelRef     string              `json:"model_ref,omitempty"`
+	CreatedAt    int64               `json:"created_at"`
+	CompletedAt  int64               `json:"completed_at,omitempty"`
+	Blocks       []Protocol.Block    `json:"blocks,omitempty"`
+	FileWrite    *Protocol.FileWrite `json:"file_write,omitempty"`
+	Reaction     string              `json:"reaction,omitempty"`
+}
+
+type MessageReactionResult struct {
+	Ok        bool         `json:"ok"`
+	MessageID string       `json:"message_id"`
+	Reaction  string       `json:"reaction,omitempty"`
+	Error     *ActionError `json:"error,omitempty"`
 }
 
 type GetChatResult struct {

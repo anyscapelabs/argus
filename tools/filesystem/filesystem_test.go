@@ -68,6 +68,9 @@ func TestWriteCreatesParentsAndGuardsOverwrites(t *testing.T) {
 	if w.Bytes != 5 {
 		t.Fatalf("expected 5 bytes, got %d", w.Bytes)
 	}
+	if w.Action != "created" || w.Lines != 1 {
+		t.Fatalf("unexpected create metadata: %+v", w)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil || string(data) != "hello" {
 		t.Fatalf("unexpected file: %q err=%v", data, err)
@@ -75,17 +78,45 @@ func TestWriteCreatesParentsAndGuardsOverwrites(t *testing.T) {
 	if _, err := Write(path, "bye", false, false); err == nil {
 		t.Fatal("expected overwrite refusal without overwrite=true")
 	}
-	if _, err := Write(path, "bye", true, false); err != nil {
+	changed, err := Write(path, "bye\n", true, false)
+	if err != nil {
 		t.Fatalf("overwrite should pass: %v", err)
 	}
-	if data, _ := os.ReadFile(path); string(data) != "bye" {
+	if changed.Action != "changed" || changed.Lines != 1 {
+		t.Fatalf("unexpected overwrite metadata: %+v", changed)
+	}
+	if data, _ := os.ReadFile(path); string(data) != "bye\n" {
 		t.Fatalf("unexpected content after overwrite: %q", data)
 	}
 	if _, err := Write(path, "-tail", false, true); err != nil {
 		t.Fatalf("append should pass: %v", err)
 	}
-	if data, _ := os.ReadFile(path); string(data) != "bye-tail" {
+	if data, _ := os.ReadFile(path); string(data) != "bye\n-tail" {
 		t.Fatalf("unexpected appended content: %q", data)
+	}
+	if _, err := Write(path, "bad", true, true); err == nil {
+		t.Fatal("overwrite and append were accepted together")
+	}
+}
+
+func TestEditRequiresExactMatchAndWritesAtomically(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "code.go")
+	if err := os.WriteFile(path, []byte("package demo\n\nconst value = 1\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Edit(path, "const value = 1", "const value = 2", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Action != "changed" || res.Lines != 3 {
+		t.Fatalf("unexpected edit metadata: %+v", res)
+	}
+	if _, err := Edit(path, "missing", "x", 1); err == nil {
+		t.Fatal("missing match changed the file")
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), "value = 2") {
+		t.Fatalf("edit did not land: %q", data)
 	}
 }
 

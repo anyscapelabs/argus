@@ -1,1 +1,221 @@
-[{"id": "gmail", "name": "Gmail", "description": "Let Argus search, read, draft and label email", "icon": "/gmail.png", "url": "https://gmailmcp.googleapis.com/mcp/v1", "oauth": {"mode": "google", "scopes": ["https://www.googleapis.com/auth/gmail.modify", "https://www.googleapis.com/auth/gmail.compose"], "probeTool": "list_labels"}}, {"id": "google-calendar", "name": "Google Calendar", "description": "Let Argus read and manage calendar events", "icon": "/icons/calendar.png", "url": "https://calendarmcp.googleapis.com/mcp/v1", "oauth": {"mode": "google", "scopes": ["https://www.googleapis.com/auth/calendar.events", "https://www.googleapis.com/auth/calendar.calendarlist.readonly"], "probeTool": "list_calendars"}}, {"id": "google-drive", "name": "Google Drive", "description": "Let Argus search, read and organise your files", "icon": "/icons/drive.png", "url": "https://drivemcp.googleapis.com/mcp/v1", "oauth": {"mode": "google", "scopes": ["https://www.googleapis.com/auth/drive"], "probeTool": "list_recent_files"}}, {"id": "google-docs", "name": "Google Docs", "description": "Let Argus read and edit Google documents", "icon": "/icons/docs.png", "url": "https://docsmcp.googleapis.com/mcp/v1", "oauth": {"mode": "google", "scopes": ["https://www.googleapis.com/auth/documents", "https://www.googleapis.com/auth/drive.readonly"], "probeTool": "read_doc"}}, {"id": "google-sheets", "name": "Google Sheets", "description": "Let Argus read and update spreadsheets", "icon": "/icons/sheets.png", "url": "https://sheetsmcp.googleapis.com/mcp/v1", "oauth": {"mode": "google", "scopes": ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive.readonly"], "probeTool": "get_spreadsheet"}}, {"id": "google-tasks", "name": "Google Tasks", "description": "Let Argus keep and complete your task lists", "icon": "/icons/tasks.png", "url": "https://tasksmcp.googleapis.com/mcp/v1", "oauth": {"mode": "google", "scopes": ["https://www.googleapis.com/auth/tasks"], "probeTool": "list_tasks"}}, {"id": "linear", "name": "Linear", "description": "Let Argus find, create and update issues and projects", "icon": "/icons/linear.png", "url": "https://mcp.linear.app/mcp", "oauth": {"mode": "dynamic", "scopes": ["read", "write"]}}, {"id": "notion", "name": "Notion", "description": "Let Argus read and write pages, databases and comments", "icon": "/icons/notion.png", "url": "https://mcp.notion.com/mcp", "oauth": {"mode": "dynamic", "scopes": ["default"]}}, {"id": "github", "name": "GitHub", "description": "Let Argus work with your repositories, issues and pull requests", "icon": "/icons/github.png", "url": "https://api.githubcopilot.com/mcp/", "oauth": {"mode": "github", "scopes": ["repo", "read:org", "read:user", "user:email", "notifications", "project", "read:project", "gist"]}}, {"id": "todoist", "name": "Todoist", "description": "Let Argus manage tasks and projects", "icon": "/todoist.png", "url": "https://ai.todoist.net/mcp", "oauth": {"mode": "dynamic", "scopes": []}}]
+[
+  {
+    "id": "gmail",
+    "name": "Gmail",
+    "description": "Let Argus search, read, draft and label email",
+    "icon": "/gmail.png",
+    "url": "https://gmailmcp.googleapis.com/mcp/v1",
+    "oauth": {
+      "mode": "google",
+      "scopes": [
+        "https://www.googleapis.com/auth/gmail.modify",
+        "https://www.googleapis.com/auth/gmail.compose"
+      ],
+      "probeTool": "list_labels"
+    }
+  },
+  {
+    "id": "google-calendar",
+    "name": "Google Calendar",
+    "description": "Let Argus read and manage calendar events",
+    "icon": "/icons/calendar.png",
+    "url": "https://calendarmcp.googleapis.com/mcp/v1",
+    "oauth": {
+      "mode": "google",
+      "scopes": [
+        "https://www.googleapis.com/auth/calendar.events",
+        "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
+      ],
+      "probeTool": "list_calendars"
+    }
+  },
+  {
+    "id": "google-drive",
+    "name": "Google Drive",
+    "description": "Let Argus search, read and organise your files",
+    "icon": "/icons/drive.png",
+    "url": "https://drivemcp.googleapis.com/mcp/v1",
+    "oauth": {
+      "mode": "google",
+      "scopes": [
+        "https://www.googleapis.com/auth/drive"
+      ],
+      "probeTool": "list_recent_files"
+    }
+  },
+  {
+    "id": "google-docs",
+    "name": "Google Docs",
+    "description": "Let Argus read and edit Google documents",
+    "icon": "/icons/docs.png",
+    "url": "https://docsmcp.googleapis.com/mcp/v1",
+    "oauth": {
+      "mode": "google",
+      "scopes": [
+        "https://www.googleapis.com/auth/documents",
+        "https://www.googleapis.com/auth/drive.readonly"
+      ],
+      "probeTool": "read_doc"
+    }
+  },
+  {
+    "id": "google-sheets",
+    "name": "Google Sheets",
+    "description": "Let Argus read and update spreadsheets",
+    "icon": "/icons/sheets.png",
+    "url": "https://sheetsmcp.googleapis.com/mcp/v1",
+    "oauth": {
+      "mode": "google",
+      "scopes": [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive.readonly"
+      ],
+      "probeTool": "get_spreadsheet"
+    }
+  },
+  {
+    "id": "google-tasks",
+    "name": "Google Tasks",
+    "description": "Let Argus keep and complete your task lists",
+    "icon": "/icons/tasks.png",
+    "url": "https://tasksmcp.googleapis.com/mcp/v1",
+    "oauth": {
+      "mode": "google",
+      "scopes": [
+        "https://www.googleapis.com/auth/tasks"
+      ],
+      "probeTool": "list_tasks"
+    }
+  },
+  {
+    "id": "cloudflare",
+    "name": "Cloudflare",
+    "description": "Let Argus search Cloudflare docs and inspect authorized resources",
+    "icon": "/icons/cloudflare.svg",
+    "url": "https://mcp.cloudflare.com/mcp",
+    "oauth": {
+      "mode": "dynamic",
+      "scopes": [
+        "user:read",
+        "account:read"
+      ]
+    }
+  },
+  {
+    "id": "context7",
+    "name": "Context7",
+    "description": "Let Argus fetch current library documentation and code examples",
+    "icon": "/icons/context7.svg",
+    "url": "https://mcp.context7.com/mcp/oauth",
+    "oauth": {
+      "mode": "dynamic",
+      "scopes": [
+        "profile",
+        "email"
+      ]
+    }
+  },
+  {
+    "id": "google-slides",
+    "name": "Google Slides",
+    "description": "Let Argus read presentations and summarize slide decks",
+    "icon": "/icons/google-slides.svg",
+    "url": "https://slidesmcp.googleapis.com/mcp/v1",
+    "oauth": {
+      "mode": "google",
+      "scopes": [
+        "https://www.googleapis.com/auth/presentations.readonly"
+      ],
+      "probeTool": "read_presentation"
+    }
+  },
+  {
+    "id": "linear",
+    "name": "Linear",
+    "description": "Let Argus find, create and update issues and projects",
+    "icon": "/icons/linear.png",
+    "url": "https://mcp.linear.app/mcp",
+    "oauth": {
+      "mode": "dynamic",
+      "scopes": [
+        "read",
+        "write"
+      ]
+    }
+  },
+  {
+    "id": "notion",
+    "name": "Notion",
+    "description": "Let Argus read and write pages, databases and comments",
+    "icon": "/icons/notion.png",
+    "url": "https://mcp.notion.com/mcp",
+    "oauth": {
+      "mode": "dynamic",
+      "scopes": [
+        "default"
+      ]
+    }
+  },
+  {
+    "id": "github",
+    "name": "GitHub",
+    "description": "Let Argus work with your repositories, issues and pull requests",
+    "icon": "/icons/github.png",
+    "url": "https://api.githubcopilot.com/mcp/",
+    "oauth": {
+      "mode": "github",
+      "scopes": [
+        "repo",
+        "read:org",
+        "read:user",
+        "user:email",
+        "notifications",
+        "project",
+        "read:project",
+        "gist"
+      ]
+    }
+  },
+  {
+    "id": "todoist",
+    "name": "Todoist",
+    "description": "Let Argus manage tasks and projects",
+    "icon": "/todoist.png",
+    "url": "https://ai.todoist.net/mcp",
+    "oauth": {
+      "mode": "dynamic",
+      "scopes": []
+    }
+  },
+  {
+    "id": "atlassian",
+    "name": "Atlassian",
+    "description": "Let Argus search Jira work and Confluence knowledge",
+    "icon": "/icons/atlassian.svg",
+    "url": "https://mcp.atlassian.com/v2/mcp",
+    "oauth": {
+      "mode": "dynamic",
+      "scopes": [
+        "read:me",
+        "read:account",
+        "read:jira:agent-interface",
+        "search:jira:agent-interface",
+        "read:confluence:agent-interface",
+        "search:confluence:agent-interface"
+      ]
+    }
+  },
+  {
+    "id": "sentry",
+    "name": "Sentry",
+    "description": "Let Argus monitor errors and summarize application health",
+    "icon": "/icons/sentry.svg",
+    "url": "https://mcp.sentry.dev/mcp",
+    "oauth": {
+      "mode": "dynamic",
+      "scopes": [
+        "org:read"
+      ]
+    }
+  }
+]

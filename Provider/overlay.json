@@ -17,7 +17,7 @@
   "providers": [
     {
       "id": "argus-router",
-      "display_name": "Argus Router",
+      "display_name": "Anyscape Gateway",
       "adapter": "openai_compat",
       "base_url": "http://localhost:8080/v1",
       "models_path": "/models",

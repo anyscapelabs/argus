@@ -40,10 +40,12 @@ func activitySources(results []Search.Result) []Shared.ActivitySource {
 // browser is included only when this machine has a browser to drive — a tool the
 // model cannot possibly succeed at is worse than not offering it.
 func (s *Service) baseToolDefs() []Protocol.ToolDef {
-	defs := []Protocol.ToolDef{terminalToolDef, readFileToolDef, writeFileToolDef, grepFilesToolDef,
+	defs := []Protocol.ToolDef{terminalToolDef, readFileToolDef, writeFileToolDef, editFileToolDef, grepFilesToolDef,
 		webSearchToolDef, timeLocationToolDef, rememberToolDef, forgetToolDef,
+		recallMemoriesToolDef,
 		scheduleReminderToolDef, createRoutineToolDef, listScheduledToolDef, cancelScheduledToolDef,
 		writeArtifactToolDef, createSlidesToolDef, conversationReadToolDef, s.connectToolDef()}
+	defs = append(defs, askUserToolDef)
 	if s.Browser != nil {
 		if ok, _ := s.Browser.Available(); ok {
 			defs = append(defs, browserToolDef)
@@ -56,12 +58,8 @@ func (s *Service) baseToolDefs() []Protocol.ToolDef {
 // connector schemas ride along only for the integrations the replayed
 // history already touched; everything else waits behind the loader. Returns
 // the system prompt suffix describing the tools (empty when tools are off).
-func (s *Service) attachTools(req *Protocol.Request, target *Protocol.Target, activeServers []string) bool {
-	baseTools := s.baseToolDefs()
-	baseTools = append(baseTools, mcpLoadToolDef)
-	for _, id := range activeServers {
-		baseTools = append(baseTools, s.mcpServerToolDefs(id)...)
-	}
+func (s *Service) attachTools(req *Protocol.Request, target *Protocol.Target, _ []string) bool {
+	baseTools := gatewayToolDefs()
 	if !s.modelSupportsTools(target) {
 		return false
 	}
@@ -74,8 +72,7 @@ func (s *Service) modelSupportsTools(target *Protocol.Target) bool {
 	if err != nil {
 		return false
 	}
-	scratch := &Protocol.Request{Tools: s.baseToolDefs()}
-	scratch.Tools = append(scratch.Tools, mcpLoadToolDef)
+	scratch := &Protocol.Request{Tools: gatewayToolDefs()}
 	Protocol.ClampRequest(scratch, ad.Capabilities(Protocol.ModelInfo{ID: target.ModelID}))
 	return len(scratch.Tools) > 0
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { linkLabel, linkify } from './linkify'
+import { linkLabel, linkify } from '../../../frontend/src/lib/linkify'
 
 describe('linkify', () => {
   it('wraps a bare URL at the end of text in angle brackets', () => {

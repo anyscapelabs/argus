@@ -56,9 +56,9 @@ var readFileToolDef = Protocol.ToolDef{
 
 var writeFileToolDef = Protocol.ToolDef{
 	Name: "write_file",
-	Description: "Create, replace or append to one text file; parent folders are created as needed. " +
-		"An existing file is never touched without overwrite=true or append=true — say what you intend. " +
-		"Use it to save a report, a note, or anything the user asked to be written down. " +
+	Description: "Create or replace a text file, including source code, configuration and project files; parent folders are created as needed. " +
+		"Read an existing file before replacing it, because overwrite=true replaces the whole file. Never append to edit source code. " +
+		"overwrite and append are mutually exclusive. Success returns a canonical path, created/changed action, exact bytes and line count. " +
 		"Needs the user's file permission first.",
 	Schema: json.RawMessage(`{
 		"type": "object",
@@ -81,6 +81,23 @@ var writeFileToolDef = Protocol.ToolDef{
 			}
 		},
 		"required": ["path", "content"]
+	}`),
+}
+
+var editFileToolDef = Protocol.ToolDef{
+	Name: "edit_file",
+	Description: "Edit source code, configuration or another text file by replacing exact old_text with new_text atomically. " +
+		"The call fails without changing anything when the match count differs from expected_replacements (default 1). " +
+		"Use this instead of reconstructing a whole existing file. Read or grep first so old_text is exact. Needs file permission.",
+	Schema: json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"path": {"type": "string", "description": "File path, absolute or starting with ~"},
+			"old_text": {"type": "string", "description": "Exact existing text to replace"},
+			"new_text": {"type": "string", "description": "Replacement text"},
+			"expected_replacements": {"type": "integer", "description": "Required match count; default 1"}
+		},
+		"required": ["path", "old_text", "new_text"]
 	}`),
 }
 

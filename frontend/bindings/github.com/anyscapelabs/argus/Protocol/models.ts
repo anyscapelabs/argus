@@ -15,6 +15,7 @@ export interface Block {
     "is_error"?: boolean;
     "signature"?: string;
     "extra"?: json$0.RawMessage;
+    "file_write"?: FileWrite | null;
 }
 
 export enum BlockType {
@@ -29,6 +30,13 @@ export enum BlockType {
     BlockToolResult = "tool_result",
     BlockThinking = "thinking",
 };
+
+export interface FileWrite {
+    "path": string;
+    "action": string;
+    "bytes": number;
+    "lines": number;
+}
 
 export interface Image {
     "media_type": string;

@@ -15,9 +15,9 @@ import (
 func TestPromptKeepsTablesForRealDataOnly(t *testing.T) {
 	prompt := systemPromptFor(Storage.AgentProfile{AgentName: "Argus"}, true)
 	for _, must := range []string{
-		"Tables are for grids of real data only",
-		"Never a table for options, next steps",
-		"At most one table per reply",
+		"table only for a real multi-row data grid",
+		"search_tools",
+		"invoke_tool",
 	} {
 		if !strings.Contains(prompt, must) {
 			t.Errorf("the output rules never say %q", must)
@@ -33,17 +33,15 @@ func TestPromptKeepsTablesForRealDataOnly(t *testing.T) {
 func TestPromptMakesTheAgentTakeTheStepItself(t *testing.T) {
 	prompt := systemPromptFor(Storage.AgentProfile{AgentName: "Argus"}, true)
 	for _, must := range []string{
-		"Do, then report",
-		"change method and try again",
-		"Never tell the user to go do something you have a tool for",
+		"Act first, then report",
+		"try a sensible alternative",
+		"Do not hand the user steps",
 	} {
 		if !strings.Contains(prompt, must) {
 			t.Errorf("the working-style rules never say %q", must)
 		}
 	}
-	// A page that rendered 32 elements and was read from 50 looks empty, and an
-	// agent that believes that stops looking.
-	if !strings.Contains(prompt, "an empty window means you read past the end") {
-		t.Error("the browser block never explains what an empty read window means")
+	if strings.Contains(prompt, "### browser") || strings.Contains(prompt, "### execute_command") {
+		t.Error("the compact prompt still dumps individual tool sections")
 	}
 }

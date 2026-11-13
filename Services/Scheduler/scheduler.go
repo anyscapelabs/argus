@@ -30,14 +30,15 @@ import (
 // chatRunner is the slice of the Chat service the engine needs. Narrow on
 // purpose: the scheduler depends on a behaviour, not on 700 lines of send.go.
 type chatRunner interface {
-	SendScheduledWake(agentID, text string) Shared.SendResult
+	SendScheduledWake(agentID, text string, prepared func(Shared.SendResult)) Shared.SendResult
 	OnRunFinished(fn func(servicechat.RunOutcome))
 }
 
 // Notifier is the notification sink; main.go passes Wails'
 // notifications.NotificationService, but the engine only ever calls Notify.
 type Notifier interface {
-	Notify(title, body string)
+	Authorize() error
+	Notify(id, title, body string)
 }
 
 type pendingRun struct {
@@ -94,6 +95,11 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 		log.Printf("scheduler: abandoned-run sweep failed: %v", err)
 	}
 	s.ctx, s.cancel = context.WithCancel(context.Background())
+	if s.Notifier != nil {
+		if err := s.Notifier.Authorize(); err != nil {
+			log.Printf("scheduler: notifications unavailable: %v", err)
+		}
+	}
 	// The engine hears about finished runs through the chat service itself,
 	// so it never has to poll for the assistant row to settle.
 	s.Chat.OnRunFinished(s.runFinished)
@@ -299,6 +305,7 @@ func (s *Service) fire(t Storage.ScheduledTask, now int64) error {
 	}
 
 	late := now - t.NextRunAt
+	occurrenceAt := t.NextRunAt
 	kindLabel := "routine"
 	if t.Kind == Storage.KindReminder {
 		kindLabel = "reminder"
@@ -311,11 +318,11 @@ func (s *Service) fire(t Storage.ScheduledTask, now int64) error {
 	// up again instead of doing it.
 	var wake strings.Builder
 	fmt.Fprintf(&wake,
-		"Your scheduler woke you: the %s %q you set up earlier is due now. There is no user message — this is an internal app-authored turn.\n"+
-			"Stored instruction: %s\n"+
-			"Execute that instruction now, then report the result to the user in this conversation. "+
-			"Do not call create_routine or schedule_reminder as part of this turn — the task is already scheduled; your job is only to perform it. "+
-			"Do not ask the user questions; this runs unattended.", kindLabel, t.Title, strings.TrimSpace(t.Prompt))
+		"Internal background task due now. No user sent a message.\n"+
+			"Task: %s\n"+
+			"Instruction to execute now: %s\n"+
+			"Perform it once and reply with only the useful user-facing result. Any time or recurrence wording describes why this task fired, not a request to schedule it again. Do not ask questions; this runs unattended.",
+		t.Title, strings.TrimSpace(t.Prompt))
 	if late > 0 {
 		wake.WriteString("\n(Time note: this fired " + humanDelay(late) + lateLate(late) + " — factor that into how you execute it.)")
 	}
@@ -344,8 +351,37 @@ func (s *Service) fire(t Storage.ScheduledTask, now int64) error {
 		}
 	}
 
-	res := s.Chat.SendScheduledWake(agentID, wake.String())
+	rid, uerr := uuid.NewV7()
+	if uerr != nil {
+		return uerr
+	}
+	runRowID := rid.String()
+	res := s.Chat.SendScheduledWake(agentID, wake.String(), func(start Shared.SendResult) {
+		if err := s.Core.DB.InsertScheduledRun(Storage.ScheduledRun{
+			ID:        runRowID,
+			TaskID:    t.ID,
+			AgentID:   agentID,
+			MessageID: start.AssistantMessageID,
+			Status:    Storage.RunStarted,
+			StartedAt: occurrenceAt,
+		}); err != nil {
+			log.Printf("scheduler: could not record started run for %s: %v", t.ID, err)
+		}
+		s.mu.Lock()
+		if s.pending == nil {
+			s.pending = map[string]pendingRun{}
+		}
+		s.pending[start.RunID] = pendingRun{taskID: t.ID, runID: runRowID, title: t.Title}
+		s.mu.Unlock()
+	})
 	if !res.Ok {
+		if t.Kind == Storage.KindRoutine {
+			// The occurrence never started. Put the routine back where this sweep
+			// found it so busy/offline retries cannot silently skip one fire.
+			if err := s.Core.DB.SetTaskSchedule(t.ID, t.ScheduleJSON, occurrenceAt); err != nil {
+				return fmt.Errorf("restore due routine after failed start: %w", err)
+			}
+		}
 		code := ""
 		if res.Error != nil {
 			code = res.Error.Code
@@ -385,21 +421,6 @@ func (s *Service) fire(t Storage.ScheduledTask, now int64) error {
 	}
 	s.clearFailure(t.ID)
 
-	rid, uerr := uuid.NewV7()
-	if uerr != nil {
-		return uerr
-	}
-	runRowID := rid.String()
-	if err := s.Core.DB.InsertScheduledRun(Storage.ScheduledRun{
-		ID:        runRowID,
-		TaskID:    t.ID,
-		AgentID:   agentID,
-		MessageID: res.AssistantMessageID,
-		Status:    Storage.RunStarted,
-		StartedAt: now,
-	}); err != nil {
-		return err
-	}
 	// Reminders retire the moment their run has been started for real;
 	// routines already advanced above.
 	if t.Kind == Storage.KindReminder {
@@ -407,12 +428,6 @@ func (s *Service) fire(t Storage.ScheduledTask, now int64) error {
 			return err
 		}
 	}
-	s.mu.Lock()
-	if s.pending == nil {
-		s.pending = map[string]pendingRun{}
-	}
-	s.pending[res.RunID] = pendingRun{taskID: t.ID, runID: runRowID, title: t.Title}
-	s.mu.Unlock()
 	log.Printf("scheduler: fired %s %q (late %s)", kindLabel, t.Title, humanDelay(late))
 	return nil
 }
@@ -467,7 +482,7 @@ func (s *Service) runFinished(out servicechat.RunOutcome) {
 		body = fmt.Sprintf("%s (%s)", body, detail)
 	}
 	if s.Notifier != nil {
-		s.Notifier.Notify(p.title, body)
+		s.Notifier.Notify(p.runID, p.title, body)
 	}
 }
 

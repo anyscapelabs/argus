@@ -88,7 +88,35 @@ func (s *Service) runFileTool(
 		if werr != nil {
 			return result("could not write the file: "+werr.Error(), true)
 		}
-		return result(fmt.Sprintf("%s: %d bytes written.", res.Path, res.Bytes), false)
+		block := result(fmt.Sprintf("%s %s: %d bytes, %d lines written.", res.Action, res.Path, res.Bytes, res.Lines), false)
+		block.FileWrite = &Protocol.FileWrite{
+			Path: res.Path, Action: res.Action, Bytes: res.Bytes, Lines: res.Lines,
+		}
+		return block
+
+	case "edit_file":
+		var input struct {
+			Path                 string `json:"path"`
+			OldText              string `json:"old_text"`
+			NewText              string `json:"new_text"`
+			ExpectedReplacements int    `json:"expected_replacements"`
+		}
+		if err := json.Unmarshal([]byte(call.Input), &input); err != nil {
+			return result("invalid tool input: could not parse edit_file arguments", true)
+		}
+		summary := "edit file: " + strings.TrimSpace(input.Path)
+		if skip, denied := gate(summary); skip {
+			return denied
+		}
+		activity("tool_started", summary)
+		res, editErr := filesystem.Edit(input.Path, input.OldText, input.NewText, input.ExpectedReplacements)
+		activity("tool_finished", summary)
+		if editErr != nil {
+			return result("could not edit the file: "+editErr.Error(), true)
+		}
+		block := result(fmt.Sprintf("changed %s: %d bytes, %d lines.", res.Path, res.Bytes, res.Lines), false)
+		block.FileWrite = &Protocol.FileWrite{Path: res.Path, Action: res.Action, Bytes: res.Bytes, Lines: res.Lines}
+		return block
 
 	case "grep_files":
 		var input struct {

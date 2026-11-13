@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getLiveConfig, conversationRead } from './api'
+import { Events } from '@wailsio/runtime'
+import { endLiveSession, getLiveConfig, runLiveTool } from './api'
+import type { VoiceTurn } from './api'
 
 export type VoiceStatus = 'idle' | 'connecting' | 'live' | 'ended'
+
+// VoiceCallSummary is what a finished call leaves behind. `unanswered` is true
+// only when the user spoke and the live model never produced any response.
+export type VoiceCallSummary = {
+  seconds: number
+  unanswered: boolean
+  turns: VoiceTurn[]
+}
 
 // targetRate is the sample rate Gemini Live expects for INPUT: 16 kHz PCM mono.
 const targetRate = 16000
@@ -24,36 +34,6 @@ const echoGuardTailSec = 0.3
 const bargeInRMS = 0.05
 // voiceName is the prebuilt Gemini voice used for every call.
 const voiceName = 'Alnilam'
-// The single tool the voice model may call. No history is replayed and no other
-// tools are attached; when the model needs earlier context it calls this.
-// Gemini 3.8 Live defaults to asynchronous (NON_BLOCKING) function calling; the
-// model keeps talking while the tool runs and picks the result up when it lands.
-const conversationReadTool = {
-  functionDeclarations: [
-    {
-      name: 'conversation_read',
-      description:
-        'Searches this chat for earlier messages and returns numbered snippets, so you can recall what was said before. Call it when the user references something from earlier in the conversation.',
-      behavior: 'NON_BLOCKING',
-      parameters: {
-        type: 'OBJECT',
-        properties: {
-          query: { type: 'STRING', description: 'Words to search for in the earlier conversation.' },
-        },
-        required: ['query'],
-      },
-    },
-  ],
-}
-
-// VoiceSystemPrompt is the compact, speech-oriented instruction the live model
-// is given. Deliberately no markdown, no tool dump, no history — the model gets
-// only this and whatever the user says.
-const VoiceSystemPrompt =
-  "You are Argus, the user's personal AI assistant, speaking in a live voice call. " +
-  'Answer briefly and conversationally, as if talking out loud. Keep it natural and to the point. ' +
-  'If the user references something from earlier in the chat, call conversation_read to look it up; ' +
-  'otherwise answer from what they just said.'
 
 // base64FromBytes encodes a binary buffer for the wire.
 function base64FromBytes(buf: ArrayBuffer): string {
@@ -123,20 +103,18 @@ function createAudioCtx(rate: number = targetRate): AudioContext {
 
 export type UseLiveCallOptions = {
   agentID?: string
-  systemPrompt?: string
-  onTranscript?: (text: string) => void
 }
 
-export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPrompt }: UseLiveCallOptions = {}) {
+export function useLiveCall({ agentID = 'default' }: UseLiveCallOptions = {}) {
   const [status, setStatus] = useState<VoiceStatus>('idle')
   const [elapsed, setElapsed] = useState(0)
   const [error, setError] = useState<string | null>(null)
   // paused mutes the microphone without tearing the call down: no frames leave
   // while paused, and the model simply hears silence until it is lifted.
   const [paused, setPaused] = useState(false)
-  // lastSeconds is the duration of the most recently finished call (0 until one
-  // ends), so a caller can record it in the transcript when the call is done.
-  const [lastSeconds, setLastSeconds] = useState(0)
+  // lastCall describes the most recently finished call (null until one ends
+  // with something said), so the caller can persist it to the transcript.
+  const [lastCall, setLastCall] = useState<VoiceCallSummary | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const micStreamRef = useRef<MediaStream | null>(null)
@@ -153,11 +131,15 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
   // starting every chunk at once, and let an interruption cut playback cleanly.
   const nextPlayTimeRef = useRef(0)
   const playingRef = useRef<Set<AudioBufferSourceNode>>(new Set())
-  const configRef = useRef<{ ws_url: string } | null>(null)
+  const sessionRef = useRef('')
   // frameCountRef caps the one-time server-frame diagnostics to the first few.
   const frameCountRef = useRef(0)
-  const systemPromptRef = useRef(systemPrompt)
-  systemPromptRef.current = systemPrompt
+  // Transcript accumulation. inputBufRef/modelBufRef hold the utterance being
+  // transcribed (Google streams the text in fragments); turnsRef holds every
+  // completed side so far.
+  const inputBufRef = useRef('')
+  const modelBufRef = useRef('')
+  const turnsRef = useRef<VoiceTurn[]>([])
 
   const stopTimer = () => {
     if (timerRef.current) {
@@ -165,6 +147,18 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
       timerRef.current = null
     }
   }
+
+  // flushTurns closes the utterances in flight: whatever the transcription
+  // fragments built up becomes a turn, and the buffers start empty. A side
+  // with no text produces no turn.
+  const flushTurns = useCallback(() => {
+    const said = inputBufRef.current.trim()
+    const answered = modelBufRef.current.trim()
+    if (said) turnsRef.current.push({ role: 'user', text: said })
+    if (answered) turnsRef.current.push({ role: 'model', text: answered })
+    inputBufRef.current = ''
+    modelBufRef.current = ''
+  }, [])
 
   const send = useCallback((frame: unknown) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -241,7 +235,8 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
     }
   }, [])
 
-  // handleFunctionCall runs one tool the model asked for and answers it.
+  // handleFunctionCall is transport only: every function, catalog lookup,
+  // permission check and side effect is owned by the backend session.
   //
   // Wire contract (Gemini Live): the model asks for tools in a TOP-LEVEL
   // `toolCall.functionCalls` frame — never inside serverContent.modelTurn — and
@@ -250,24 +245,26 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
   // never arrives, which from the outside looks like a call that went silent.
   const handleFunctionCall = useCallback(
     async (call: { id: string; name: string; args?: Record<string, unknown> }) => {
-      let result = ''
-      if (call.name === 'conversation_read') {
-        const query = String(call.args?.query ?? '').trim()
-        try {
-          result = await conversationRead(agentID, query)
-        } catch (err) {
-          result = `could not read the conversation: ${(err as Error).message}`
-        }
-      } else {
-        result = `Unknown tool ${call.name}`
+      let output = ''
+      let isError = false
+      try {
+        if (!sessionRef.current) throw new Error('The live tool session has ended')
+        const result = await runLiveTool(sessionRef.current, call.id, call.name, call.args ?? {})
+        output = result.output
+        isError = result.isError
+      } catch (err) {
+        output = `tool call failed: ${(err as Error).message}`
+        isError = true
       }
       send({
         toolResponse: {
-          functionResponses: [{ id: call.id, name: call.name, response: { output: result } }],
+          functionResponses: [
+            { id: call.id, name: call.name, response: { output, is_error: isError, scheduling: 'INTERRUPT' } },
+          ],
         },
       })
     },
-    [agentID, send],
+    [send],
   )
 
   // handleServerFrame processes a message from the model.
@@ -306,6 +303,14 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
       if (sc?.interrupted) {
         flushAudio()
       }
+      // Transcription fragments. Google streams the words as they are spoken;
+      // they only become turns at a turn boundary.
+      if (typeof sc?.inputTranscription?.text === 'string') {
+        inputBufRef.current += sc.inputTranscription.text
+      }
+      if (typeof sc?.outputTranscription?.text === 'string') {
+        modelBufRef.current += sc.outputTranscription.text
+      }
       if (sc?.modelTurn?.parts) {
         for (const part of sc.modelTurn.parts) {
           if (part.inlineData?.data) {
@@ -320,6 +325,7 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
         }
       }
       if (sc?.turnComplete) {
+        flushTurns()
         setStatus((s) => (s === 'connecting' ? 'live' : s))
       }
       if (frame.error) {
@@ -383,20 +389,27 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
   const start = useCallback(async () => {
     setError(null)
     setElapsed(0)
-    setLastSeconds(0)
+    setLastCall(null)
     setPaused(false)
     pausedRef.current = false
     setupDoneRef.current = false
     startRef.current = 0
     stopTimer()
     frameCountRef.current = 0
+    inputBufRef.current = ''
+    modelBufRef.current = ''
+    turnsRef.current = []
     flushAudio()
     setStatus('connecting')
     try {
-      if (!configRef.current) {
-        configRef.current = await getLiveConfig()
+      if (sessionRef.current) {
+        await endLiveSession(sessionRef.current)
+        sessionRef.current = ''
       }
-      const cfg = configRef.current
+      // Prompt, profile context and the compact gateway declarations are
+      // rebuilt by Go for every call; the frontend owns only transport.
+      const cfg = await getLiveConfig(agentID)
+      sessionRef.current = cfg.session_id
       // The playback context exists before the socket so the connect beep can
       // fire the instant the server accepts the call. It runs at the model's
       // 24 kHz output rate so the voice is not resampled down on the way out.
@@ -418,8 +431,13 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
               responseModalities: ['AUDIO'],
               speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName } } },
             },
-            systemInstruction: { parts: [{ text: systemPromptRef.current }] },
-            tools: [conversationReadTool],
+            // Both sides of the call come back as text. This is what the
+            // transcript card is built from; it adds no separate fee, only a
+            // trivial number of text tokens on top of the audio already sent.
+            inputAudioTranscription: {},
+            outputAudioTranscription: {},
+            systemInstruction: { parts: [{ text: cfg.system_instruction }] },
+            tools: [{ functionDeclarations: cfg.tools ?? [] }],
           },
         })
       }
@@ -439,8 +457,9 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
           // Keep the first error if one was already reported (it is more specific).
           setError((prev) => prev ?? `The voice service closed the call (${ev.code}${ev.reason ? `: ${ev.reason}` : ''})`)
         }
-        setStatus((s) => (s === 'live' || s === 'connecting' ? 'ended' : s))
-        stopTimer()
+        // The server ended the call: finalize the transcript and tear the rest
+        // of the session down exactly as a user-initiated stop would.
+        end()
       }
 
       // Open the microphone now so the permission prompt happens up front, but
@@ -464,13 +483,29 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
       setStatus('ended')
       void end()
     }
-  }, [attachMic, connectBeep, flushAudio, handleServerFrame, send])
+  }, [agentID, attachMic, connectBeep, flushAudio, handleServerFrame, send])
 
   const end = useCallback(() => {
     stopTimer()
+    if (sessionRef.current) {
+      void endLiveSession(sessionRef.current)
+      sessionRef.current = ''
+    }
+    // Close the utterance in flight before deciding whether the call was ever
+    // answered. A partial or complete live-model response still counts as an
+    // answer and belongs in the voice transcript card.
+    flushTurns()
+    const seconds = startRef.current ? Math.max(0, Math.floor((Date.now() - startRef.current) / 1000)) : 0
     // A call that never connected (startRef still 0) has no duration to record.
-    setLastSeconds(startRef.current ? Math.max(0, Math.floor((Date.now() - startRef.current) / 1000)) : 0)
+    if (turnsRef.current.length > 0) {
+      const turns = turnsRef.current.slice()
+      const unanswered = turns.some((turn) => turn.role === 'user') && !turns.some((turn) => turn.role === 'model')
+      setLastCall({ seconds, unanswered, turns })
+    } else {
+      setLastCall(null)
+    }
     startRef.current = 0
+    turnsRef.current = []
     processorRef.current?.disconnect()
     processorRef.current = null
     micStreamRef.current?.getTracks().forEach((t) => t.stop())
@@ -492,7 +527,7 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
       wsRef.current = null
     }
     setStatus('ended')
-  }, [])
+  }, [flushTurns])
 
   // togglePause mutes or unmutes the mic mid-call. The session stays open, so
   // the user can step away from the conversation and rejoin it where it left
@@ -506,6 +541,10 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
   }, [send])
 
   useEffect(() => () => end(), [end])
+  useEffect(() => {
+    const unsubscribe = Events.On('app:backgrounded', () => end())
+    return () => unsubscribe?.()
+  }, [end])
 
   // formatElapsed renders seconds as MM:SS (or H:MM:SS past an hour).
   const display = useCallback(() => {
@@ -514,5 +553,5 @@ export function useLiveCall({ agentID = 'default', systemPrompt = VoiceSystemPro
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
   }, [elapsed])
 
-  return { status, elapsed, display, lastSeconds, error, paused, togglePause, start, end }
+  return { status, elapsed, display, lastCall, error, paused, togglePause, start, end }
 }

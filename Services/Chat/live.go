@@ -4,7 +4,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
 
@@ -14,9 +13,13 @@ import (
 // itself, so the app never has to know a model id. The account key rides in the
 // URL's query because a WebSocket client (the webview) cannot set custom headers
 // and the browser cannot read the OS keyring.
-func (s *Service) LiveConfig() Shared.LiveConfigResult {
+func (s *Service) LiveConfig(agentID string) Shared.LiveConfigResult {
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.LiveConfigResult{Error: aerr}
+	}
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		agentID = "default"
 	}
 	base := s.routerBaseURL()
 	if base == "" {
@@ -30,7 +33,17 @@ func (s *Service) LiveConfig() Shared.LiveConfigResult {
 	if wsURL == "" {
 		return Shared.LiveConfigResult{Error: Shared.NewError(Shared.CodeBadInput, "The router URL is not valid")}
 	}
-	return Shared.LiveConfigResult{Config: &Shared.LiveConfig{WsURL: wsURL}}
+	profile, err := s.ensureAgent(agentID)
+	if err != nil {
+		return Shared.LiveConfigResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+	}
+	sessionID := s.beginLiveToolSession(agentID, agentName(profile))
+	return Shared.LiveConfigResult{Config: &Shared.LiveConfig{
+		WsURL:             wsURL,
+		SessionID:         sessionID,
+		SystemInstruction: s.liveSystemPrompt(profile),
+		Tools:             liveFunctionDeclarations(),
+	}}
 }
 
 // routerBaseURL resolves the router provider's base URL, honouring any
@@ -68,27 +81,4 @@ func liveWSURL(base, key string) string {
 	q.Set("key", key)
 	u.RawQuery = q.Encode()
 	return u.String()
-}
-
-// ConversationRead is the conversation_read tool exposed to the live voice
-// session. The voice model is given only this one tool (no history replay, no
-// other tools), so when it needs earlier context it calls this and the frontend
-// returns the resulting text as a function response. It mirrors the agent tool
-// so a voice turn reads history exactly as a typed turn would.
-func (s *Service) ConversationRead(agentID, query string) Shared.ConversationReadResult {
-	if aerr := s.Core.Ready(); aerr != nil {
-		return Shared.ConversationReadResult{Error: aerr}
-	}
-	agentID = strings.TrimSpace(agentID)
-	if agentID == "" {
-		agentID = "default"
-	}
-	result := func(text string, isError bool) Protocol.Block {
-		return Protocol.Block{Type: Protocol.BlockToolResult, Text: text, IsError: isError}
-	}
-	block := s.runConversationRead(agentID, Protocol.ToolCall{
-		ID: "live", Name: "conversation_read",
-		Input: mustMarshal(map[string]any{"query": query}), Valid: true,
-	}, result, func(string, string) {})
-	return Shared.ConversationReadResult{Text: block.Text}
 }

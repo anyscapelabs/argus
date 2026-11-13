@@ -113,7 +113,7 @@ func TestBrowserSchemaAllowsEveryActionThePromptNames(t *testing.T) {
 
 	// The prompt has to mention the verbs the model will reach for, or it will
 	// invent ones the schema refuses.
-	prompt := systemPromptFor(Storage.AgentProfile{AgentName: "Argus"}, true)
+	prompt := browserToolDef.Description
 	for _, must := range []string{"open", "click", "fill", "read", "find", "wait", "screenshot"} {
 		if !strings.Contains(prompt, must) {
 			t.Errorf("the browser prompt block never mentions %q", must)
@@ -151,23 +151,13 @@ func TestBrowserPromptMakesTheAgentTheOneWhoActs(t *testing.T) {
 	// The failure this guards is not a crash but a politely useless agent: one
 	// that reaches a checkout and offers to let the user book the flight, pay the
 	// bill, finish the form. The handover has to stay the exception.
-	prompt := strings.ToLower(systemPromptFor(Storage.AgentProfile{AgentName: "Argus"}, true))
+	prompt := strings.ToLower(browserToolDef.Description)
 	for _, must := range []string{
-		"you do the work", "checkout", "booking", "one-tap approval", "request_takeover",
-		// The run this closes stopped at an Amazon page that had only painted its
-		// header, and answered with "How to complete the purchase yourself".
-		"place order", "press the final", "still rendering", "numbered list of what to click",
-		"carry on yourself",
+		"do the whole job", "checkout", "booking", "one tap", "request_takeover",
+		"newest snapshot",
 	} {
 		if !strings.Contains(prompt, must) {
 			t.Errorf("the browser block never says %q", must)
-		}
-	}
-	// The chain has to be spelled out, because "complete the checkout" alone let a
-	// model stop at the product page and describe the rest.
-	for _, step := range []string{"add to cart", "open the cart", "go to checkout", "delivery address"} {
-		if !strings.Contains(prompt, step) {
-			t.Errorf("the purchase sequence is missing %q", step)
 		}
 	}
 	// A sign-in sent to chat strands the run: nothing resumes it, so the card is

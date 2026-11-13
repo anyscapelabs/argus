@@ -2,9 +2,13 @@ import { Browser } from '@wailsio/runtime'
 import * as AccountService from '../../../bindings/github.com/anyscapelabs/argus/Services/Account/service.js'
 import type { EntitlementsView, KeyStatusResult, SaveAccountKeyResult } from '../../../bindings/github.com/anyscapelabs/argus/Services/Shared/models.js'
 
-// The backend the agent pairs with. Override with VITE_ARGUS_API_URL when
-// pointing at a non-default argus-router deployment.
-export const ARGUS_API_URL: string = import.meta.env.VITE_ARGUS_API_URL ?? 'http://localhost:8080'
+// The backend the agent pairs with. Override with VITE_ANYSCAPE_GATEWAY_URL
+// (preferred) or the deprecated VITE_ARGUS_API_URL when pointing at a
+// non-default Anyscape Gateway deployment.
+export const ARGUS_API_URL: string =
+  import.meta.env.VITE_ANYSCAPE_GATEWAY_URL ??
+  import.meta.env.VITE_ARGUS_API_URL ??
+  'http://localhost:8080'
 
 export async function getKeyStatus(): Promise<KeyStatusResult> {
   return AccountService.GetKeyStatus()

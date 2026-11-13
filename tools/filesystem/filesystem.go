@@ -46,10 +46,10 @@ type ReadResult struct {
 
 // WriteResult is one write_file call.
 type WriteResult struct {
-	Path     string `json:"path"`
-	Bytes    int    `json:"bytes"`
-	Existed  bool   `json:"existed"`
-	Appended bool   `json:"appended"`
+	Path   string `json:"path"`
+	Action string `json:"action"`
+	Bytes  int    `json:"bytes"`
+	Lines  int    `json:"lines"`
 }
 
 // GrepMatch is one matching line, ripgrep style: long lines are clipped to
@@ -114,7 +114,7 @@ func Read(path string, offsetLine, limit int) (ReadResult, error) {
 		}
 		if written >= limit || b.Len() > maxReadBytes {
 			truncated = true
-			break
+			continue
 		}
 		if written > 0 {
 			b.WriteByte('\n')
@@ -148,7 +148,15 @@ func Write(path, content string, overwrite, appendMode bool) (WriteResult, error
 		return WriteResult{}, fmt.Errorf("content is %d bytes, the limit is %d",
 			len(content), maxWriteBytes)
 	}
-	if _, err := os.Stat(abs); err == nil && !overwrite && !appendMode {
+	if overwrite && appendMode {
+		return WriteResult{}, fmt.Errorf("overwrite and append are mutually exclusive")
+	}
+	_, statErr := os.Stat(abs)
+	existed := statErr == nil
+	if statErr != nil && !os.IsNotExist(statErr) {
+		return WriteResult{}, statErr
+	}
+	if existed && !overwrite && !appendMode {
 		return WriteResult{}, fmt.Errorf("%s already exists: pass overwrite to replace it or append to extend it", abs)
 	}
 	if dir := filepath.Dir(abs); dir != "" {
@@ -156,8 +164,10 @@ func Write(path, content string, overwrite, appendMode bool) (WriteResult, error
 			return WriteResult{}, err
 		}
 	}
-	flags := os.O_WRONLY | os.O_CREATE
+	flags := os.O_WRONLY
 	switch {
+	case !existed:
+		flags |= os.O_CREATE | os.O_EXCL
 	case appendMode:
 		flags |= os.O_APPEND
 	default:
@@ -167,12 +177,95 @@ func Write(path, content string, overwrite, appendMode bool) (WriteResult, error
 	if err != nil {
 		return WriteResult{}, err
 	}
-	defer f.Close()
 	n, err := f.WriteString(content)
+	if err != nil {
+		_ = f.Close()
+		return WriteResult{}, err
+	}
+	if n != len(content) {
+		_ = f.Close()
+		return WriteResult{}, fmt.Errorf("short write: wrote %d of %d bytes", n, len(content))
+	}
+	if err := f.Close(); err != nil {
+		return WriteResult{}, err
+	}
+	action := "changed"
+	if !existed {
+		action = "created"
+	}
+	return WriteResult{Path: abs, Action: action, Bytes: n, Lines: writtenLineCount(content)}, nil
+}
+
+func writtenLineCount(content string) int {
+	if content == "" {
+		return 0
+	}
+	lines := strings.Count(content, "\n") + 1
+	if strings.HasSuffix(content, "\n") {
+		lines--
+	}
+	return lines
+}
+
+// Edit replaces an exact text occurrence and writes the file atomically. It is
+// deliberately strict: missing or ambiguous matches fail without changing the
+// file, which is safer for source code than whole-file reconstruction.
+func Edit(path, oldText, newText string, expected int) (WriteResult, error) {
+	abs, err := absClean(path)
 	if err != nil {
 		return WriteResult{}, err
 	}
-	return WriteResult{Path: abs, Bytes: n, Existed: !overwrite && appendMode, Appended: appendMode}, nil
+	if oldText == "" {
+		return WriteResult{}, fmt.Errorf("old_text is required")
+	}
+	if expected <= 0 {
+		expected = 1
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return WriteResult{}, err
+	}
+	if info.Size() > maxWriteBytes {
+		return WriteResult{}, fmt.Errorf("file is %d bytes, the editable limit is %d", info.Size(), maxWriteBytes)
+	}
+	raw, err := os.ReadFile(abs)
+	if err != nil {
+		return WriteResult{}, err
+	}
+	if strings.IndexByte(string(raw), 0) >= 0 {
+		return WriteResult{}, fmt.Errorf("%s looks binary", abs)
+	}
+	content := string(raw)
+	found := strings.Count(content, oldText)
+	if found != expected {
+		return WriteResult{}, fmt.Errorf("old_text matched %d time(s), expected %d; no change was made", found, expected)
+	}
+	updated := strings.Replace(content, oldText, newText, expected)
+	tmp, err := os.CreateTemp(filepath.Dir(abs), ".argus-edit-*")
+	if err != nil {
+		return WriteResult{}, err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if err := tmp.Chmod(info.Mode().Perm()); err != nil {
+		_ = tmp.Close()
+		return WriteResult{}, err
+	}
+	n, err := tmp.WriteString(updated)
+	if err != nil || n != len(updated) {
+		_ = tmp.Close()
+		if err == nil {
+			err = fmt.Errorf("short write: wrote %d of %d bytes", n, len(updated))
+		}
+		return WriteResult{}, err
+	}
+	if err := tmp.Close(); err != nil {
+		return WriteResult{}, err
+	}
+	if err := os.Rename(tmpPath, abs); err != nil {
+		return WriteResult{}, err
+	}
+	return WriteResult{Path: abs, Action: "changed", Bytes: len(updated), Lines: writtenLineCount(updated)}, nil
 }
 
 // Grep scans root for lines matching pattern. include selects files by

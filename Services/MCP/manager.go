@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -75,6 +76,39 @@ func (m *Manager) ListConfigs() []ServerConfig {
 		out = append(out, c)
 	}
 	return out
+}
+
+// allowedLaunchers are the conventional stdio MCP host binaries. Anything
+// else must be an absolute path to a binary, so a config can't ride PATH
+// lookups into a binary the user never chose. (No callers reach AddConfig
+// from the agent; user-initiated catalog installs go through MCPConnect
+// with its permission card. This is defense in depth for the config path.)
+var allowedLaunchers = map[string]bool{
+	"npx": true, "uvx": true, "node": true, "bunx": true,
+	"python3": true, "python": true, "deno": true,
+	"npx.cmd": true, "bunx.cmd": true, "uvx.exe": true,
+}
+
+func validateCommand(command string) error {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return errors.New("mcp command required")
+	}
+	if strings.ContainsAny(command, "\x00\n\r") || strings.Contains(command, " ") {
+		return fmt.Errorf("mcp command must be a single binary name or absolute path")
+	}
+	if allowedLaunchers[command] {
+		return nil
+	}
+	if strings.HasPrefix(command, "/") || isWindowsAbs(command) {
+		return nil
+	}
+	return fmt.Errorf("mcp command %q is not an allowed launcher; use an absolute path", command)
+}
+
+func isWindowsAbs(command string) bool {
+	// "C:\\..." (any drive letter) or a UNC path "\\\\share\\...".
+	return (len(command) > 2 && command[1] == ':') || strings.HasPrefix(command, `\\`)
 }
 
 // AddConfig adds or updates a server configuration.
@@ -149,6 +183,9 @@ func (m *Manager) connectLocked(ctx context.Context, cfg ServerConfig) error {
 	if strings.TrimSpace(cfg.Command) == "" {
 		return errors.New("mcp command required")
 	}
+	if err := validateCommand(cfg.Command); err != nil {
+		return err
+	}
 
 	c := mcp.NewClient(&mcp.Implementation{Name: "argus", Version: "0.1.0"}, nil)
 
@@ -218,7 +255,7 @@ func (m *Manager) refreshToolsLocked() {
 		res, err := sc.sess.ListTools(ctx, &mcp.ListToolsParams{})
 		cancel()
 		if err != nil {
-			fmt.Printf("mcp: list tools failed for %s: %v\n", id, err)
+			log.Printf("mcp: list tools failed for %s: %v", id, err)
 			continue
 		}
 		for _, t := range res.Tools {
@@ -236,7 +273,7 @@ func (m *Manager) refreshToolsLocked() {
 			})
 		}
 		if len(res.Tools) == 0 {
-			fmt.Printf("mcp: %s connected but returned 0 tools\n", id)
+			log.Printf("mcp: %s connected but returned 0 tools", id)
 		}
 	}
 	m.tools = tools

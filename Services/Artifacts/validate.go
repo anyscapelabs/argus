@@ -48,10 +48,11 @@ var frontMatterKeys = map[string]string{
 }
 
 var (
-	fenceStart  = regexp.MustCompile(`^ {0,3}(` + "`" + `{3,}|~{3,})`)
-	footnoteRef = regexp.MustCompile(`\[\^[^\]\s]+\]`)
-	dividerRow  = regexp.MustCompile(`^ {0,3}\|?[\s:|-]*-[\s:|-]*$`)
-	keyValue    = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9_-]*)[ \t]*:[ \t]*(.*)$`)
+	fenceStart       = regexp.MustCompile(`^ {0,3}(` + "`" + `{3,}|~{3,})`)
+	footnoteRef      = regexp.MustCompile(`\[\^[^\]\s]+\]`)
+	dividerRow       = regexp.MustCompile(`^ {0,3}\|?[\s:|-]*-[\s:|-]*$`)
+	keyValue         = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9_-]*)[ \t]*:[ \t]*(.*)$`)
+	firstHeadingLine = regexp.MustCompile(`^#{1,4}[ \t]+\S`)
 )
 
 // Diagnostic is one lint finding. Line is 1-based against the text the model
@@ -126,9 +127,29 @@ func Validate(src string) Result {
 
 	res.checkFrontMatter(fmLines)
 	res.checkEmpty(body, fmLines)
+	res.checkHeadingFirst(body)
 	res.lintSource(normalised)
 	res.walkAST(body)
 	return res
+}
+
+// checkHeadingFirst gives every stored document a real hierarchy. Validation
+// runs on the fully assembled body, so append chunks need not repeat the title.
+func (r *Result) checkHeadingFirst(body string) {
+	if strings.TrimSpace(body) == "" {
+		return
+	}
+	pos := 0
+	for _, line := range strings.SplitAfter(body, "\n") {
+		trimmed := strings.TrimSpace(strings.TrimSuffix(line, "\n"))
+		if trimmed != "" {
+			if !firstHeadingLine.MatchString(trimmed) {
+				r.add(SeverityError, r.lineOf(pos), "the document must start with a Markdown heading (# through ####), after optional front matter")
+			}
+			return
+		}
+		pos += len(line)
+	}
 }
 
 // normalise makes the stored body deterministic: one line-ending style, no BOM,

@@ -134,6 +134,9 @@ func save(db *Storage.DB, agentID, artifactID, title, body string, appendBody bo
 	}
 
 	name := res.Title
+	if appendBody && existing != nil {
+		name = existing.Title
+	}
 	if name == "" {
 		name = strings.TrimSpace(title)
 	}
@@ -151,6 +154,9 @@ func save(db *Storage.DB, agentID, artifactID, title, body string, appendBody bo
 	}
 
 	meta := EncodeMeta(res.FrontMatter)
+	if appendBody && existing != nil {
+		meta = existing.Meta
+	}
 	var stored Storage.Artifact
 	if existing != nil {
 		updated, err := db.UpdateArtifact(existing.ID, name, res.Body, meta, 0)
@@ -194,8 +200,12 @@ func warningReport(res Result) string {
 func firstHeading(body string) string {
 	for _, line := range strings.Split(body, "\n") {
 		t := strings.TrimSpace(line)
-		if strings.HasPrefix(t, "# ") {
-			return strings.TrimSpace(strings.TrimPrefix(t, "# "))
+		level := 0
+		for level < len(t) && level < MaxHeadingLevel && t[level] == '#' {
+			level++
+		}
+		if level > 0 && level < len(t) && (t[level] == ' ' || t[level] == '\t') {
+			return strings.TrimSpace(t[level:])
 		}
 	}
 	return ""

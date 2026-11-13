@@ -4,6 +4,7 @@ export type AgentListItemProps = {
   avatar?: string
   name: string
   lastMessage?: string
+  lastMessageIcon?: ReactNode
   time?: string
   active?: boolean
   onClick?: () => void
@@ -14,6 +15,7 @@ export default function AgentListItem({
   avatar = '/argus-logo.svg',
   name,
   lastMessage,
+  lastMessageIcon,
   time,
   active = false,
   onClick,
@@ -31,7 +33,10 @@ export default function AgentListItem({
       </div>
       <div className="min-w-0 flex-1">
         <div className={`truncate text-sm font-medium ${active ? 'text-primary' : 'text-primary'}`}>{name}</div>
-        <div className="truncate text-xs text-secondary">{lastMessage || 'No messages yet'}</div>
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-secondary">
+          {lastMessageIcon}
+          <span className="truncate">{lastMessage || 'No messages yet'}</span>
+        </div>
       </div>
       <span className="shrink-0 text-xs text-secondary">{time}</span>
     </button>

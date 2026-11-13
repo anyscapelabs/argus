@@ -14,7 +14,11 @@ function timeOfDay() {
 }
 
 type HomeProps = {
-  onSend?: (text: string, modelRef: string | null) => void
+  onSend?: (
+    text: string,
+    modelRef: string | null,
+    attachments: { id: string; filename: string; kind: string; dataUrl?: string }[],
+  ) => void
   // The panel lists the agent's documents even on the landing page, so the same
   // full-screen viewer has to open from here as it does from the chat.
   onOpenArtifact?: (artifactID: string) => void

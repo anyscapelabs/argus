@@ -32,8 +32,14 @@ type toolRunner func(
 // through runMCPDynamicTool below.
 var toolRunners = map[string]toolRunner{
 	"get_time_and_location": runTimeLocationTool,
+	"ask_user":             runAskUserTool,
+	"read_file":             runFileToolDispatch,
+	"write_file":            runFileToolDispatch,
+	"edit_file":             runFileToolDispatch,
+	"grep_files":            runFileToolDispatch,
 	"remember":              runRememberTool,
 	"forget":                runForgetTool,
+	"recall_memories":       runRecallMemoriesTool,
 	"schedule_reminder":     runScheduleReminderTool,
 	"create_routine":        runCreateRoutineTool,
 	"list_scheduled":        runListScheduledTool,
@@ -45,6 +51,20 @@ var toolRunners = map[string]toolRunner{
 	"create_slides":         runCreateSlidesToolDispatch,
 	"browser":               runBrowserTool,
 	Permission.TerminalTool: runTerminalTool,
+}
+
+// runFileToolDispatch adapts the three file operations to the common registry
+// signature while preserving their shared permission gate.
+func runFileToolDispatch(
+	s *Service,
+	ctx context.Context,
+	_ string,
+	agentID, agentName string,
+	call Protocol.ToolCall,
+	result resultFn,
+	activity activityFn,
+) Protocol.Block {
+	return s.runFileTool(ctx, call, result, activity, agentID, agentName)
 }
 
 // runTool executes one tool_use block and returns the tool_result block the

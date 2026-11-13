@@ -8,6 +8,7 @@ export {
 
 export type {
     Block,
+    FileWrite,
     Image,
     Message,
     ToolCall

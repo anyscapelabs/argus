@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"fmt"
 
 	"log"
 	"os"
@@ -20,8 +21,8 @@ import (
 	servicepermission "github.com/anyscapelabs/argus/Services/Permission"
 	serviceprovider "github.com/anyscapelabs/argus/Services/Provider"
 	servicescheduler "github.com/anyscapelabs/argus/Services/Scheduler"
-	serviceuploads "github.com/anyscapelabs/argus/Services/Uploads"
 	"github.com/anyscapelabs/argus/Services/Shared"
+	serviceuploads "github.com/anyscapelabs/argus/Services/Uploads"
 )
 
 // Wails uses Go's `embed` package to embed the frontend files into the binary.
@@ -52,8 +53,27 @@ type systemNotifier struct {
 	service *notifications.NotificationService
 }
 
-func (n systemNotifier) Notify(title, body string) {
+func (n systemNotifier) Authorize() error {
+	allowed, err := n.service.CheckNotificationAuthorization()
+	if err != nil {
+		return err
+	}
+	if allowed {
+		return nil
+	}
+	allowed, err = n.service.RequestNotificationAuthorization()
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return fmt.Errorf("notification permission was denied")
+	}
+	return nil
+}
+
+func (n systemNotifier) Notify(id, title, body string) {
 	if err := n.service.SendNotification(notifications.NotificationOptions{
+		ID:    id,
 		Title: title,
 		Body:  body,
 	}); err != nil {
@@ -117,12 +137,8 @@ func main() {
 			Handler: application.AssetFileServerFS(assets),
 		},
 		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: true,
+			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
-	})
-
-	core.Notifier(func(name string, data any) {
-		application.Get().Event.Emit(name, data)
 	})
 	core.PickerHook = models.Picker
 
@@ -131,7 +147,7 @@ func main() {
 	// 'Mac' options tailor the window when running on macOS.
 	// 'BackgroundColour' is the background colour of the window.
 	// 'URL' is the URL that will be loaded into the webview.
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
+	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title: "Argus",
 		// Frameless drops the native title bar and window decorations on every
 		// platform. On Linux this is `gtk_window_set_decorated(FALSE)`; the
@@ -141,8 +157,8 @@ func main() {
 		// `--wails-draggable: drag` property already set on <body>.
 		Frameless: true,
 		// Window sized to the golden ratio (1000 / 618 ≈ 1.618).
-		Width:  1000,
-		Height: 618,
+		Width:      1000,
+		Height:     618,
 		StartState: application.WindowStateMaximised,
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 50,
@@ -153,6 +169,11 @@ func main() {
 		// underlay and the webview are the same colour during load and resize.
 		BackgroundColour: application.NewRGB(0, 0, 0),
 		URL:              "/",
+	})
+	lifecycle := newBackgroundLifecycle(app, window, appIcon)
+	core.Notifier(func(name string, data any) {
+		application.Get().Event.Emit(name, data)
+		lifecycle.handleEvent(name)
 	})
 
 	// Run the application. This blocks until the application has been exited.

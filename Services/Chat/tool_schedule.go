@@ -19,7 +19,7 @@ import (
 // runScheduleReminderTool creates a one-time reminder.
 func runScheduleReminderTool(
 	s *Service,
-	_ context.Context,
+	ctx context.Context,
 	_ string,
 	agentID string,
 	_ string,
@@ -27,6 +27,9 @@ func runScheduleReminderTool(
 	result resultFn,
 	activity activityFn,
 ) Protocol.Block {
+	if Shared.IsScheduledFire(ctx) {
+		return result("This is a scheduled task firing now, not a request to create another reminder. Execute the stored instruction and report its result.", true)
+	}
 	var input struct {
 		Title  string `json:"title"`
 		Prompt string `json:"prompt"`
@@ -83,7 +86,7 @@ func runScheduleReminderTool(
 // runCreateRoutineTool creates a recurring routine.
 func runCreateRoutineTool(
 	s *Service,
-	_ context.Context,
+	ctx context.Context,
 	_ string,
 	agentID string,
 	_ string,
@@ -91,6 +94,9 @@ func runCreateRoutineTool(
 	result resultFn,
 	activity activityFn,
 ) Protocol.Block {
+	if Shared.IsScheduledFire(ctx) {
+		return result("This is a scheduled task firing now, not a request to create another routine. Execute the stored instruction and report its result.", true)
+	}
 	var input struct {
 		Title        string `json:"title"`
 		Prompt       string `json:"prompt"`

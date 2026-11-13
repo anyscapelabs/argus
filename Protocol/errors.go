@@ -5,15 +5,27 @@ import (
 )
 
 const (
-	CodeInvalidKey    = "invalid_key"
-	CodeRateLimited   = "rate_limited"
-	CodeNetwork       = "network"
-	CodeProviderError = "provider_error"
-	CodeBadResponse   = "bad_response"
-	CodeBadInput      = "bad_input"
-	CodeNotConfigured = "not_configured"
-	CodeCancelled     = "cancelled"
+	CodeInvalidKey         = "invalid_key"
+	CodeRateLimited        = "rate_limited"
+	CodeNetwork            = "network"
+	CodeProviderError      = "provider_error"
+	CodeBadResponse        = "bad_response"
+	CodeBadInput           = "bad_input"
+	CodeNotConfigured      = "not_configured"
+	CodeCancelled          = "cancelled"
+	CodeDailyLimitReached  = "daily_limit_reached"
+	CodeWeeklyLimitReached = "weekly_limit_reached"
+	CodeMonthlyLimitReached = "monthly_limit_reached"
+	CodeCreditsExhausted   = "credits_exhausted"
 )
+
+func IsUsageLimit(code string) bool {
+	switch code {
+	case CodeDailyLimitReached, CodeWeeklyLimitReached, CodeMonthlyLimitReached, CodeCreditsExhausted:
+		return true
+	}
+	return false
+}
 
 func NewError(code, message string) *Error {
 	return &Error{Code: code, Message: message}

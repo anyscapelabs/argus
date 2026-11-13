@@ -21,6 +21,7 @@ export function useTakeoverFlow() {
   const [takeover, setTakeover] = useState<TakeoverRequestView | null>(null)
   const [takeoverState, setTakeoverState] = useState<TakeoverState>('requested')
   const [takeoverError, setTakeoverError] = useState<string>()
+  const [takeoverBusy, setTakeoverBusy] = useState(false)
   const qc = useQueryClient()
   const noticesKey = ['chat', 'default', 'notices']
 
@@ -53,7 +54,8 @@ export function useTakeoverFlow() {
         // stays where the user can answer it instead of vanishing on them.
         if (state === 'requested') return
         if (state === 'active') {
-          setTakeoverState('active')
+        setTakeoverState('active')
+          setTakeoverBusy(false)
           setTakeoverError(payload.error)
           return
         }
@@ -64,6 +66,7 @@ export function useTakeoverFlow() {
         setTakeover(null)
         setTakeoverState('requested')
         setTakeoverError(undefined)
+        setTakeoverBusy(false)
         qc.invalidateQueries({ queryKey: noticesKey })
       }),
     ]
@@ -71,11 +74,14 @@ export function useTakeoverFlow() {
   }, [qc])
 
   const decide = (decision: TakeoverDecision) => {
-    if (!takeover) return
-    respondTakeover(takeover.request_id, decision).catch((err) => {
-      setTakeoverError(err.message)
-    })
+    if (!takeover || takeoverBusy) return
+    setTakeoverBusy(true)
+    respondTakeover(takeover.request_id, decision)
+      .catch((err) => {
+        setTakeoverError(err.message)
+      })
+      .finally(() => setTakeoverBusy(false))
   }
 
-  return { takeover, takeoverState, takeoverError, decide }
+  return { takeover, takeoverState, takeoverError, takeoverBusy, decide }
 }

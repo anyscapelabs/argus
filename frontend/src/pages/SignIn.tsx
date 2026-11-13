@@ -18,11 +18,15 @@ export default function SignIn({ onAuthenticated }: SignInProps) {
   const busy = save.isPending || verifying
 
   const connect = async () => {
-    if (!key.trim()) return
+    if (!key.trim() || busy) return
     setVerifying(true)
     try {
+      // The mutation rejects when the keyring write or the entitlements
+      // proof fails; the message surfaces through the pairing state below.
       await save.mutateAsync(key)
       onAuthenticated()
+    } catch {
+      // fall through — pairing.status flips to `invalid`
     } finally {
       setVerifying(false)
     }
@@ -57,6 +61,11 @@ export default function SignIn({ onAuthenticated }: SignInProps) {
         />
         {pairing.status === 'invalid' && (
           <p className="text-left text-sm text-red-400">{pairing.message}</p>
+        )}
+        {save.isError && (
+          <p className="text-left text-sm text-red-400">
+            {save.error instanceof Error ? save.error.message : String(save.error)}
+          </p>
         )}
 
         <button

@@ -14,7 +14,7 @@ var writeArtifactToolDef = Protocol.ToolDef{
 	Description: "Write one document into the app's Artifacts panel. Markdown only; the user exports it " +
 		"later as .md, .html, .pdf or .docx. Free, no approval, and it never touches the user's disk. " +
 		"Use it for anything worth keeping — a report, brief, plan, letter, summary, comparison — " +
-		"instead of pasting long markdown into the chat.",
+		"instead of pasting long markdown into the chat. The complete document must start with a Markdown heading after optional front matter.",
 	Schema: json.RawMessage(`{
 		"type": "object",
 		"properties": {
@@ -24,7 +24,7 @@ var writeArtifactToolDef = Protocol.ToolDef{
 			},
 			"body": {
 				"type": "string",
-				"description": "The document in Markdown. Optional front matter first (title, author, date, language, paper, orientation). On a rewrite this is the whole new document, not a diff."
+				"description": "The document in Markdown. Optional front matter first, then a heading (# through ####) must be the first body line. On a rewrite this is the whole new document, not a diff."
 			},
 			"artifact_id": {
 				"type": "string",

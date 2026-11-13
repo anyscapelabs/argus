@@ -1,4 +1,5 @@
 import * as MCPConnectService from '../../../bindings/github.com/anyscapelabs/argus/Services/MCPConnect/service.js'
+import * as MCPService from '../../../bindings/github.com/anyscapelabs/argus/Services/MCP/service.js'
 import type { ActionResult } from '../../../bindings/github.com/anyscapelabs/argus/Services/Shared/models.js'
 
 export type MCPConnectDecision = 'connect' | 'deny' | 'cancel'
@@ -68,4 +69,8 @@ export async function listIntegrations(): Promise<IntegrationView[]> {
 export async function registerMCPConnect(agentID: string, agentName: string, serverID: string): Promise<string> {
   const res = await (MCPConnectService as any).Register(agentID, agentName, serverID)
   return res ?? ''
+}
+
+export async function disconnectIntegration(serverID: string): Promise<void> {
+  await MCPService.DisconnectRemote(serverID)
 }

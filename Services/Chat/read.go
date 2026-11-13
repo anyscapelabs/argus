@@ -1,6 +1,7 @@
 package Chat
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/anyscapelabs/argus/Services/Shared"
@@ -26,19 +27,46 @@ func (s *Service) GetChat(agentID string, beforeSeq, limit int) Shared.GetChatRe
 	if err != nil {
 		return Shared.GetChatResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
+	messageIDs := make([]string, 0, len(msgs))
+	for _, message := range msgs {
+		messageIDs = append(messageIDs, message.ID)
+	}
+	reactions, err := s.Core.DB.ListMessageReactions(messageIDs)
+	if err != nil {
+		return Shared.GetChatResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+	}
 	// The cursor: the smallest seq on the page (the list is ascending), stepped
 	// down by one so the next page is strictly older. A short page means the
 	// walk reached the conversation's first message and there is nothing older.
 	var nextBeforeSeq int
-	if len(msgs) > 0 {
-		nextBeforeSeq = msgs[0].Seq - 1
+	if len(msgs) == limit && len(msgs) > 0 {
+		// The query already uses seq < beforeSeq; subtracting here skipped one
+		// visible row at every page boundary.
+		nextBeforeSeq = msgs[0].Seq
 	}
 	out := make([]Shared.ChatMessage, 0, len(msgs))
 	for _, m := range msgs {
 		// Steering rows are the app speaking on the user's behalf — an MCP
 		// connection settling, say. The model reads them as context; showing
 		// them here would put words in the user's mouth that they never typed.
-		if m.Kind != "" {
+		// Voice-call rows are the one app-authored kind the chat draws: they
+		// carry the transcript of a finished voice session as a JSON record,
+		// which the frontend renders as a collapsible transcript card.
+		if m.Kind != "" && m.Kind != "voice" && m.Kind != Storage.MessageKindFileWrite {
+			continue
+		}
+		if m.Kind == Storage.MessageKindFileWrite {
+			for i, block := range m.Blocks() {
+				if block.IsError || block.FileWrite == nil || strings.TrimSpace(block.FileWrite.Path) == "" {
+					continue
+				}
+				write := *block.FileWrite
+				out = append(out, Shared.ChatMessage{
+					ID: fmt.Sprintf("%s:file:%d", m.ID, i), AgentID: m.AgentID, Seq: m.Seq,
+					Role: "assistant", Kind: Storage.MessageKindFileWrite, Status: "complete",
+					CreatedAt: m.CreatedAt, CompletedAt: m.CompletedAt, FileWrite: &write,
+				})
+			}
 			continue
 		}
 		// Tool round-trips are real message rows so buildHistory can replay
@@ -67,14 +95,17 @@ func (s *Service) GetChat(agentID string, beforeSeq, limit int) Shared.GetChatRe
 			AgentID:      m.AgentID,
 			Seq:          m.Seq,
 			Role:         m.Role,
+			Kind:         m.Kind,
 			Text:         text,
 			Status:       m.Status,
 			ErrorMessage: m.ErrorMessage,
+			ErrorCode:    m.ErrorCode,
 			StopReason:   m.StopReason,
 			ModelRef:     m.ModelRef,
 			CreatedAt:    m.CreatedAt,
 			CompletedAt:  m.CompletedAt,
 			Blocks:       m.Blocks(),
+			Reaction:     reactions[m.ID],
 		})
 	}
 	return Shared.GetChatResult{Messages: out, NextBeforeSeq: nextBeforeSeq}
