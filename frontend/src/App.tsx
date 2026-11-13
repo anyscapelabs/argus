@@ -1,50 +1,35 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Events } from '@wailsio/runtime'
 import { useQueryClient } from '@tanstack/react-query'
+import { FiWifiOff } from 'react-icons/fi'
 import { Time } from '../bindings/events'
 import Toolbar from './components/layout/Toolbar'
 import Sidebar from './components/layout/Sidebar'
 import SettingsSidebar from './components/settings/SettingsSidebar'
+import Spinner from './components/Spinner'
+import { getChat } from './domains/chat/api'
+import { usePairing, useAccount } from './domains/account/hooks'
+
 const Onboarding = lazy(() => import('./pages/Onboarding'))
 const SignIn = lazy(() => import('./pages/SignIn'))
 const Home = lazy(() => import('./pages/Home'))
 const Chat = lazy(() => import('./pages/Chat'))
 const Integrations = lazy(() => import('./pages/Integrations'))
 const ArtifactViewer = lazy(() => import('./pages/ArtifactViewer'))
-import { getChat } from './domains/chat/api'
-import { usePairing, useAccount } from './domains/account/hooks'
-import { FiWifiOff } from 'react-icons/fi'
-import Spinner from './components/Spinner'
 
-// Blank black canvas.
-//
-// The Go -> frontend event wiring is kept alive even though nothing renders
-// yet: the server clock is parked on the canvas as a `data-server-time`
-// attribute, so it is readable in DevTools and ready for the first screen to
-// consume without re-subscribing.
-//
-// Backend bindings are generated into ../bindings (refresh with
-// `wails3 generate bindings`) and are untouched. Import one when a screen
-// needs it, e.g.:
-//     import { GreetService } from '../bindings/github.com/anyscapelabs/argus'
+type Page = 'signin' | 'onboarding' | 'home' | 'chat' | 'settings' | 'integrations'
 
 export default function App() {
-  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null)
   const qc = useQueryClient()
-  // The shell boots through pairing first: pending (checking the keyring),
-  // absent → onboarding, invalid → sign-in, valid → the agent screens. The
-  // later states emerge from this one source of truth, so every route read of
-  // `pairing` stays decisive.
+
   const { pairing, leave } = usePairing(true)
   const { data: account } = useAccount()
-  const [page, setPage] = useState<'onboarding' | 'signin' | 'home' | 'chat' | 'settings' | 'integrations'>('onboarding');
-  // Which document is open full screen, by id. Not a boolean: the chat card, the
-  // panel list and the viewer all need to agree on *which* document the user
-  // meant, and closing is naming none of them.
-  const [openArtifact, setOpenArtifact] = useState<string | null>(null);
-  const [sidebarMode, setSidebarMode] = useState<'main' | 'settings'>('main');
-  const [settingsReturn, setSettingsReturn] = useState<'home' | 'chat'>('home');
-  const [integrationsReturn, setIntegrationsReturn] = useState<'home' | 'chat'>('chat');
+  const [page, setPage] = useState<Page>('signin')
+  const [openArtifact, setOpenArtifact] = useState<string | null>(null)
+  const [sidebarMode, setSidebarMode] = useState<'main' | 'settings'>('main')
+  const [settingsReturn, setSettingsReturn] = useState<'home' | 'chat'>('home')
+  const [integrationsReturn, setIntegrationsReturn] = useState<'home' | 'chat'>('chat')
   const [pendingSend, setPendingSend] = useState<{
     id: number
     text: string
@@ -52,41 +37,39 @@ export default function App() {
     attachments: { id: string; filename: string; kind: string; dataUrl?: string }[]
   } | null>(null)
 
-  // Boot: hold the shell on the black canvas until the keyring check settles.
-  // A pairing that exists but no longer proves (revoked key, or the backend
-  // being unreachable) belongs on the sign-in screen — the account is still
-  // half-paired there, the error is visible, and "Connect" retries; only a
-  // truly unpaired keyring starts the onboarding tour.
-  const [booted, setBooted] = useState(false);
+  const [booted, setBooted] = useState(false)
+
+  // Settle initial route once keyring check completes.
   useEffect(() => {
     if (booted || pairing.status === 'pending') return
     setBooted(true)
-    if (pairing.status === 'valid') setPage('home')
-    else if (pairing.status === 'invalid') setPage('signin')
-    else setPage('onboarding')
+    if (pairing.status === 'valid') {
+      setPage('home')
+      return
+    }
+    if (pairing.status === 'invalid') {
+      setPage('onboarding')
+      return
+    }
+    setPage('signin')
   }, [pairing.status, booted])
 
-  // Protected routes: the agent screens exist only behind a verified key. Sign
-  // out (or a revoked key discovered on entitlements refetch) lands here.
+  // Guard authenticated screens if key is signed out or revoked.
   useEffect(() => {
-    if (!booted) return
-    if (pairing.status === 'valid') return
-    if (page === 'home' || page === 'chat' || page === 'settings' || page === 'integrations') setPage('signin')
+    if (!booted || pairing.status === 'valid') return
+    if (page === 'home' || page === 'chat' || page === 'settings' || page === 'integrations') {
+      setPage(pairing.status === 'invalid' ? 'onboarding' : 'signin')
+    }
   }, [booted, pairing.status, page])
 
-  // While the shell is authenticated and resting on home, an existing chat
-  // picks up where it left off: the stream of history decides the landing.
-  // Runs after boot — on mount it would race the pairing effect, which
-  // rewrites the page as soon as the keyring check settles.
+  // Resume existing default conversation on home landing.
   useEffect(() => {
     if (!booted || pairing.status !== 'valid' || page !== 'home') return
     let cancelled = false
     getChat('default')
       .then((res) => {
         if (cancelled) return
-        if (res?.messages && res.messages.length > 0) {
-          setPage('chat')
-        }
+        if (res?.messages && res.messages.length > 0) setPage('chat')
       })
       .catch(() => {})
     return () => {
@@ -95,9 +78,7 @@ export default function App() {
   }, [booted, pairing.status, page])
 
   useEffect(() => {
-    const invalidateAll = () => {
-      qc.invalidateQueries()
-    }
+    const invalidateAll = () => qc.invalidateQueries()
     const unsubs = [
       Events.On('providers:changed', invalidateAll),
       Events.On('selections:changed', invalidateAll),
@@ -107,20 +88,13 @@ export default function App() {
     return () => unsubs.forEach((u) => u())
   }, [qc])
 
-
   useEffect(() => {
-    // `Events.On` returns an unsubscribe function. StrictMode mounts effects
-    // twice in development, so tearing down is what keeps the listener from
-    // being registered twice.
     const unsubscribe = Events.On(Time, (event) => {
-      canvasRef.current?.setAttribute('data-server-time', String(event.data));
-    });
-    return unsubscribe;
-  }, []);
+      canvasRef.current?.setAttribute('data-server-time', String(event.data))
+    })
+    return unsubscribe
+  }, [])
 
-  // One viewer, opened by id, laid over whichever page named it. Both the landing
-  // panel and the chat can reach a document, and neither should carry its own
-  // copy of this overlay.
   const artifactOverlay = openArtifact ? (
     <div className="fixed inset-0 z-50">
       <Suspense fallback={null}>
@@ -138,10 +112,7 @@ export default function App() {
   }
 
   return (
-    <div
-      ref={canvasRef}
-      className="flex min-h-dvh w-full flex-col bg-primary text-grey-100"
-    >
+    <div ref={canvasRef} className="flex min-h-dvh w-full flex-col bg-primary text-grey-100">
       {account?.offline && (
         <div
           role="status"
@@ -151,73 +122,134 @@ export default function App() {
           Offline — showing your last synced plan and identity. Changes sync when the backend is reachable.
         </div>
       )}
-      <Suspense fallback={<div className="flex flex-1 items-center justify-center"><Spinner /></div>}>
-        {page === 'onboarding' ? (
-        <>
-          <Toolbar />
-          <Onboarding onContinue={() => setPage('signin')} />
-        </>
-      ) : page === 'signin' ? (
-        <>
-          <Toolbar />
-          <SignIn onAuthenticated={() => setPage('home')} />
-        </>
-      ) : page === 'home' ? (
-        <div className="flex flex-1 min-h-0">
-          <Sidebar mode={sidebarMode} onToggleSettings={() => {
-            if (sidebarMode === 'settings') {
-              setSidebarMode('main')
-            } else {
-              setSidebarMode('settings')
-              setSettingsReturn('home')
-              setPage('settings')
-            }
-          }} onOpenIntegrations={() => { setIntegrationsReturn('home'); setPage('integrations'); setSidebarMode('main') }} onOpenChat={() => setPage('chat')} agentActive={false} onSignOut={() => { void leave.mutateAsync() }} />
-          <Home onSend={(text: string, modelRef: string | null, attachments: { id: string; filename: string; kind: string; dataUrl?: string }[]) => {
-            setPendingSend({ id: Date.now(), text, modelRef, attachments: attachments ?? [] });
-            setPage('chat');
-          }} onOpenArtifact={(id) => setOpenArtifact(id)} />
-          {artifactOverlay}
-        </div>
-      ) : page === 'integrations' ? (
-        <div className="flex flex-1 min-h-0">
-          <Sidebar mode={sidebarMode} onToggleSettings={() => {
-            if (sidebarMode === 'settings') {
-              setSidebarMode('main')
-            } else {
-              setSidebarMode('settings')
-              setSettingsReturn(integrationsReturn)
-              setPage('settings')
-            }
-          }} onOpenIntegrations={() => { setIntegrationsReturn('chat'); setPage('integrations'); setSidebarMode('main') }} onOpenChat={() => setPage('chat')} agentActive={false} onSignOut={() => { void leave.mutateAsync() }} />
-          <Integrations />
-        </div>
-      ) : page === 'settings' ? (
-        <div className="flex flex-1 min-h-0">
-          <SettingsSidebar onBack={() => {
-            setSidebarMode('main')
-            setPage(settingsReturn)
-          }} />
-          <div className="flex flex-1 min-h-0 flex-col">
-            <Toolbar />
+
+      <Suspense
+        fallback={
+          <div className="flex flex-1 items-center justify-center">
+            <Spinner />
           </div>
-        </div>
-      ) : (
-        <div className="relative flex flex-1 min-h-0">
-          <Sidebar mode={sidebarMode} onToggleSettings={() => {
-            if (sidebarMode === 'settings') {
-              setSidebarMode('main')
-            } else {
-              setSidebarMode('settings')
-              setSettingsReturn('chat')
-              setPage('settings')
-            }
-          }} onOpenIntegrations={() => { setIntegrationsReturn(page === 'chat' || page === 'integrations' ? 'chat' : 'home'); setPage('integrations'); setSidebarMode('main') }} onOpenChat={() => setPage('chat')} agentActive={true} onSignOut={() => { void leave.mutateAsync() }} />
-          <Chat pendingSend={pendingSend} onPendingConsumed={() => setPendingSend(null)} onOpenArtifact={(id) => setOpenArtifact(id)} />
-          {artifactOverlay}
-        </div>
-      )}
+        }
+      >
+        {page === 'signin' ? (
+          <>
+            <Toolbar />
+            <SignIn
+              onSignIn={() => setPage('onboarding')}
+              onCreateAccount={() => setPage('onboarding')}
+            />
+          </>
+        ) : page === 'onboarding' ? (
+          <>
+            <Toolbar />
+            <Onboarding
+              onBack={() => setPage('signin')}
+              onAuthenticated={() => setPage('home')}
+            />
+          </>
+        ) : page === 'home' ? (
+          <div className="flex min-h-0 flex-1">
+            <Sidebar
+              mode={sidebarMode}
+              onToggleSettings={() => {
+                if (sidebarMode === 'settings') {
+                  setSidebarMode('main')
+                  return
+                }
+                setSidebarMode('settings')
+                setSettingsReturn('home')
+                setPage('settings')
+              }}
+              onOpenIntegrations={() => {
+                setIntegrationsReturn('home')
+                setPage('integrations')
+                setSidebarMode('main')
+              }}
+              onOpenChat={() => setPage('chat')}
+              agentActive={false}
+              onSignOut={() => {
+                void leave.mutateAsync()
+              }}
+            />
+            <Home
+              onSend={(text, modelRef, attachments) => {
+                setPendingSend({ id: Date.now(), text, modelRef, attachments: attachments ?? [] })
+                setPage('chat')
+              }}
+              onOpenArtifact={(id) => setOpenArtifact(id)}
+            />
+            {artifactOverlay}
+          </div>
+        ) : page === 'integrations' ? (
+          <div className="flex min-h-0 flex-1">
+            <Sidebar
+              mode={sidebarMode}
+              onToggleSettings={() => {
+                if (sidebarMode === 'settings') {
+                  setSidebarMode('main')
+                  return
+                }
+                setSidebarMode('settings')
+                setSettingsReturn(integrationsReturn)
+                setPage('settings')
+              }}
+              onOpenIntegrations={() => {
+                setIntegrationsReturn('chat')
+                setPage('integrations')
+                setSidebarMode('main')
+              }}
+              onOpenChat={() => setPage('chat')}
+              agentActive={false}
+              onSignOut={() => {
+                void leave.mutateAsync()
+              }}
+            />
+            <Integrations />
+          </div>
+        ) : page === 'settings' ? (
+          <div className="flex min-h-0 flex-1">
+            <SettingsSidebar
+              onBack={() => {
+                setSidebarMode('main')
+                setPage(settingsReturn)
+              }}
+            />
+            <div className="flex min-h-0 flex-1 flex-col">
+              <Toolbar />
+            </div>
+          </div>
+        ) : (
+          <div className="relative flex min-h-0 flex-1">
+            <Sidebar
+              mode={sidebarMode}
+              onToggleSettings={() => {
+                if (sidebarMode === 'settings') {
+                  setSidebarMode('main')
+                  return
+                }
+                setSidebarMode('settings')
+                setSettingsReturn('chat')
+                setPage('settings')
+              }}
+              onOpenIntegrations={() => {
+                setIntegrationsReturn(page === 'chat' || page === 'integrations' ? 'chat' : 'home')
+                setPage('integrations')
+                setSidebarMode('main')
+              }}
+              onOpenChat={() => setPage('chat')}
+              agentActive={true}
+              onSignOut={() => {
+                void leave.mutateAsync()
+              }}
+            />
+            <Chat
+              pendingSend={pendingSend}
+              onPendingConsumed={() => setPendingSend(null)}
+              onOpenArtifact={(id) => setOpenArtifact(id)}
+            />
+            {artifactOverlay}
+          </div>
+        )}
       </Suspense>
     </div>
-  );
+  )
 }

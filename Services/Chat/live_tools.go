@@ -56,12 +56,40 @@ var liveInvokeToolDef = Protocol.ToolDef{
 	}`),
 }
 
+var liveReadSkillDef = Protocol.ToolDef{
+	Name: "read_skill",
+	Description: "Load the step-by-step workflow, exact tool names, and live schemas for an installed skill. " +
+		"Call this BEFORE search_tools or invoke_tool whenever a task matches an installed skill.",
+	Schema: json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"name": {"type": "string", "description": "Exact skill id from Installed skills, e.g. gmail, notion, github"}
+		},
+		"required": ["name"]
+	}`),
+}
+
+var liveInstallSkillDef = Protocol.ToolDef{
+	Name: "install_skill",
+	Description: "Enable an available skill for this agent so its workflow instructions can be read. " +
+		"Requires user approval via permission card.",
+	Schema: json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"name": {"type": "string", "description": "Skill id to install/enable"}
+		},
+		"required": ["name"]
+	}`),
+}
+
 func liveFunctionDeclarations() []Shared.LiveFunctionDeclaration {
 	defs := []Protocol.ToolDef{
 		conversationReadToolDef,
 		webSearchToolDef,
 		liveSearchToolsDef,
 		liveInvokeToolDef,
+		liveReadSkillDef,
+		liveInstallSkillDef,
 	}
 	out := make([]Shared.LiveFunctionDeclaration, 0, len(defs))
 	for _, def := range defs {
@@ -185,6 +213,10 @@ func (s *Service) RunLiveTool(sessionID, callID, name, argsJSON string) Shared.L
 		return s.searchLiveTools(session, argsJSON)
 	case "invoke_tool":
 		return s.invokeLiveTool(session, callID, argsJSON)
+	case "read_skill":
+		return s.readSkillGateway(session.agentID, session.discovered, argsJSON)
+	case "install_skill":
+		return s.installSkillGateway(session.ctx, session.agentID, session.agentName, argsJSON)
 	case "conversation_read", "web_search":
 		return s.runLiveCanonicalTool(session, callID, name, argsJSON)
 	default:
@@ -314,6 +346,16 @@ func (s *Service) searchAvailableTools(discovered map[string]bool, scheduledFire
 	return Shared.LiveToolResult{Output: string(raw)}
 }
 
+func (s *Service) connectedServerSet() map[string]bool {
+	out := map[string]bool{}
+	if s.MCP != nil {
+		for _, id := range s.MCP.ListServerIDs() {
+			out[id] = true
+		}
+	}
+	return out
+}
+
 func (s *Service) liveToolCatalog(scheduledFire, allowMemoryMutation bool) []Protocol.ToolDef {
 	defs := make([]Protocol.ToolDef, 0, len(s.baseToolDefs()))
 	for _, def := range s.baseToolDefs() {
@@ -338,6 +380,52 @@ func (s *Service) liveToolCatalog(scheduledFire, allowMemoryMutation bool) []Pro
 	return defs
 }
 
+var toolSynonyms = map[string][]string{
+	"email":        {"mail", "message", "inbox", "thread", "draft", "gmail"},
+	"mail":         {"email", "message", "inbox", "gmail"},
+	"song":         {"track", "music", "playlist", "spotify", "audio"},
+	"music":        {"song", "track", "playlist", "spotify"},
+	"ticket":       {"issue", "task", "bug", "linear", "jira"},
+	"issue":        {"ticket", "bug", "task", "pr", "pull"},
+	"bug":          {"error", "exception", "issue", "sentry", "crash"},
+	"error":        {"bug", "exception", "sentry", "issue", "log"},
+	"doc":          {"document", "page", "note", "notion", "docs"},
+	"document":     {"doc", "page", "file", "docs", "notion"},
+	"spreadsheet":  {"sheet", "sheets", "table", "cell", "csv"},
+	"sheet":        {"spreadsheet", "sheets", "row", "column"},
+	"presentation": {"slides", "deck", "slide"},
+	"deck":         {"slides", "presentation", "slide"},
+	"meeting":      {"calendar", "event", "schedule", "invite"},
+	"event":        {"calendar", "meeting", "schedule"},
+	"todo":         {"task", "tasks", "todoist", "reminder", "checklist"},
+	"task":         {"todo", "tasks", "todoist", "issue"},
+	"repo":         {"repository", "github", "branch", "commit", "pr"},
+	"pr":           {"pull", "request", "github", "review", "merge"},
+	"wiki":         {"confluence", "notion", "page", "knowledge"},
+	"worker":       {"cloudflare", "kv", "r2", "d1", "dns", "zone"},
+}
+
+func expandQueryVariants(term string) []string {
+	seen := map[string]bool{term: true}
+	out := []string{term}
+	if len(term) > 3 && strings.HasSuffix(term, "s") {
+		sing := strings.TrimSuffix(term, "s")
+		if !seen[sing] {
+			seen[sing] = true
+			out = append(out, sing)
+		}
+	}
+	for _, base := range append([]string(nil), out...) {
+		for _, syn := range toolSynonyms[base] {
+			if !seen[syn] {
+				seen[syn] = true
+				out = append(out, syn)
+			}
+		}
+	}
+	return out
+}
+
 func liveToolScore(query string, def Protocol.ToolDef, category string) int {
 	name := strings.ToLower(def.Name)
 	description := strings.ToLower(def.Description)
@@ -349,18 +437,18 @@ func liveToolScore(query string, def Protocol.ToolDef, category string) int {
 		if len(term) < 2 || term == "tool" || term == "use" || term == "need" || term == "want" {
 			continue
 		}
-		variants := []string{term}
-		if len(term) > 3 && strings.HasSuffix(term, "s") {
-			variants = append(variants, strings.TrimSuffix(term, "s"))
-		}
-		for _, variant := range variants {
+		for i, variant := range expandQueryVariants(term) {
+			weight := 1
+			if i == 0 {
+				weight = 2
+			}
 			switch {
 			case strings.Contains(name, variant):
-				score += 12
+				score += 6 * weight
 			case strings.Contains(category, variant):
-				score += 7
+				score += 4 * weight
 			case strings.Contains(description, variant):
-				score += 3
+				score += 2 * weight
 			}
 		}
 	}

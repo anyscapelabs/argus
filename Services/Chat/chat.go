@@ -23,6 +23,7 @@ import (
 	"github.com/anyscapelabs/argus/Services/MCPConnect"
 	"github.com/anyscapelabs/argus/Services/Permission"
 	"github.com/anyscapelabs/argus/Services/Shared"
+	"github.com/anyscapelabs/argus/Services/Skills"
 )
 
 type Service struct {
@@ -33,6 +34,8 @@ type Service struct {
 	MCP *MCP.Service
 	// MCPConnect handles MCP connection approval flow.
 	MCPConnect *MCPConnect.Service
+	// Skills holds the embedded and installed Agent Skills registry.
+	Skills *Skills.Service
 	// Artifacts stores the documents the agent writes. Unattended-safe by
 	// design: unlike the file tools it needs no permission grant, which is what
 	// lets a routine produce a report on a machine nobody is sitting at.

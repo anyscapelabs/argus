@@ -55,7 +55,7 @@ func SaveStructured(db *Storage.DB, memory Storage.Memory) (Storage.Memory, erro
 	if utf8.RuneCountInString(value) > maxValueLen {
 		return Storage.Memory{}, fmt.Errorf("value too long (max %d characters)", maxValueLen)
 	}
-	if memory.Scope != "contextual" {
+	if memory.Scope != "contextual" && memory.Scope != "avoid" {
 		memory.Scope = "always"
 	}
 	memory.Key = key

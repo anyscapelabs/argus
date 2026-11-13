@@ -1,0 +1,107 @@
+[
+  {
+    "id": "gmail",
+    "name": "Gmail",
+    "description": "Search, read threads, draft, reply, send, and label email in Gmail. Use whenever user mentions email, inbox, messages, threads, or replying.",
+    "connectors": ["gmail"],
+    "auto_enable": true
+  },
+  {
+    "id": "google-calendar",
+    "name": "Google Calendar",
+    "description": "List calendars, check availability, create, update, or cancel calendar events and meetings.",
+    "connectors": ["google-calendar"],
+    "auto_enable": true
+  },
+  {
+    "id": "google-drive",
+    "name": "Google Drive",
+    "description": "Search, list, organize, move, and inspect files and folders in Google Drive.",
+    "connectors": ["google-drive"],
+    "auto_enable": true
+  },
+  {
+    "id": "google-docs",
+    "name": "Google Docs",
+    "description": "Read, create, and edit Google Docs documents.",
+    "connectors": ["google-docs"],
+    "auto_enable": true
+  },
+  {
+    "id": "google-sheets",
+    "name": "Google Sheets",
+    "description": "Read ranges, append rows, and update cells in Google Sheets spreadsheets.",
+    "connectors": ["google-sheets"],
+    "auto_enable": true
+  },
+  {
+    "id": "google-tasks",
+    "name": "Google Tasks",
+    "description": "List task lists, create, update, and complete Google Tasks.",
+    "connectors": ["google-tasks"],
+    "auto_enable": true
+  },
+  {
+    "id": "google-slides",
+    "name": "Google Slides",
+    "description": "Read and summarize Google Slides presentations.",
+    "connectors": ["google-slides"],
+    "auto_enable": true
+  },
+  {
+    "id": "github",
+    "name": "GitHub",
+    "description": "Search repositories, inspect code/commits, manage issues and pull requests on GitHub.",
+    "connectors": ["github"],
+    "auto_enable": true
+  },
+  {
+    "id": "linear",
+    "name": "Linear",
+    "description": "Find, triage, create, and update Linear issues, cycles, and projects.",
+    "connectors": ["linear"],
+    "auto_enable": true
+  },
+  {
+    "id": "notion",
+    "name": "Notion",
+    "description": "Search pages/databases, read content, create or update Notion pages and comments.",
+    "connectors": ["notion"],
+    "auto_enable": true
+  },
+  {
+    "id": "todoist",
+    "name": "Todoist",
+    "description": "Create, filter, complete, and organize tasks and projects in Todoist.",
+    "connectors": ["todoist"],
+    "auto_enable": true
+  },
+  {
+    "id": "atlassian",
+    "name": "Atlassian Jira & Confluence",
+    "description": "Search Jira issues with JQL, inspect tickets, and search/read Confluence wiki pages.",
+    "connectors": ["atlassian"],
+    "auto_enable": true
+  },
+  {
+    "id": "sentry",
+    "name": "Sentry",
+    "description": "Inspect Sentry organizations, projects, production errors, stacktraces, and issue health.",
+    "connectors": ["sentry"],
+    "auto_enable": true
+  },
+  {
+    "id": "cloudflare",
+    "name": "Cloudflare",
+    "description": "Search Cloudflare documentation and inspect accounts, zones, Workers, KV, D1, and R2 resources.",
+    "connectors": ["cloudflare"],
+    "auto_enable": true
+  },
+  {
+    "id": "context7",
+    "name": "Context7",
+    "description": "Resolve library IDs and fetch up-to-date API documentation and code examples.",
+    "connectors": ["context7"],
+    "auto_enable": true
+  }
+]

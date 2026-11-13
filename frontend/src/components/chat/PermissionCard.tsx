@@ -1,4 +1,4 @@
-import { FiTerminal, FiFolder, FiGlobe } from 'react-icons/fi'
+import { FiTerminal, FiFolder, FiGlobe, FiPackage } from 'react-icons/fi'
 import type { PermissionRequestView } from '../../domains/permission/api'
 
 export type Permission = PermissionRequestView
@@ -7,6 +7,7 @@ const TOOL_LABELS: Record<string, string> = {
   execute_command: 'Terminal',
   file_access: 'Files',
   browser_action: 'Browser',
+  skill_install: 'Agent Skill',
 }
 
 // A browsing grant is scoped to one site and that scope is carried in the tool
@@ -65,11 +66,13 @@ export default function PermissionCard({ permission, agentName, busy, onNotify, 
       <div className="flex items-center gap-2">
         <div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary">
           {family === 'file_access' ? (
-            <FiFolder size={9} className="text-primary" />
+            <FiFolder className="text-primary" size={9} />
           ) : family === 'browser_action' ? (
-            <FiGlobe size={9} className="text-primary" />
+            <FiGlobe className="text-primary" size={9} />
+          ) : family === 'skill_install' ? (
+            <FiPackage className="text-primary" size={9} />
           ) : (
-            <FiTerminal size={9} className="text-primary" />
+            <FiTerminal className="text-primary" size={9} />
           )}
         </div>
         <span className="text-xs text-primary">{label}</span>

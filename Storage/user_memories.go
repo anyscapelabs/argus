@@ -48,6 +48,16 @@ func scanMemory(scanner interface{ Scan(...any) error }) (Memory, error) {
 }
 
 func (db *DB) UpsertMemory(memory Memory) (Memory, error) {
+	if memory.Scope == "avoid" {
+		now := nowUnixMs()
+		id, _ := uuid.NewV7()
+		_, err := db.conn.Exec(
+			`INSERT INTO memory_avoid_rules (id, agent_id, key, value, updated_at) VALUES (?, ?, ?, ?, ?)
+			 ON CONFLICT(agent_id, key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at`,
+			id.String(), memory.AgentID, memory.Key, memory.Value, now,
+		)
+		return memory, err
+	}
 	now := nowUnixMs()
 	current, found, err := db.GetMemory(memory.AgentID, memory.Key)
 	if err != nil {
@@ -115,12 +125,106 @@ func (db *DB) ListMemoryCandidates(agentID string) ([]Memory, error) {
 }
 
 func (db *DB) ForgetMemoryForAgent(agentID, key string) (bool, error) {
+	_, _ = db.conn.Exec(`DELETE FROM memory_avoid_rules WHERE agent_id = ? AND key = ?`, agentID, key)
 	res, err := db.conn.Exec(`DELETE FROM memory_items WHERE agent_id = ? AND key = ?`, agentID, key)
 	if err != nil {
 		return false, fmt.Errorf("storage: memory delete failed: %w", err)
 	}
 	n, err := res.RowsAffected()
 	return n > 0, err
+}
+
+func (db *DB) ListAvoidMemories(agentID string, limit int) ([]Memory, error) {
+	if limit <= 0 {
+		limit = 12
+	}
+	rows, err := db.conn.Query(
+		`SELECT id, agent_id, key, value, updated_at FROM memory_avoid_rules WHERE agent_id = ? ORDER BY updated_at DESC LIMIT ?`,
+		agentID, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Memory
+	for rows.Next() {
+		var m Memory
+		m.Scope = "avoid"
+		if err := rows.Scan(&m.ID, &m.AgentID, &m.Key, &m.Value, &m.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func (db *DB) GetAgentSkillState(agentID, skillID string) (bool, bool, error) {
+	var enabled int
+	err := db.conn.QueryRow(`SELECT enabled FROM agent_skills WHERE agent_id = ? AND skill_id = ?`, agentID, skillID).Scan(&enabled)
+	if err == sql.ErrNoRows {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, err
+	}
+	return enabled == 1, true, nil
+}
+
+func (db *DB) SetAgentSkillState(agentID, skillID string, enabled bool) error {
+	_, err := db.conn.Exec(
+		`INSERT INTO agent_skills (agent_id, skill_id, enabled, updated_at) VALUES (?, ?, ?, ?)
+		 ON CONFLICT(agent_id, skill_id) DO UPDATE SET enabled=excluded.enabled, updated_at=excluded.updated_at`,
+		agentID, skillID, b2i(enabled), nowUnixMs(),
+	)
+	return err
+}
+
+func (db *DB) UpsertToolLesson(agentID, serverID, toolName, lesson string) error {
+	_, err := db.conn.Exec(
+		`INSERT INTO learned_tool_lessons (agent_id, server_id, tool_name, lesson, hit_count, updated_at)
+		 VALUES (?, ?, ?, ?, 1, ?)
+		 ON CONFLICT(agent_id, tool_name) DO UPDATE SET
+		 lesson=excluded.lesson, hit_count=learned_tool_lessons.hit_count+1, updated_at=excluded.updated_at`,
+		agentID, serverID, toolName, lesson, nowUnixMs(),
+	)
+	return err
+}
+
+func (db *DB) ListToolLessons(agentID string, serverIDs []string, limit int) ([]string, error) {
+	if len(serverIDs) == 0 {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 8
+	}
+	marks := ""
+	args := make([]any, 0, len(serverIDs)+2)
+	args = append(args, agentID)
+	for i, id := range serverIDs {
+		if i > 0 {
+			marks += ","
+		}
+		marks += "?"
+		args = append(args, id)
+	}
+	args = append(args, limit)
+	rows, err := db.conn.Query(
+		`SELECT lesson FROM learned_tool_lessons WHERE agent_id = ? AND server_id IN (`+marks+`) ORDER BY updated_at DESC LIMIT ?`,
+		args...,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var l string
+		if err := rows.Scan(&l); err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
 }
 
 func (db *DB) GetRequestSource(runID string) (RequestSource, bool, error) {
