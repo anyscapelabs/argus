@@ -37,13 +37,21 @@ func Select(db *Storage.DB, agentID, query string, tokenBudget, maxItems int, al
 	queryTerms := terms(query)
 	var ranked []SelectedMemory
 	for _, memory := range items {
+		// "avoid" rules are injected via BehaviorPrompt's dedicated Do NOT block.
+		if memory.Scope == "avoid" {
+			continue
+		}
 		if alwaysOnly && memory.Scope != "always" {
 			continue
 		}
 		score := int(memory.Confidence * 10)
 		keyTerms := terms(strings.ReplaceAll(memory.Key, "_", " "))
 		valueTerms := terms(memory.Value)
-		overlap := overlapCount(queryTerms, keyTerms)*8 + min(overlapCount(queryTerms, valueTerms), 4)*3
+		valueOverlap := overlapCount(queryTerms, valueTerms)
+		if valueOverlap > 4 {
+			valueOverlap = 4
+		}
+		overlap := overlapCount(queryTerms, keyTerms)*8 + valueOverlap*3
 		if memory.Scope == "always" {
 			score += 20
 		} else if overlap == 0 {

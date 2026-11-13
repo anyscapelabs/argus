@@ -29,6 +29,7 @@ func (db *DB) migrate() error {
 		migration15,
 		migration16,
 		migration17,
+		migration18,
 	}
 
 	for i := version; i < len(migrations); i++ {
@@ -511,6 +512,44 @@ func migration17(db *DB) error {
 			return nil
 		}
 		return err
+	}
+	return nil
+}
+
+// migration18 adds agent skill activation overrides, 'avoid' scope support
+// on memory_items, and learned MCP tool recovery lessons.
+func migration18(db *DB) error {
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS agent_skills (
+			agent_id TEXT NOT NULL REFERENCES agent_profiles(id) ON DELETE CASCADE,
+			skill_id TEXT NOT NULL,
+			enabled INTEGER NOT NULL DEFAULT 1,
+			updated_at INTEGER NOT NULL,
+			PRIMARY KEY (agent_id, skill_id)
+		)`,
+		`CREATE TABLE IF NOT EXISTS learned_tool_lessons (
+			agent_id TEXT NOT NULL REFERENCES agent_profiles(id) ON DELETE CASCADE,
+			server_id TEXT NOT NULL,
+			tool_name TEXT NOT NULL,
+			lesson TEXT NOT NULL,
+			hit_count INTEGER NOT NULL DEFAULT 1,
+			updated_at INTEGER NOT NULL,
+			PRIMARY KEY (agent_id, tool_name)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_tool_lessons_server ON learned_tool_lessons(agent_id, server_id, updated_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS memory_avoid_rules (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL REFERENCES agent_profiles(id) ON DELETE CASCADE,
+			key TEXT NOT NULL,
+			value TEXT NOT NULL,
+			updated_at INTEGER NOT NULL,
+			UNIQUE(agent_id, key)
+		)`,
+	}
+	for _, q := range statements {
+		if _, err := db.conn.Exec(q); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -18,6 +18,8 @@ func TestPromptKeepsTablesForRealDataOnly(t *testing.T) {
 		"table only for a real multi-row data grid",
 		"search_tools",
 		"invoke_tool",
+		"read_skill",
+		"scope=\"avoid\"",
 	} {
 		if !strings.Contains(prompt, must) {
 			t.Errorf("the output rules never say %q", must)

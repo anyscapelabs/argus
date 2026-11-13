@@ -269,6 +269,11 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	if learned := Memory.BehaviorPrompt(s.Core.DB, agentID); learned != "" {
 		sysPrompt += learned
 	}
+	if s.MCP != nil {
+		if lessons := Memory.ToolLessonsPrompt(s.Core.DB, agentID, s.MCP.ListServerIDs()); lessons != "" {
+			sysPrompt += lessons
+		}
+	}
 	// Timezone and the approximate location — resolved fresh per send so
 	// dates and local reasoning stay correct.
 	if loc := Location.Current(sCtx(), s.Core.DB); loc.Timezone != "" {
@@ -282,6 +287,9 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 		if live := s.MCPConnect.PromptBlock(withTools); live != "" {
 			sysPrompt += live
 		}
+	}
+	if skillsBlock := s.skillsPromptBlock(agentID, withTools); skillsBlock != "" {
+		sysPrompt += skillsBlock
 	}
 	req.System = sysPrompt
 	log.Printf("chat: history messages=%d system_tokens≈%d tools=%d", len(history), s.historySystemTokens(&req), len(req.Tools))

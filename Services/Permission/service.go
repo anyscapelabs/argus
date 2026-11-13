@@ -22,6 +22,8 @@ const (
 	// BrowserTool guards the irreversible half of browsing: buying, sending,
 	// posting, deleting. Reading is free and never reaches the gate.
 	BrowserTool = "browser_action"
+	// SkillInstallTool guards enabling/installing an Agent Skill.
+	SkillInstallTool = "skill_install"
 )
 
 // BrowserHostTool scopes a browsing grant to one site. "Always allow" then means
@@ -184,7 +186,7 @@ func (s *Service) Revoke(agentID string) Shared.ActionResult {
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.ActionResult{Error: aerr}
 	}
-	for _, tool := range []string{TerminalTool, FileAccessTool} {
+	for _, tool := range []string{TerminalTool, FileAccessTool, SkillInstallTool} {
 		if err := s.Core.DB.ClearGrant(agentID, tool); err != nil {
 			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 		}

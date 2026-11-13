@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Router"
+	"github.com/anyscapelabs/argus/Services/Memory"
 	"github.com/anyscapelabs/argus/Services/Shared"
 	"github.com/anyscapelabs/argus/Storage"
 	"github.com/google/uuid"
@@ -26,6 +28,9 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	// that pastes the document into the chat as well cannot leak it.
 	wroteArtifact := false
 	discoveredTools := map[string]bool{}
+	// failedToolCalls tracks inner tool errors in this run so a subsequent
+	// successful retry can automatically record a compact recovery lesson.
+	failedToolCalls := map[string]string{}
 
 	// runModelTurn asks the model for one turn and re-asks on retryable
 	// provider failures. The request is stateless, so a retry simply re-runs
@@ -74,13 +79,23 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 		for _, call := range calls {
 			innerName := call.Name
 			var block Protocol.Block
-			if call.Name == liveSearchToolsDef.Name || call.Name == liveInvokeToolDef.Name {
+			if isGatewayMetaTool(call.Name) {
 				block, innerName = s.runTypedGatewayTool(ctx, runID, agentID, profile.AgentName, discoveredTools, call)
 			} else {
 				block = s.runTool(ctx, runID, agentID, profile.AgentName, call)
 			}
 			if !block.IsError && (innerName == writeArtifactToolDef.Name || innerName == createSlidesToolDef.Name) {
 				wroteArtifact = true
+			}
+			if innerName != "" && strings.Contains(innerName, "__") {
+				if block.IsError {
+					failedToolCalls[innerName] = block.Text
+				} else if prevErr, hadErr := failedToolCalls[innerName]; hadErr {
+					delete(failedToolCalls, innerName)
+					if s.Core != nil && s.Core.DB != nil {
+						Memory.RecordToolLesson(s.Core.DB, agentID, innerName, prevErr, call.Input)
+					}
+				}
 			}
 			roundResults = append(roundResults, block)
 		}

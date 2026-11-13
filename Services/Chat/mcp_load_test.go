@@ -36,20 +36,20 @@ func TestMCPServersReferencedFindsOnlyUsedServers(t *testing.T) {
 	}
 }
 
-// Every request carries only the compact gateway. Static and integration
-// schemas are returned by search_tools only when the run needs them.
+// Every request carries only the compact gateway. Static, skill, and integration
+// schemas are returned by search_tools/read_skill only when the run needs them.
 func TestAttachToolsShipsCompactGatewayOnly(t *testing.T) {
 	s := &Service{}
 	req := Protocol.Request{}
 	s.attachTools(&req, &Protocol.Target{Family: Protocol.FamilyOpenAICompat}, nil)
 	names := toolNames(req.Tools)
-	for _, name := range []string{"conversation_read", "web_search", "search_tools", "invoke_tool"} {
+	for _, name := range []string{"conversation_read", "web_search", "search_tools", "invoke_tool", "read_skill", "install_skill"} {
 		if !names[name] {
 			t.Errorf("gateway is missing %s", name)
 		}
 	}
-	if len(names) != 4 {
-		t.Fatalf("provider received %d tools instead of the four-tool gateway: %v", len(names), names)
+	if len(names) != 6 {
+		t.Fatalf("provider received %d tools instead of the six-tool gateway: %v", len(names), names)
 	}
 }
 

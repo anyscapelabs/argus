@@ -22,6 +22,7 @@ import (
 	serviceprovider "github.com/anyscapelabs/argus/Services/Provider"
 	servicescheduler "github.com/anyscapelabs/argus/Services/Scheduler"
 	"github.com/anyscapelabs/argus/Services/Shared"
+	serviceskills "github.com/anyscapelabs/argus/Services/Skills"
 	serviceuploads "github.com/anyscapelabs/argus/Services/Uploads"
 )
 
@@ -101,7 +102,8 @@ func main() {
 	artifacts := &serviceartifacts.Service{Core: core}
 	uploads := &serviceuploads.Service{Core: core}
 	browser := &servicebrowser.Service{}
-	chat := &servicechat.Service{Core: core, Permissions: permissions, MCP: mcp, MCPConnect: mcpConnect, Artifacts: artifacts, Browser: browser}
+	skills := &serviceskills.Service{Core: core}
+	chat := &servicechat.Service{Core: core, Permissions: permissions, MCP: mcp, MCPConnect: mcpConnect, Skills: skills, Artifacts: artifacts, Browser: browser}
 	// When a sign-in settles, the connector hands the turn back to the agent
 	// instead of waiting for the user to say "I connected". Chat is set here
 	// rather than constructed inside the connector because Chat imports

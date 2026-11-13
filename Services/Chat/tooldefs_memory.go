@@ -33,8 +33,8 @@ var rememberToolDef = Protocol.ToolDef{
 			},
 			"scope": {
 				"type": "string",
-				"enum": ["always", "contextual"],
-				"description": "always for standing preferences; contextual when relevant words should be required"
+				"enum": ["always", "contextual", "avoid"],
+				"description": "always for standing preferences; contextual when relevant words should be required; avoid for explicit negative rules/things the user dislikes or told you NOT to repeat"
 			},
 			"evidence": {
 				"type": "string",

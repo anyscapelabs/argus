@@ -21,14 +21,16 @@ func TestEveryAdvertisedBaseToolHasRunner(t *testing.T) {
 
 func TestLiveDeclarationsStayCompactAndUseGeminiTypes(t *testing.T) {
 	defs := liveFunctionDeclarations()
-	if len(defs) != 4 {
-		t.Fatalf("live setup has %d declarations, want 4", len(defs))
+	if len(defs) != 6 {
+		t.Fatalf("live setup has %d declarations, want 6", len(defs))
 	}
 	want := map[string]bool{
 		"conversation_read": true,
 		"web_search":        true,
 		"search_tools":      true,
 		"invoke_tool":       true,
+		"read_skill":        true,
+		"install_skill":     true,
 	}
 	for _, def := range defs {
 		if !want[def.Name] {
@@ -86,7 +88,7 @@ func TestLivePromptUsesProfileWithoutToolDump(t *testing.T) {
 	prompt := s.liveSystemPrompt(Storage.AgentProfile{
 		ID: "default", AgentName: "Nova", SystemPrompt: "Call the user Sam.",
 	})
-	for _, text := range []string{"You are Nova", "Call the user Sam.", "search_tools", "invoke_tool"} {
+	for _, text := range []string{"You are Nova", "Call the user Sam.", "search_tools", "invoke_tool", "read_skill"} {
 		if !strings.Contains(prompt, text) {
 			t.Errorf("live prompt missing %q", text)
 		}
@@ -112,5 +114,36 @@ func TestTypedGatewayDiscoversThenInvokesTool(t *testing.T) {
 	)
 	if result.IsError || inner != "recall_memories" || result.ToolName != "invoke_tool" || result.ToolRefID != "c2" {
 		t.Fatalf("gateway invocation failed or broke outer pairing: inner=%q result=%+v", inner, result)
+	}
+}
+
+func TestGatewayReadSkillUnlocksSchemasAndUnknownSkillErrors(t *testing.T) {
+	s, _ := newVoiceTestService(t)
+	discovered := map[string]bool{}
+	res, _ := s.runTypedGatewayTool(
+		context.Background(), "run-2", "default", "Argus", discovered,
+		Protocol.ToolCall{ID: "s1", Name: "read_skill", Input: `{"name":"context7"}`, Valid: true},
+	)
+	if res.IsError {
+		t.Fatalf("read_skill failed: %+v", res)
+	}
+	if !strings.Contains(res.Text, "Context7") || !strings.Contains(res.Text, "# Context7 Workflow") {
+		t.Fatalf("read_skill did not return skill workflow: %s", res.Text)
+	}
+	bad, _ := s.runTypedGatewayTool(
+		context.Background(), "run-2", "default", "Argus", discovered,
+		Protocol.ToolCall{ID: "s2", Name: "read_skill", Input: `{"name":"nope-skill"}`, Valid: true},
+	)
+	if !bad.IsError || !strings.Contains(bad.Text, "skill not found") {
+		t.Fatalf("unknown skill should error clearly: %+v", bad)
+	}
+}
+
+func TestLiveToolScoreUsesSynonyms(t *testing.T) {
+	if score := liveToolScore("draft an email", Protocol.ToolDef{Name: "gmail__create_draft", Description: "Create an email draft"}, "integration"); score <= 0 {
+		t.Fatal("email synonym query should match gmail draft tool")
+	}
+	if score := liveToolScore("open calendar meeting", Protocol.ToolDef{Name: "schedule_reminder", Description: "Schedule a reminder"}, "scheduling"); score <= 0 {
+		t.Fatal("meeting/calendar synonym query should match scheduling tools")
 	}
 }

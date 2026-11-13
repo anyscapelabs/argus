@@ -109,3 +109,24 @@ func TestRepeatedReactionsProduceCompactBehaviorRule(t *testing.T) {
 		t.Fatalf("unexpected learned behavior block: %q", block)
 	}
 }
+
+func TestAvoidMemoryExcludedFromSelectionButInjectedByBehavior(t *testing.T) {
+	db := memoryDB(t)
+	if _, err := SaveStructured(db, Storage.Memory{
+		AgentID: "default", Key: "no_emoji", Value: "Do not use emojis in responses.",
+		Scope: "avoid", Confidence: 1, SourceType: "explicit",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	selection, err := Select(db, "default", "please answer", 500, 8, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(selection.Rendered, "Do not use emojis") {
+		t.Fatalf("avoid memory leaked into normal selection: %s", selection.Rendered)
+	}
+	block := BehaviorPrompt(db, "default")
+	if !strings.Contains(block, "Do NOT repeat") || !strings.Contains(block, "Do not use emojis in responses.") {
+		t.Fatalf("avoid memory not injected as hard constraint: %q", block)
+	}
+}

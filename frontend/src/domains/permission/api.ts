@@ -58,6 +58,7 @@ const FAMILY_LABELS: Record<string, string> = {
   execute_command: 'the terminal',
   file_access: 'file access',
   browser_action: 'the browser',
+  skill_install: 'installing agent skills',
 }
 
 export function noticeText(
