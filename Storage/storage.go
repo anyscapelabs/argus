@@ -56,6 +56,13 @@ func (db *DB) Close() error {
 	return db.conn.Close()
 }
 
+// SQL exposes the raw connection handle for the free-function subsystems that
+// are shared verbatim with the HTTP deployment (delegation, connections,
+// run metrics). Long-lived Wails services should prefer the *DB methods.
+func (db *DB) SQL() *sql.DB {
+	return db.conn
+}
+
 func nullString(s string) any {
 	if s == "" {
 		return nil

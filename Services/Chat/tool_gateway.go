@@ -32,7 +32,6 @@ func isGatewayMetaTool(name string) bool {
 	}
 }
 
-// runTypedGatewayTool executes one of the two meta-tools for a normal chat run.
 // The outer id/name must be preserved so provider tool-call pairing remains
 // valid even though the backend executes an inner tool with its real name.
 func (s *Service) runTypedGatewayTool(
@@ -142,8 +141,6 @@ func (s *Service) readSkillGateway(agentID string, discovered map[string]bool, a
 	var b strings.Builder
 	b.WriteString(doc.Body)
 
-	// Attach live schemas for every tool in this skill's connector(s) or
-	// explicit allowed_tools list, and mark them discovered for this turn.
 	var unlocked []Protocol.ToolDef
 	allowedSet := map[string]bool{}
 	for _, t := range doc.Meta.AllowedTools {

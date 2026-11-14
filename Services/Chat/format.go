@@ -12,24 +12,20 @@ import (
 // line; anything longer can no longer be a plausible cosmetic title.
 const maxTitleRestLen = 80
 
-// isTitleLine reports whether the first non-empty line of a reply is a
-// cosmetic title instead of the answer. The agent name is compared
-// case-insensitively with plain string comparison only, never a regular
+// Agent names are compared case-insensitively with plain string comparison,
+// never a regular
 // expression, so renamed agents with unusual characters stay safe.
 func isTitleLine(line, agentName string) bool {
 	line = trimSpaces(strings.TrimSuffix(strings.TrimSpace(line), "\r"))
 	if line == "" {
 		return false
 	}
-	// Markdown heading (# Disk Space): 1-6 hashes and a space, or "#" alone.
 	if n := atxDepth(line); n > 0 && (n == len(line) || line[n] == ' ' || line[n] == '\t') {
 		return true
 	}
-	// Block-level constructs are never treated as titles.
 	if strings.HasPrefix(line, "```") || strings.HasPrefix(line, ">") || isListLine(line) {
 		return false
 	}
-	// Bold-only line (**Disk Space**), optionally followed by a colon.
 	if inner, ok := boldOnly(line); ok {
 		rest := utf8.RuneCountInString(inner) <= maxTitleRestLen && !endsWithPunct(inner)
 		return rest && strings.TrimSpace(inner) != ""
@@ -38,7 +34,6 @@ func isTitleLine(line, agentName string) bool {
 	if name == "" {
 		return false
 	}
-	// Agent name alone, optionally bold or with a trailing colon.
 	tr := []rune(line)
 	if ln := utf8.RuneCountInString(name); utf8.RuneCountInString(line) >= ln && strings.EqualFold(string(tr[:ln]), name) {
 		return nameRestTitle(strings.TrimSpace(string(tr[ln:])))
@@ -143,8 +138,6 @@ func CleanReply(text, agentName string) string {
 	return text
 }
 
-// StripLeadingTitle is CleanReply with hit logging so per-model violation
-// rates stay visible in the logs.
 func StripLeadingTitle(text, agentName, source string) string {
 	clean := CleanReply(text, agentName)
 	if clean != text {
@@ -172,7 +165,6 @@ func NewTitleFilter(agentName, source string) *TitleFilter {
 	return &TitleFilter{agentName: agentName, source: source, textIndex: -1}
 }
 
-// Reset prepares the filter for a new model message.
 func (f *TitleFilter) Reset() {
 	f.textIndex, f.sawText, f.through, f.hold, f.skipBlanks = -1, false, false, "", false
 }

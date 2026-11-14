@@ -5,10 +5,8 @@ import (
 	"github.com/anyscapelabs/argus/Protocol"
 )
 
-// writeArtifactToolDef is the document tool. The rules the validator enforces
-// live in the system prompt rather than here: a tool description is read once,
-// while the list of rejected constructs is the thing the model needs next to the
-// text it is composing.
+// Validator rules live in the system prompt rather than here: a tool description
+// is read once, while rejected constructs must stay beside the text being composed.
 var writeArtifactToolDef = Protocol.ToolDef{
 	Name: "write_artifact",
 	Description: "Write one document into the app's Artifacts panel. Markdown only; the user exports it " +

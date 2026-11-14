@@ -2,6 +2,7 @@ package Shared
 
 import (
 	"github.com/anyscapelabs/argus/Protocol"
+	"github.com/anyscapelabs/argus/Storage"
 )
 
 type AgentProfile struct {
@@ -108,3 +109,16 @@ type ModelRequestView struct {
 	StartedAt    int64   `json:"started_at"`
 	CompletedAt  int64   `json:"completed_at"`
 }
+
+// CreateAgentResult is the outcome of creating a teammate agent: the new
+// profile's identity so the caller can navigate to or address it, plus the
+// usual action error.
+type CreateAgentResult struct {
+	Ok      bool         `json:"ok"`
+	AgentID string       `json:"agent_id,omitempty"`
+	Handle  string       `json:"handle,omitempty"`
+	Error   *ActionError `json:"error,omitempty"`
+}
+
+// AgentSummary is one agent as the sidebar lists it.
+type AgentSummary = Storage.AgentSummary

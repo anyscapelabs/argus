@@ -26,8 +26,6 @@ export async function entitlements(): Promise<EntitlementsView> {
   return AccountService.Entitlements(ARGUS_API_URL)
 }
 
-// openDashboard sends the operator to the browser, where argus-router serves
-// the web console that mints agent keys.
 export async function openDashboard(path: string): Promise<void> {
   const url = `${ARGUS_API_URL}${path}`.replace(/([^:])\/{2,}/g, '$1/')
   try {

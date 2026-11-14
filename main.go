@@ -26,11 +26,6 @@ import (
 	serviceuploads "github.com/anyscapelabs/argus/Services/Uploads"
 )
 
-// Wails uses Go's `embed` package to embed the frontend files into the binary.
-// Any files in the frontend/dist folder will be embedded into the binary and
-// made available to the frontend.
-// See https://pkg.go.dev/embed for more information.
-
 //go:embed all:frontend/dist
 var assets embed.FS
 
@@ -38,15 +33,9 @@ var assets embed.FS
 var appIcon []byte
 
 func init() {
-	// Register a custom event whose associated data type is string.
-	// This is not required, but the binding generator will pick up registered events
-	// and provide a strongly typed JS/TS API for them.
 	application.RegisterEvent[string]("time")
 }
 
-// main function serves as the application's entry point. It initializes the application, creates a window,
-// and starts a goroutine that emits a time-based event every second. It subsequently runs the application and
-// logs any error that might occur.
 // systemNotifier adapts Wails' notification service to the narrow sink the
 // scheduler uses; keeping it behind an interface means the engine never
 // depends on the notification library.
@@ -144,11 +133,6 @@ func main() {
 	})
 	core.PickerHook = models.Picker
 
-	// Create a new window with the necessary options.
-	// 'Title' is the title of the window.
-	// 'Mac' options tailor the window when running on macOS.
-	// 'BackgroundColour' is the background colour of the window.
-	// 'URL' is the URL that will be loaded into the webview.
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title: "Argus",
 		// Frameless drops the native title bar and window decorations on every
@@ -158,7 +142,6 @@ func main() {
 		// removal of the WM-drawn frame. Dragging the window uses the
 		// `--wails-draggable: drag` property already set on <body>.
 		Frameless: true,
-		// Window sized to the golden ratio (1000 / 618 ≈ 1.618).
 		Width:      1000,
 		Height:     618,
 		StartState: application.WindowStateMaximised,
@@ -178,10 +161,8 @@ func main() {
 		lifecycle.handleEvent(name)
 	})
 
-	// Run the application. This blocks until the application has been exited.
 	err := app.Run()
 
-	// If an error occurred while running the application, log it and exit.
 	if err != nil {
 		log.Fatal(err)
 	}

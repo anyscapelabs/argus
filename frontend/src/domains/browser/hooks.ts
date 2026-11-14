@@ -17,16 +17,16 @@ import {
 // That is also what makes a failed hand-over visible — the settled status
 // arrives with its reason, and the conversation keeps a notice row for it
 // whether or not this window is still open.
-export function useTakeoverFlow() {
+export function useTakeoverFlow(agentID = 'default') {
   const [takeover, setTakeover] = useState<TakeoverRequestView | null>(null)
   const [takeoverState, setTakeoverState] = useState<TakeoverState>('requested')
   const [takeoverError, setTakeoverError] = useState<string>()
   const [takeoverBusy, setTakeoverBusy] = useState(false)
   const qc = useQueryClient()
-  const noticesKey = ['chat', 'default', 'notices']
+  const noticesKey = ['chat', agentID, 'notices']
 
   useEffect(() => {
-    pendingTakeovers('default').then((l) => {
+    pendingTakeovers(agentID).then((l) => {
       const v = l && l[0]
       if (!v) return
       setTakeover(v)
@@ -39,16 +39,14 @@ export function useTakeoverFlow() {
     const unsubs = [
       Events.On('browser:takeover:requested', (event: any) => {
         const payload = (event?.data ?? event) as TakeoverRequestView
-        if (!payload?.request_id) return
-        // The raise carries the page: screenshot, host and the reason the agent
-        // gave, all of which the card needs before the user decides anything.
+        if (!payload?.request_id || payload.agent_id !== agentID) return
         setTakeover(payload)
         setTakeoverState(asTakeoverState(payload.state))
         setTakeoverError(undefined)
       }),
       Events.On('browser:takeover:status', (event: any) => {
         const payload = (event?.data ?? event) as TakeoverStatus
-        if (!payload?.request_id) return
+        if (!payload?.request_id || payload.agent_id !== agentID) return
         const state = asTakeoverState(payload.state)
         // A state the UI does not know is treated as still asking, so the card
         // stays where the user can answer it instead of vanishing on them.
@@ -71,7 +69,7 @@ export function useTakeoverFlow() {
       }),
     ]
     return () => unsubs.forEach((u) => u && u())
-  }, [qc])
+  }, [agentID, qc])
 
   const decide = (decision: TakeoverDecision) => {
     if (!takeover || takeoverBusy) return

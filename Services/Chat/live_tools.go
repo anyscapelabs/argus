@@ -188,9 +188,8 @@ func (s *Service) liveToolSession(sessionID string) *liveToolSession {
 	return s.liveSessions[strings.TrimSpace(sessionID)]
 }
 
-// RunLiveTool is the sole function-call bridge used by the frontend. It keeps
-// discovery, allowlisting, permissions, execution and output limits in Go; the
-// webview only relays Gemini's call and this result.
+// The webview only relays Gemini calls; discovery, allowlisting, permissions,
+// execution and output limits stay in Go.
 func (s *Service) RunLiveTool(sessionID, callID, name, argsJSON string) Shared.LiveToolResult {
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.LiveToolResult{Error: aerr}

@@ -73,8 +73,6 @@ export function useExportArtifact() {
   })
 }
 
-// Saves a deck's .pptx. Resolves with the file that landed, or null when the
-// user backed out of the save dialog.
 export function useExportDeck() {
   return useMutation<ArtifactExportResult | null, Error, {
     artifactID: string

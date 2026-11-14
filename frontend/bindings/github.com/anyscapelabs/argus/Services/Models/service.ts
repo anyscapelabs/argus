@@ -34,6 +34,16 @@ export function ClearSlot(slot: string): $CancellablePromise<Shared$0.ActionResu
     return $Call.ByID(2231001759, slot);
 }
 
+/**
+ * CreateAgent creates a teammate agent from the new-agent card: a fresh
+ * profile keyed by a new id, carrying the user's chosen avatar color, plus a
+ * routable @handle derived from the name. The default agent is untouched —
+ * it stays the orchestrator teammates are created around.
+ */
+export function CreateAgent(name: string, avatar: string): $CancellablePromise<Shared$0.CreateAgentResult> {
+    return $Call.ByID(2221156779, name, avatar);
+}
+
 export function CustomViews(providerID: string): $CancellablePromise<Shared$0.ModelView[] | null> {
     return $Call.ByID(3671034797, providerID);
 }
@@ -56,6 +66,10 @@ export function GetProviderSelection(providerID: string): $CancellablePromise<Sh
 
 export function GetSlots(): $CancellablePromise<Shared$0.SlotView[] | null> {
     return $Call.ByID(1232662787);
+}
+
+export function ListAgents(): $CancellablePromise<Shared$0.AgentSummary[] | null> {
+    return $Call.ByID(3915230656);
 }
 
 export function Picker(providerID: string, options: Shared$0.PickerOptions): $CancellablePromise<Shared$0.PickerResult> {

@@ -30,6 +30,7 @@ func (db *DB) migrate() error {
 		migration16,
 		migration17,
 		migration18,
+		migration19,
 	}
 
 	for i := version; i < len(migrations); i++ {
@@ -552,4 +553,84 @@ func migration18(db *DB) error {
 		}
 	}
 	return nil
+}
+
+// migration19 adds the multi-agent delegation and multi-account integration
+// schema: routable @handles on agent profiles, the agent_messages inbox that
+// carries delegation requests, reports and mid-run steering, the per-account
+// MCP connection registry with per-agent access-tier bindings, agent-scoped
+// working memory, and one telemetry row per agent run. It also backfills a
+// handle for every profile that predates the column, so no agent is left
+// unaddressable.
+func migration19(db *DB) error {
+	statements := []string{
+		`ALTER TABLE agent_profiles ADD COLUMN handle TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE agent_profiles ADD COLUMN role TEXT NOT NULL DEFAULT ''`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_agent_profiles_handle ON agent_profiles(handle) WHERE handle != ''`,
+		`CREATE TABLE IF NOT EXISTS agent_messages (
+			id TEXT PRIMARY KEY,
+			thread_id TEXT NOT NULL,
+			parent_message_id TEXT NOT NULL DEFAULT '',
+			from_agent_id TEXT NOT NULL,
+			to_agent_id TEXT NOT NULL,
+			kind TEXT NOT NULL,
+			body TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'queued',
+			report_back INTEGER NOT NULL DEFAULT 0,
+			urgent INTEGER NOT NULL DEFAULT 0,
+			hops INTEGER NOT NULL DEFAULT 0,
+			created_at INTEGER NOT NULL,
+			delivered_at INTEGER NOT NULL DEFAULT 0,
+			completed_at INTEGER NOT NULL DEFAULT 0
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_messages_inbox ON agent_messages(to_agent_id, status, created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_messages_thread ON agent_messages(thread_id, created_at)`,
+		`CREATE TABLE IF NOT EXISTS mcp_connections (
+			id TEXT PRIMARY KEY,
+			server_id TEXT NOT NULL,
+			label TEXT NOT NULL DEFAULT '',
+			account_email TEXT NOT NULL DEFAULT '',
+			expected_email TEXT NOT NULL DEFAULT '',
+			scopes TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'connected',
+			created_at INTEGER NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_mcp_connections_server ON mcp_connections(server_id)`,
+		`CREATE TABLE IF NOT EXISTS agent_connections (
+			agent_id TEXT NOT NULL,
+			connection_id TEXT NOT NULL,
+			access_level TEXT NOT NULL DEFAULT 'draft',
+			created_at INTEGER NOT NULL,
+			PRIMARY KEY (agent_id, connection_id),
+			FOREIGN KEY (connection_id) REFERENCES mcp_connections(id) ON DELETE CASCADE
+		)`,
+		`CREATE TABLE IF NOT EXISTS agent_memory (
+			agent_id TEXT NOT NULL,
+			mem_key TEXT NOT NULL,
+			mem_value TEXT NOT NULL,
+			updated_at INTEGER NOT NULL,
+			PRIMARY KEY (agent_id, mem_key)
+		)`,
+		`CREATE TABLE IF NOT EXISTS agent_run_metrics (
+			run_id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL,
+			thread_id TEXT NOT NULL DEFAULT '',
+			rounds INTEGER NOT NULL DEFAULT 0,
+			input_tokens INTEGER NOT NULL DEFAULT 0,
+			output_tokens INTEGER NOT NULL DEFAULT 0,
+			tool_calls INTEGER NOT NULL DEFAULT 0,
+			duration_ms INTEGER NOT NULL DEFAULT 0,
+			status TEXT NOT NULL DEFAULT 'completed',
+			created_at INTEGER NOT NULL
+		)`,
+	}
+	for _, q := range statements {
+		if _, err := db.conn.Exec(q); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				continue
+			}
+			return err
+		}
+	}
+	return backfillAgentHandles(db.conn)
 }

@@ -8,10 +8,7 @@ import (
 	"github.com/anyscapelabs/argus/Protocol"
 )
 
-// runCreateSlidesTool is the create_slides handler. It validates the deck with
-// the slides engine, stores it as an artifact of kind "deck", and tells the
-// model what landed so the reply can name the deck and its size without
-// repeating the deck itself.
+// The tool result describes the saved deck without repeating its contents.
 func (s *Service) runCreateSlidesTool(
 	call Protocol.ToolCall,
 	agentID string,
@@ -47,7 +44,6 @@ func (s *Service) runCreateSlidesTool(
 	fmt.Fprintf(&b, "Saved %q as a slide deck (id %s, %d slides). ",
 		res.Artifact.Title, shortID(res.Artifact.ID), res.SlideCount)
 	if res.Error != nil {
-		// The deck landed but the .pptx could not be built (no LibreOffice).
 		b.WriteString("The slides are in the Artifacts panel, but the .pptx could not be generated on this machine. " + res.Error.Message)
 	} else {
 		b.WriteString("It is in the Artifacts panel, where the user saves it as a .pptx.")

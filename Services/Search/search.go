@@ -43,7 +43,6 @@ var defaultInstances = []string{
 	"https://searx.rhscz.eu",
 }
 
-// Result is one web hit for the model to cite.
 type Result struct {
 	Title   string `json:"title"`
 	URL     string `json:"url"`
@@ -60,7 +59,6 @@ type Answer struct {
 	Err     string   `json:"error,omitempty"`
 }
 
-// Render flattens an Answer into the tool_result text the model sees.
 func (a Answer) Render() string {
 	if a.Err != "" {
 		return "web search failed: " + a.Err
@@ -101,7 +99,6 @@ type Client struct {
 
 var defaultClient = NewClient()
 
-// Search runs one query against the default instance pool.
 func Search(ctx context.Context, query string, maxResults int) Answer {
 	return defaultClient.Search(ctx, query, maxResults)
 }
@@ -123,7 +120,6 @@ func NewClient() *Client {
 	return NewClientWith(urls)
 }
 
-// NewClientWith builds a client over an explicit pool; used by tests.
 func NewClientWith(urls []string) *Client {
 	c := &Client{}
 	for _, u := range urls {

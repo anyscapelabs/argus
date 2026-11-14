@@ -1,9 +1,9 @@
 package MCP
 
 import (
-	"encoding/json"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -234,4 +234,53 @@ func fetchCode(interactive bool, cb *callback) auth.AuthorizationCodeFetcher {
 			return nil, ctx.Err()
 		}
 	}
+}
+
+// OAuthStartOptions carries the parameters a first leg of an OAuth flow needs.
+type OAuthStartOptions struct {
+	ClientID      string
+	RedirectURI   string
+	Scopes        []string
+	State         string
+	ExpectedEmail string
+}
+
+// BuildAuthURL assembles a provider authorization URL for the HTTP
+// deployment's server-side flow. access_type=offline and select_account
+// consent mirror what the desktop loopback flow requests: a refresh token,
+// and the account picker on every sign-in so a user connecting a second
+// account is not silently funneled into the first one.
+func BuildAuthURL(endpoint string, opts OAuthStartOptions) (string, error) {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return "", err
+	}
+	q := u.Query()
+	q.Set("client_id", opts.ClientID)
+	q.Set("redirect_uri", opts.RedirectURI)
+	q.Set("response_type", "code")
+	q.Set("access_type", "offline")
+	q.Set("prompt", "select_account consent")
+	q.Set("scope", strings.Join(opts.Scopes, " "))
+	q.Set("state", opts.State)
+	if hint := strings.TrimSpace(opts.ExpectedEmail); hint != "" {
+		q.Set("login_hint", hint)
+	}
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
+// VerifyAuthorizedEmail enforces an account pin. An empty expectation disables
+// the check: the pin is optional and only set when the user typed an address
+// in the connect form to disambiguate which Google account to use.
+func VerifyAuthorizedEmail(expectedEmail, actualEmail string) error {
+	exp := strings.ToLower(strings.TrimSpace(expectedEmail))
+	if exp == "" {
+		return nil
+	}
+	act := strings.ToLower(strings.TrimSpace(actualEmail))
+	if act != exp {
+		return fmt.Errorf("authenticated as %s, expected %s", actualEmail, expectedEmail)
+	}
+	return nil
 }

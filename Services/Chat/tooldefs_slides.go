@@ -6,10 +6,6 @@ import (
 	"github.com/anyscapelabs/argus/Protocol"
 )
 
-// createSlidesToolDef is the presentation tool. Like write_artifact it authors
-// a kept artifact rather than touching the user's disk, but it is structured:
-// the model hands over slide JSON (title, theme, slides) and the app renders a
-// real .pptx. The theme lets the model choose colors and fonts per deck.
 var createSlidesToolDef = Protocol.ToolDef{
 	Name: "create_slides",
 	Description: "Build a slide deck as an artifact: title, a theme (colors and fonts the deck should use) " +

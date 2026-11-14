@@ -97,8 +97,6 @@ func adapterFor(t *Protocol.Target) (Protocol.Adapter, error) {
 	return nil, fmt.Errorf("no adapter for protocol family %q", t.Family)
 }
 
-// AdapterFor exposes the protocol adapter for a target, for callers that need
-// the adapter's capability information outside of a streaming run.
 func AdapterFor(t *Protocol.Target) (Protocol.Adapter, error) {
 	return adapterFor(t)
 }

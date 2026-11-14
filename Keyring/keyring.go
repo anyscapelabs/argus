@@ -64,7 +64,6 @@ func Delete(providerID string) error {
 	return nil
 }
 
-// SetSecret stores a generic secret by ref.
 func SetSecret(ref, v string) error {
 	if err := keyring.Set(service, ref, v); err != nil {
 		return fmt.Errorf("secrets store refused the save: %w", err)
@@ -72,7 +71,6 @@ func SetSecret(ref, v string) error {
 	return nil
 }
 
-// GetSecret retrieves a generic secret by ref.
 func GetSecret(ref string) (string, error) {
 	v, err := keyring.Get(service, ref)
 	if err != nil {
@@ -84,7 +82,6 @@ func GetSecret(ref string) (string, error) {
 	return v, nil
 }
 
-// DeleteSecret deletes a generic secret by ref.
 func DeleteSecret(ref string) error {
 	err := keyring.Delete(service, ref)
 	if err != nil && !errors.Is(err, keyring.ErrNotFound) {

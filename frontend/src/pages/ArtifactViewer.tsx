@@ -9,6 +9,7 @@ import Markdown from 'react-markdown'
 import { linkify, linkLabel } from '../lib/linkify'
 import remarkGfm from 'remark-gfm'
 import CodeBlock from '../components/chat/CodeBlock'
+import MarkdownTable from '../components/chat/MarkdownTable'
 import WebsiteCard, { isHttpUrl } from '../components/chat/WebsiteCard'
 import { useArtifact, useExportArtifact, useExportDeck, useExportFormats, type ExportFormatView } from '../domains/artifacts/hooks'
 import DeckViewer from '../components/chat/DeckViewer'
@@ -40,8 +41,6 @@ function FormatIcon({ id, className }: { id: string; className: string }) {
   }
 }
 
-// baseName is what the confirmation quotes back. The user chose the folder, so
-// the file name is the only part they need reminding of.
 function baseName(path: string): string {
   const parts = path.split(/[/\\]/)
   return parts[parts.length - 1] || path
@@ -93,8 +92,6 @@ export default function ArtifactViewer({ onBack, artifactID }: ArtifactViewerPro
     }
   }
 
-  // A deck has a single file — its .pptx — so "export" is one direct action,
-  // not a menu of targets.
   const runDeckExport = async () => {
     if (!artifact) return
     try {
@@ -217,11 +214,7 @@ export default function ArtifactViewer({ onBack, artifactID }: ArtifactViewerPro
                 remarkPlugins={[remarkGfm]}
                 components={{
                   pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
-                  table: ({ children }) => (
-                    <div className="my-2 w-full max-w-full overflow-hidden rounded-2xl">
-                      <table className="w-full border-separate border-spacing-0 text-left text-xs">{children}</table>
-                    </div>
-                  ),
+                  table: ({ children }) => <MarkdownTable>{children}</MarkdownTable>,
                   a: ({ href, children }) => {
                     if (!href || !isHttpUrl(href)) {
                       return (

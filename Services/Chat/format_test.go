@@ -98,8 +98,7 @@ func deltaText(ev Protocol.Event) string {
 	return ev.Delta.Text
 }
 
-// TestTitleFilterChunking is the chunking property test: no matter where the
-// stream is cut, the filter output equals CleanReply of the full text.
+// Filtering must be independent of stream chunk boundaries.
 func TestTitleFilterChunking(t *testing.T) {
 	samples := []string{
 		"# Disk Space\n\n3.5 GB used",
@@ -133,7 +132,6 @@ func TestTitleFilterChunking(t *testing.T) {
 					got.WriteString(deltaText(ev))
 				}
 			}
-			// End of stream: stop, then flush any unterminated hold.
 			for _, ev := range f.Emit(Protocol.Event{Type: Protocol.EventMessageStop}) {
 				got.WriteString(deltaText(ev))
 			}
@@ -151,10 +149,8 @@ func TestTitleFilterPassesThinkingUntouched(t *testing.T) {
 	f := NewTitleFilter("Argus", "test")
 	var in []Protocol.Event
 	in = append(in, Protocol.Event{Type: Protocol.EventMessageStart})
-	// thinking block at index 0
 	in = append(in, Protocol.Event{Type: Protocol.EventBlockStart, Index: 0, Start: &Protocol.BlockStart{Index: 0, Block: Protocol.Block{Type: Protocol.BlockThinking}}})
 	in = append(in, Protocol.Event{Type: Protocol.EventBlockDelta, Index: 0, Delta: &Protocol.Delta{Kind: Protocol.DeltaThinking, Text: "Argus – should stay"}})
-	// text block at index 1
 	in = append(in, Protocol.Event{Type: Protocol.EventBlockStart, Index: 1, Start: &Protocol.BlockStart{Index: 1, Block: Protocol.Block{Type: Protocol.BlockText}}})
 	in = append(in, textDelta("Argus – Disk Space"))
 	in = append(in, textDelta("\nreal line"))
@@ -205,7 +201,6 @@ func TestTitleFilterResetsOnMessageStart(t *testing.T) {
 	for _, ev := range []Protocol.Event{tstart(), textDelta("Argus – first\ncontent one")} {
 		f.Emit(ev)
 	}
-	// New round: message_start resets, so the second message is filtered again.
 	for _, out := range f.Emit(Protocol.Event{Type: Protocol.EventMessageStart}) {
 		_ = out
 	}

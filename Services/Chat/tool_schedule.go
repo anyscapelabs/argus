@@ -16,7 +16,6 @@ import (
 	"github.com/anyscapelabs/argus/Storage"
 )
 
-// runScheduleReminderTool creates a one-time reminder.
 func runScheduleReminderTool(
 	s *Service,
 	ctx context.Context,
@@ -83,7 +82,6 @@ func runScheduleReminderTool(
 		title, whenLabel(sp.At), shortID(id.String())), false)
 }
 
-// runCreateRoutineTool creates a recurring routine.
 func runCreateRoutineTool(
 	s *Service,
 	ctx context.Context,
@@ -181,7 +179,6 @@ func runCreateRoutineTool(
 		title, sp.Summary(), whenLabel(next), shortID(id.String())), false)
 }
 
-// runListScheduledTool lists every reminder and routine.
 func runListScheduledTool(
 	s *Service,
 	_ context.Context,
@@ -220,7 +217,6 @@ func runListScheduledTool(
 	return result(b.String(), false)
 }
 
-// runCancelScheduledTool deletes a scheduled task by id.
 func runCancelScheduledTool(
 	s *Service,
 	_ context.Context,
@@ -272,7 +268,6 @@ func parseWhen(raw string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("%q is not RFC3339 or 2006-01-02T15:04", raw)
 }
 
-// whenLabel is how fire times read back to the model and the user.
 func whenLabel(ms int64) string {
 	t := time.UnixMilli(ms)
 	layout := "Mon 2 Jan 15:04"
@@ -316,8 +311,6 @@ func (s *Service) RoutineAlreadySpoken(agentID, title string, sp schedulespec.Sc
 	return Storage.ScheduledTask{}, false
 }
 
-// normRoutineTitle strips everything a model's phrasing differs in — case,
-// punctuation, extra whitespace — leaving bare words to compare.
 func normRoutineTitle(s string) string {
 	var b strings.Builder
 	for _, r := range strings.ToLower(s) {

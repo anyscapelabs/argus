@@ -62,7 +62,6 @@ var conversationReadToolDef = Protocol.ToolDef{
 	}`),
 }
 
-// runConversationRead serves the conversation_read tool for one agent's chat.
 func (s *Service) runConversationRead(
 	agentID string,
 	call Protocol.ToolCall,
@@ -152,9 +151,6 @@ func historyStamp(m Storage.Message) string {
 	return "(" + time.UnixMilli(m.CreatedAt).Local().Format("2006-01-02 15:04") + ")"
 }
 
-// snippetAround returns about max characters of text centred on the first
-// occurrence of term (case-insensitive), with whitespace collapsed so a
-// multi-line message reads as one line.
 func snippetAround(text, term string, max int) string {
 	rs := []rune(strings.Join(strings.Fields(text), " "))
 	if len(rs) <= max {

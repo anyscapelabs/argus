@@ -2,13 +2,19 @@ package Chat
 
 import (
 	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strings"
 	"time"
 
+	"github.com/anyscapelabs/argus/Models"
 	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Router"
+	"github.com/anyscapelabs/argus/Services/MCP"
 	"github.com/anyscapelabs/argus/Services/Memory"
 	"github.com/anyscapelabs/argus/Services/Shared"
 	"github.com/anyscapelabs/argus/Storage"
@@ -32,10 +38,22 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	// successful retry can automatically record a compact recovery lesson.
 	failedToolCalls := map[string]string{}
 
-	// runModelTurn asks the model for one turn and re-asks on retryable
-	// provider failures. The request is stateless, so a retry simply re-runs
+	// A long unattended run keeps every round in req.Messages. The budget lets
+	// the loop elide old tool output instead of dying on a context error, which
+	// is what made a small round cap necessary in the first place.
+	providerID, modelID := Models.SplitRef(modelRef)
+	runBudget := s.runContextBudget(modelRef, providerID, modelID, &req)
+	var lastSig uint64
+	repeats := 0
+	stuck := false
+
+	// The request is stateless, so a retry simply re-runs
 	// the turn; tools already executed earlier are not re-executed.
 	runModelTurn := func() Protocol.Result {
+		// Tell the frontend a model turn is starting. Between tool rounds nothing
+		// else announces it, so without this the indicator went blank while the
+		// model worked out its next step.
+		s.Core.EmitEvent(Shared.EventChatPhase, map[string]any{"agent_id": agentID, "run_id": runID, "phase": "thinking"})
 		res := s.collectWithTyping(ctx, runID, agentID, &req, target, trace)
 		for tries := 0; res.Error != nil && res.Error.Retryable && ctx.Err() == nil && tries < maxModelRetries; tries++ {
 			extraTries++
@@ -56,7 +74,10 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	// requesting tools. Every completed round-trip is persisted as its own
 	// message pair, so the next send replays what was actually done and an
 	// unattended follow-up turn cannot repeat or forget earlier commands.
-	for round := 0; round < maxToolRounds && !reachedEnd; round++ {
+	for round := 0; round < maxToolRounds && !reachedEnd && !stuck; round++ {
+		if n := compactRunMessages(req.Messages, runBudget); n > 0 {
+			log.Printf("chat: run %s compacted %d earlier messages to stay inside the context window", runID, n)
+		}
 		result = runModelTurn()
 
 		if ctx.Err() != nil || result.Error != nil {
@@ -108,10 +129,19 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 			s.persistRound(agentID, modelRef, internalKind, persisted, roundResults)
 		}
 		rounds++
+		if sig := callSignature(calls); sig == lastSig {
+			repeats++
+			if repeats+1 >= stuckRoundLimit {
+				stuck = true
+			}
+		} else {
+			lastSig, repeats = sig, 0
+		}
 	}
 
 	if !reachedEnd && ctx.Err() == nil && result.Error == nil {
-		// Out of rounds with the model still mid-plan. Don't end on the
+		// Stopped early with the model still mid-plan: either the runaway
+		// backstop or a loop repeating the same calls. Don't end on the
 		// limit itself: give it one tools-off turn to summarize honestly
 		// what ran and what did not.
 		req.Tools = nil
@@ -124,7 +154,7 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 		} else {
 			result.Message.Blocks = append(stripToolUses(result.Message.Blocks), Protocol.Block{
 				Type: Protocol.BlockText,
-				Text: "Stopped at the tool-round limit. The actions listed above ran; nothing after them did.",
+				Text: "Stopped before finishing. The actions listed above ran; nothing after them did. Reply \"continue\" to pick up from here.",
 			})
 		}
 	}
@@ -193,7 +223,6 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 		log.Printf("chat: could not finalize message %s: %v", assistantID, err)
 	}
 
-	// finalize request
 	finalMR := mr
 	finalMR.Attempt = 1 + extraTries
 	finalMR.Status = reqStatus
@@ -216,7 +245,6 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	}
 	finalMR.CompletedAt = nowUnixMs()
 
-	// usage
 	usage := total
 	hasUsage := usage.InputTokens != 0 || usage.OutputTokens != 0 || usage.CacheReadTokens != 0 || usage.CacheWriteTokens != 0 || usage.ReasoningTokens != 0
 	if hasUsage {
@@ -231,7 +259,6 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 		finalMR.CacheWriteTokens = &cw
 		finalMR.OutputTokens = &out
 		finalMR.ReasoningTokens = &rs
-		// cost
 		cost := s.computeCost(usage, modelRef)
 		finalMR.CostUSD = cost
 	} else {
@@ -350,4 +377,324 @@ func dropUnnamedCalls(msg Protocol.Message) Protocol.Message {
 	}
 	msg.Blocks = kept
 	return msg
+}
+
+type ToolSpec struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	InputSchema json.RawMessage `json:"input_schema"`
+}
+
+// RunGuard carries a run's safety context across rounds: where the run sits
+// in a delegation chain and which call shapes it has already repeated. Every
+// round observes the guard first, so both ways an unattended loop escalates
+// out of control — an endless delegation relay and a stuck toolcall loop —
+// are bounded in one place.
+type RunGuard struct {
+	AgentID  string
+	ThreadID string
+	BaseHops int
+
+	maxHops int
+	calls   map[string]int
+	repeats int
+	lastSig string
+}
+
+// BaseHops is inherited from the delegating request (zero for a user-initiated
+// run); every delegation this
+// run performs spends one hop.
+func NewRunGuard(agentID, threadID string, baseHops int) *RunGuard {
+	return &RunGuard{
+		AgentID:  agentID,
+		ThreadID: threadID,
+		BaseHops: baseHops,
+		maxHops:  maxDelegationHops,
+		calls:    map[string]int{},
+	}
+}
+
+// HopsLeft reports how many delegations this run may still perform. At zero
+// the loop's delegation tools refuse, pushing the model to finish or
+// escalate to the user instead of bouncing the task onward forever.
+func (g *RunGuard) HopsLeft() int {
+	return g.maxHops - g.BaseHops
+}
+
+// ObserveStuck tracks consecutive rounds issuing the identical call set, the
+// signature the Wails loop already watches. The Scheduler-driven loop uses
+// Stuck to stop early rather than burning rounds to the limit.
+func (g *RunGuard) ObserveStuck(callNames []string) {
+	sig := callSignatureFromNames(callNames)
+	if sig == g.lastSig {
+		g.repeats++
+	} else {
+		g.lastSig, g.repeats = sig, 0
+	}
+}
+
+func (g *RunGuard) Stuck() bool {
+	return g.repeats+1 >= stuckRoundLimit
+}
+
+func callSignatureFromNames(names []string) string {
+	h := sha256.Sum256([]byte(strings.Join(names, "|")))
+	return hex.EncodeToString(h[:4])
+}
+
+// DrainRoundInbox returns the queued messages addressed to this agent,
+// formatted for injection at a round boundary, and marks them delivered. The
+// loop calls it before every model turn: mid-run steering and teammate
+// reports must be able to change the next round's plan without racing the
+// loop's history writes.
+func DrainRoundInbox(db *sql.DB, agentID, threadID string) ([]string, error) {
+	msgs, err := Storage.DrainQueuedAgentMessages(db, agentID)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, m := range msgs {
+		if threadID != "" && m.ThreadID != threadID && m.Kind != "steer" {
+			// A message bound to another thread stays queued for that
+			// thread's own run.
+			if err := Storage.MarkAgentMessageStatus(db, m.ID, "queued"); err != nil {
+				log.Printf("chat: could not requeue cross-thread message %s: %v", m.ID, err)
+			}
+			continue
+		}
+		var line string
+		switch m.Kind {
+		case "steer":
+			line = "[Mid-run instruction from the user] " + m.Body
+		case "report":
+			line = fmt.Sprintf("[Report from teammate %s] %s", m.FromAgentID, m.Body)
+		case "request":
+			line = fmt.Sprintf("[Task request from teammate %s] %s", m.FromAgentID, m.Body)
+		default:
+			line = fmt.Sprintf("[%s from %s] %s", m.Kind, m.FromAgentID, m.Body)
+		}
+		out = append(out, line)
+	}
+	return out, nil
+}
+
+// FinalizeDelegatedRun closes the loop on one delegation: the request that
+// started this run is marked handled, and — when the delegator asked for a
+// report — the run's final text is enqueued back to them so the next round
+// boundary on their side picks it up.
+func FinalizeDelegatedRun(db *sql.DB, requestID, fromAgentID, toAgentID, report, status string) error {
+	if requestID != "" {
+		if err := Storage.MarkAgentMessageStatus(db, requestID, status); err != nil {
+			return err
+		}
+	}
+	if status != "completed" || strings.TrimSpace(report) == "" {
+		return nil
+	}
+	return Storage.EnqueueAgentMessage(db, Storage.AgentMessage{
+		ID:          "rep_" + uuid.NewString(),
+		FromAgentID: toAgentID,
+		ToAgentID:   fromAgentID,
+		Kind:        "report",
+		Body:        strings.TrimSpace(report),
+		Status:      "queued",
+	})
+}
+
+func TeamToolSpecs() []ToolSpec {
+	return []ToolSpec{
+		{
+			Name:        "list_agents",
+			Description: "List the teammate agents you may delegate tasks to, with their handles and specialties.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{}}`),
+		},
+		{
+			Name:        "message_agent",
+			Description: "Delegate a task to a teammate agent by handle. Set report_back true to receive their report at a later round boundary.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"to":{"type":"string","description":"Teammate @handle"},"task":{"type":"string"},"report_back":{"type":"boolean"},"urgent":{"type":"boolean"}},"required":["to","task"]}`),
+		},
+		{
+			Name:        "save_agent_note",
+			Description: "Persist a durable working-memory note for yourself across runs. An empty value deletes the note.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"]}`),
+		},
+	}
+}
+
+func isTeamTool(name string) bool {
+	switch name {
+	case "list_agents", "message_agent", "save_agent_note":
+		return true
+	}
+	return false
+}
+
+// Errors come back as readable tool text rather than a thrown failure: the
+// model is expected to read the reason and course-correct on the next round,
+// exactly as it does for MCP tier refusals.
+func DispatchBuiltInTeamTool(
+	ctx context.Context,
+	db *sql.DB,
+	callerID, threadID string,
+	hops int,
+	name, rawArgs string,
+	wakeFn func(agentID string),
+) (string, error) {
+	switch name {
+	case "list_agents":
+		return HandleListAgents(db, callerID)
+	case "message_agent":
+		return HandleMessageAgent(ctx, db, callerID, threadID, hops, rawArgs, wakeFn)
+	case "save_agent_note":
+		var in struct {
+			Key   string `json:"key"`
+			Value string `json:"value"`
+		}
+		if err := json.Unmarshal([]byte(rawArgs), &in); err != nil {
+			return "", fmt.Errorf("invalid arguments: %w", err)
+		}
+		return HandleSaveAgentNote(db, callerID, in.Key, in.Value)
+	}
+	return "", fmt.Errorf("unknown team tool %q", name)
+}
+
+// ExecuteGuardedTool runs one tool call for the delegation loop with the
+// access tier checked before anything executes. Built-in team tools come
+// first, then projected MCP connector tools through the gateway, then a
+// refusal the model can read. Everything else is out of scope for an
+// unattended run: the scheduler loop only promises what these surfaces cover.
+func ExecuteGuardedTool(
+	ctx context.Context,
+	db *sql.DB,
+	mgr *MCP.Manager,
+	agentID, threadID string,
+	hops int,
+	name, rawArgs string,
+	wakeFn func(agentID string),
+) (string, error) {
+	if isTeamTool(name) {
+		return DispatchBuiltInTeamTool(ctx, db, agentID, threadID, hops, name, rawArgs, wakeFn)
+	}
+	if strings.Contains(name, "__") {
+		return ExecuteAgentMCPTool(ctx, db, mgr, agentID, name, rawArgs)
+	}
+	return "", fmt.Errorf("tool %q is not available to unattended agent runs", name)
+}
+
+type LoopMessage struct {
+	Role    string // "user" | "assistant" | "tool"
+	Content string
+}
+
+type ToolCall struct {
+	Name string
+	Args string
+}
+
+type ModelResponse struct {
+	Text         string
+	ToolCalls    []ToolCall
+	InputTokens  int
+	OutputTokens int
+}
+
+type ModelTurn func(ctx context.Context, cfg LoopConfig, messages []LoopMessage) (ModelResponse, error)
+
+// Returned errors become readable tool results, so a provider hiccup or
+// a tier refusal becomes context the model can react to.
+type ToolExecutor func(ctx context.Context, cfg LoopConfig, call ToolCall) (string, error)
+
+type LoopConfig struct {
+	AgentID   string
+	ThreadID  string
+	System    string
+	BaseHops  int
+	MaxRounds int
+
+	Turn ModelTurn
+	Exec ToolExecutor
+}
+
+func RunAgentLoop(ctx context.Context, db *sql.DB, cfg LoopConfig) (ModelResponse, error) {
+	started := time.Now()
+	if cfg.MaxRounds <= 0 {
+		cfg.MaxRounds = maxToolRounds
+	}
+
+	guard := NewRunGuard(cfg.AgentID, cfg.ThreadID, cfg.BaseHops)
+	messages := make([]LoopMessage, 0, 16)
+	var usageIn, usageOut, toolCalls int
+	var rounds int
+
+	for round := 0; round < cfg.MaxRounds; round++ {
+		rounds = round + 1
+		if ctx.Err() != nil {
+			break
+		}
+
+		if inbox, err := DrainRoundInbox(db, cfg.AgentID, cfg.ThreadID); err == nil && len(inbox) > 0 {
+			messages = append(messages, LoopMessage{Role: "user", Content: strings.Join(inbox, "\n\n")})
+		}
+
+		resp, err := cfg.Turn(ctx, cfg, messages)
+		if err != nil {
+			usageIn += resp.InputTokens
+			usageOut += resp.OutputTokens
+			recordLoopMetric(db, cfg, started, rounds, usageIn, usageOut, toolCalls, "failed")
+			return resp, err
+		}
+		usageIn += resp.InputTokens
+		usageOut += resp.OutputTokens
+
+		if len(resp.ToolCalls) == 0 {
+			recordLoopMetric(db, cfg, started, rounds, usageIn, usageOut, toolCalls, "completed")
+			return resp, nil
+		}
+
+		messages = append(messages, LoopMessage{Role: "assistant", Content: resp.Text})
+		var names []string
+		for _, call := range resp.ToolCalls {
+			names = append(names, call.Name)
+		}
+		guard.ObserveStuck(names)
+
+		for _, call := range resp.ToolCalls {
+			toolCalls++
+			text, err := cfg.Exec(ctx, cfg, call)
+			if err != nil {
+				text = "Tool error: " + err.Error()
+			}
+			messages = append(messages, LoopMessage{Role: "tool", Content: text})
+		}
+
+		if guard.Stuck() {
+			break
+		}
+	}
+
+	status := "completed"
+	if ctx.Err() != nil {
+		status = "cancelled"
+	} else if guard.Stuck() {
+		status = "stopped_repeating"
+	}
+	recordLoopMetric(db, cfg, started, rounds, usageIn, usageOut, toolCalls, status)
+	return ModelResponse{}, nil
+}
+
+// recordLoopMetric persists one unattended run's metrics, ignoring failure:
+// metrics are observability, not correctness.
+func recordLoopMetric(db *sql.DB, cfg LoopConfig, started time.Time, rounds, in, out, calls int, status string) ModelResponse {
+	_ = Storage.RecordAgentRunMetric(db, Storage.AgentRunMetric{
+		RunID:        "run_" + uuid.NewString(),
+		AgentID:      cfg.AgentID,
+		ThreadID:     cfg.ThreadID,
+		Rounds:       rounds,
+		InputTokens:  in,
+		OutputTokens: out,
+		ToolCalls:    calls,
+		DurationMs:   time.Since(started).Milliseconds(),
+		Status:       status,
+	})
+	return ModelResponse{}
 }

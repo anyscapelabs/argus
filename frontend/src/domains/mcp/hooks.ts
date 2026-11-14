@@ -8,15 +8,15 @@ import { useQuery } from '@tanstack/react-query'
 // events, and the decide handler the card's buttons call. The backend holds
 // the request in memory and hands it back on mount, so a reload during a
 // sign-in restores the card instead of stranding it mid-flow.
-export function useMCPConnectFlow() {
+export function useMCPConnectFlow(agentID = 'default') {
   const [mcpConnect, setMcpConnect] = useState<MCPConnectRequestView | null>(null)
   const [mcpState, setMcpState] = useState<MCPConnectState>('requested')
   const [mcpError, setMcpError] = useState<string>()
   const qc = useQueryClient()
-  const noticesKey = ['chat', 'default', 'notices']
+  const noticesKey = ['chat', agentID, 'notices']
 
   useEffect(() => {
-    pendingMCPConnects('default').then((l) => {
+    pendingMCPConnects(agentID).then((l) => {
       const v = l && l[0]
       if (!v) return
       setMcpConnect(v)
@@ -26,7 +26,7 @@ export function useMCPConnectFlow() {
     const unsubs = [
       Events.On('mcp:connect:status', (event: any) => {
         const payload = (event?.data ?? event) as any
-        if (!payload?.request_id) return
+        if (!payload?.request_id || payload.agent_id !== agentID) return
         if (payload.state === 'requested') {
           setMcpConnect({
             request_id: payload.request_id,
@@ -69,7 +69,7 @@ export function useMCPConnectFlow() {
       }),
     ]
     return () => unsubs.forEach((u) => u && u())
-  }, [qc])
+  }, [agentID, qc])
 
   const decide = (decision: 'connect' | 'deny' | 'cancel') => {
     if (!mcpConnect) return

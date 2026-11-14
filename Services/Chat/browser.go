@@ -1,10 +1,5 @@
 package Chat
 
-// The browser tool's place in the agent loop. Everything about a page happens in
-// Services/Browser; this file is the seam — turning a tool call into a browser
-// call, asking Search to resolve the plain words the agent typed as a URL, and
-// turning the browser's own verdict into a tool result and a live status.
-
 import (
 	"context"
 	"encoding/json"
@@ -17,7 +12,6 @@ import (
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
 
-// runBrowser executes one browser tool call.
 func (s *Service) runBrowser(
 	ctx context.Context,
 	runID, agentID, agentName string,
@@ -91,7 +85,6 @@ func (s *Service) runBrowser(
 
 	out := s.Browser.Run(ctx, input, approve)
 
-	// The indicator shows the site the agent ended up on, not the verb it used.
 	if out.Host != "" || out.Title != "" {
 		s.Core.EmitEvent(Shared.EventActivity, Shared.ActivityView{
 			AgentID: agentID,
@@ -127,8 +120,8 @@ func (s *Service) runBrowser(
 	return result(text, false)
 }
 
-// challengeSeen is the verdict that raises a takeover card. The page pass names
-// the check from its scaffolding (the iframe, the class, the interstitial's own
+// The page pass names human checks from their scaffolding (the iframe, class, or
+// interstitial heading)
 // heading) because a check in a cross-origin frame is invisible to the
 // accessibility tree; the regex over the result text stays for a page that says
 // it out loud in its own document.
@@ -136,8 +129,6 @@ func challengeSeen(out Browser.Result, text string) bool {
 	return len(out.Challenge) > 0 || captchaDetected(text)
 }
 
-// browserSummary is the human line for the live indicator: what is being done and
-// to what, cut short enough to read at a glance.
 func browserSummary(action string, in Browser.Call) string {
 	switch action {
 	case "open", "tab_new":

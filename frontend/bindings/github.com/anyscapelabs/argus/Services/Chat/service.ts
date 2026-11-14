@@ -36,8 +36,7 @@ export function ListRequests(agentID: string, limit: number): $CancellablePromis
 }
 
 /**
- * LiveConfig returns a ready-to-open WebSocket URL for a live voice call. The
- * desktop deliberately does not name a model: the router resolves the configured
+ * The desktop deliberately does not name a live model: the router resolves the configured
  * default (the JSON entry flagged `default`) and injects it into the setup frame
  * itself, so the app never has to know a model id. The account key rides in the
  * URL's query because a WebSocket client (the webview) cannot set custom headers
@@ -82,10 +81,6 @@ export function RespondAskUser(requestID: string, answer: string): $CancellableP
     return $Call.ByID(601087915, requestID, answer);
 }
 
-/**
- * RespondTakeover is the binding the card's buttons call. decisions:
- * takeover | done | decline.
- */
 export function RespondTakeover(requestID: string, decision: string): $CancellablePromise<Shared$0.ActionResult> {
     return $Call.ByID(1172068374, requestID, decision);
 }
@@ -101,9 +96,8 @@ export function RoutineAlreadySpoken(agentID: string, title: string, sp: spec$0.
 }
 
 /**
- * RunLiveTool is the sole function-call bridge used by the frontend. It keeps
- * discovery, allowlisting, permissions, execution and output limits in Go; the
- * webview only relays Gemini's call and this result.
+ * The webview only relays Gemini calls; discovery, allowlisting, permissions,
+ * execution and output limits stay in Go.
  */
 export function RunLiveTool(sessionID: string, callID: string, name: string, argsJSON: string): $CancellablePromise<Shared$0.LiveToolResult> {
     return $Call.ByID(1877709519, sessionID, callID, name, argsJSON);
@@ -149,12 +143,6 @@ export function SetMessageReaction(agentID: string, messageID: string, reaction:
     return $Call.ByID(3659157130, agentID, messageID, reaction);
 }
 
-/**
- * Status is the small dashboard the right panel's Details tab renders: when
- * the app started (uptime), when the agent last finished a turn (last
- * active), and whether a run is on right now (online vs working). One
- * snapshot per call; the panel recomputes the relative wording locally.
- */
 export function Status(agentID: string): $CancellablePromise<Shared$0.AgentStatusResult> {
     return $Call.ByID(1735941344, agentID);
 }

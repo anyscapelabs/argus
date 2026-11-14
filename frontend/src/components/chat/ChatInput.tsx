@@ -20,7 +20,6 @@ function formatUsage(n: number): string {
 // before it is even sent.
 const maxUploadBytes = 10 << 20
 
-// acceptedMimes are the file types the backend will accept.
 const acceptedMimes = [
   'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp',
   'application/pdf',
@@ -34,13 +33,14 @@ function previewUrl(file: File): string {
 }
 
 type ChatInputProps = {
+  agentID?: string
   onSend?: (text: string, modelRef: string | null, attachments: PendingAttachment[]) => void
   busy?: boolean
   onStartVoice?: () => void
   voiceActive?: boolean
 }
 
-export default function ChatInput({ onSend, busy = false, onStartVoice, voiceActive = false }: ChatInputProps) {
+export default function ChatInput({ agentID = 'default', onSend, busy = false, onStartVoice, voiceActive = false }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const [expanded, setExpanded] = useState(false)
@@ -51,9 +51,9 @@ export default function ChatInput({ onSend, busy = false, onStartVoice, voiceAct
   const [attachError, setAttachError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const { data: chatModelsData } = useChatModels()
-  const { data: agentProfile } = useAgentProfile('default')
+  const { data: agentProfile } = useAgentProfile(agentID)
   const setAgentModel = useSetAgentModel()
-  const { data: usage } = useUsage('default')
+  const { data: usage } = useUsage(agentID)
   const chatModels = chatModelsData ?? []
 
   const initialized = useRef(false)
@@ -64,17 +64,17 @@ export default function ChatInput({ onSend, busy = false, onStartVoice, voiceAct
       setSelectedRef(agentProfile.model_ref)
     } else if (chatModels.length > 0) {
       setSelectedRef(chatModels[0].ref)
-      setAgentModel.mutate({ id: 'default', modelRef: chatModels[0].ref })
+      setAgentModel.mutate({ id: agentID, modelRef: chatModels[0].ref })
     }
     initialized.current = true
-  }, [agentProfile, chatModelsData])
+  }, [agentID, agentProfile, chatModelsData])
 
   const selectedModel = chatModels.find((m) => m.ref === selectedRef)
   const displayName = selectedModel?.model?.name ?? selectedRef ?? 'Select model'
 
   const handleSelectModel = (ref: string) => {
     setSelectedRef(ref)
-    setAgentModel.mutate({ id: 'default', modelRef: ref })
+    setAgentModel.mutate({ id: agentID, modelRef: ref })
   }
 
   const addFiles = useCallback((incoming: File[]) => {
@@ -132,7 +132,7 @@ export default function ChatInput({ onSend, busy = false, onStartVoice, voiceAct
       // row below reuses these for its image previews.
       const uploaded: PendingAttachment[] = []
       for (const file of files) {
-        const att = await uploadFile('default', file)
+        const att = await uploadFile(agentID, file)
         uploaded.push({
           id: att.id,
           filename: att.filename,
@@ -165,8 +165,6 @@ export default function ChatInput({ onSend, busy = false, onStartVoice, voiceAct
 
   return (
     <div className="mx-auto mb-2 flex w-3xl flex-col gap-1">
-      {/* Pending attachments sit above the input container, not inside it, so
-          the box keeps its pill shape while files are staged. */}
       {files.length > 0 && (
         <div className="flex flex-wrap gap-2 px-2">
           {files.map((f, i) => (

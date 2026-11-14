@@ -4,6 +4,8 @@ import { sendMessage, sendMessageWithAttachments, getChat, getUsage, setMessageR
 import type { GetChatResult, ChatMessage } from '../../../bindings/github.com/anyscapelabs/argus/Services/Shared/models'
 import { dataOf, mediaTypeOf, type PendingAttachment } from '../uploads/api'
 import { messageReaction, patchMessageReaction, rollbackMessageReaction } from './reactions'
+import { adoptServerMessageID } from './optimistic'
+import { SEND_MUTATION_KEY } from './invalidate'
 
 export type SendPayload = {
   text: string
@@ -56,6 +58,7 @@ export function useSendMessage(agentID: string) {
   const messagesKey = ['chat', agentID, 'history']
   const usageKey = ['chat', agentID, 'usage']
   return useMutation({
+    mutationKey: SEND_MUTATION_KEY,
     mutationFn: ({ text, attachmentIDs }: SendPayload) => {
       if (attachmentIDs && attachmentIDs.length > 0) {
         return sendMessageWithAttachments(agentID, text, attachmentIDs)
@@ -92,9 +95,17 @@ export function useSendMessage(agentID: string) {
     onError: (_err, _payload, ctx) => {
       if (ctx?.previous) qc.setQueryData(messagesKey, ctx.previous)
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      // Re-key the optimistic row to its real id first, so the refetch below
+      // updates the bubble in place instead of remounting it.
+      if (result?.user_message_id) {
+        qc.setQueryData<InfiniteData<GetChatResult>>(messagesKey, (old) =>
+          adoptServerMessageID(old, result.user_message_id!),
+        )
+      }
       qc.invalidateQueries({ queryKey: messagesKey })
       qc.invalidateQueries({ queryKey: usageKey })
+      qc.invalidateQueries({ queryKey: ['models', 'agents'] })
     },
   })
 }

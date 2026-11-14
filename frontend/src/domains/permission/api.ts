@@ -64,7 +64,6 @@ const FAMILY_LABELS: Record<string, string> = {
 export function noticeText(
   n: Pick<PermissionNoticeView, 'agent_name' | 'decision' | 'text' | 'tool'>,
 ): string {
-  // A row that carries its own sentence was written ready-made, so show it as is.
   if (n.text) return n.text
   const agent = n.agent_name || 'the agent'
   const tool = n.tool || 'execute_command'

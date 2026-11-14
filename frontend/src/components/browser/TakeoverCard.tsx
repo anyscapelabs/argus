@@ -29,8 +29,6 @@ export default function TakeoverCard({ request, state, error, busy = false, onTa
   const where = request.host || 'the page'
   return (
     <div className="flex w-full max-w-2xl flex-col items-stretch gap-3 rounded-xl border border-secondary bg-secondary p-3">
-      {/* The page as the agent sees it. Without this the ask is a sentence
-          about a page; with it the user knows which tab and which wall. */}
       <div className="aspect-[64/45] w-full overflow-hidden rounded-lg border border-secondary bg-tertiary">
         {request.screenshot ? (
           <img src={request.screenshot} alt={`${request.page_title || where} browser preview`} className="h-full w-full object-contain object-top" />
@@ -42,8 +40,6 @@ export default function TakeoverCard({ request, state, error, busy = false, onTa
       </div>
       <div className="min-w-0">
         <div className="truncate text-sm font-medium text-primary">
-          {/* Named by the page rather than by the verb: two cards from the same
-              run are told apart by where they were raised, not by why. */}
           {driving ? `You're driving ${where}` : where}
         </div>
         {request.page_title && <div className="truncate text-xs text-secondary">{request.page_title}</div>}

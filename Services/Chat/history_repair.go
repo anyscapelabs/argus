@@ -107,8 +107,6 @@ func repairPairsOnce(out []Protocol.Message) []Protocol.Message {
 				continue
 			}
 		}
-		// No splits needed: keep the message when the pairing is intact.
-		// If it carries both halves, split at the tool_result boundary.
 		kept = appendSplit(kept, m)
 	}
 	// A trailing-text split can leave a second user content right after a
@@ -120,7 +118,6 @@ func repairPairsOnce(out []Protocol.Message) []Protocol.Message {
 		}
 		var out []Protocol.Message
 		head := kept[i]
-		// find the first non-tool_result block
 		split := -1
 		for j, b := range head.Blocks {
 			if b.Type != Protocol.BlockToolResult {
@@ -234,8 +231,6 @@ func appendSplit(kept []Protocol.Message, m Protocol.Message) []Protocol.Message
 		}
 	}
 	if split <= 0 {
-		// Nothing to split: the message has no tool_result, or the
-		// tool_result is already the first block.
 		return append(kept, m)
 	}
 	head := Protocol.Message{Role: m.Role, Blocks: m.Blocks[:split]}
@@ -253,7 +248,6 @@ func appendSplit(kept []Protocol.Message, m Protocol.Message) []Protocol.Message
 		}
 	}
 	if trailing == 0 {
-		// No tool_result before the text — the tail is pure text.
 		return append(kept, tail)
 	}
 	if trailing > 0 {

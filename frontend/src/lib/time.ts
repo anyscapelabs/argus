@@ -1,7 +1,3 @@
-// Transcript time chips: a day changes, or hours pass between messages, the
-// chat shows when — always with the day context ("Today at 3:47pm",
-// "Yesterday at 6:03pm"), never a bare clock.
-
 export const HOUR_MS = 60 * 60 * 1000
 
 type Stamped = { created_at?: number; completed_at?: number }
@@ -40,7 +36,6 @@ export function dayLabel(ms: number): string {
   if (n <= 0) return 'Today'
   if (n === 1) return 'Yesterday'
   const d = new Date(ms)
-  // This week: the weekday name reads better than a date.
   if (n < 7) return d.toLocaleDateString(undefined, { weekday: 'long' })
   const md = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
   return n < 365 ? md : `${md}, ${d.getFullYear()}`
@@ -67,8 +62,17 @@ export function nextFireLabel(ms: number, now = Date.now()): string {
   return `${dated} at ${time}`
 }
 
-// Details tab labels. Last active reads like activity feeds do — "Just now"
-// while it is fresh, then coarse — while uptime counts the whole session.
+export function artifactDateLabel(ms: number | undefined, now = Date.now()): string {
+  if (!ms) return '—'
+  const ago = Math.max(0, now - ms)
+  if (ago < 60 * 1000) return 'Just now'
+  if (ago < HOUR_MS) return `${Math.floor(ago / (60 * 1000))}m`
+  if (ago < 24 * HOUR_MS) return `${Math.floor(ago / HOUR_MS)}h`
+  const days = Math.floor(ago / (24 * HOUR_MS))
+  if (days <= 30) return `${days}D`
+  return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
 export function lastActiveLabel(ms: number | undefined, now = Date.now()): string {
   if (!ms) return '—'
   const ago = now - ms

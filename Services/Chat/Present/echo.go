@@ -14,7 +14,6 @@ import (
 // Headings, list items and table rows are structural and are not subject to it.
 const minPlainEcho = 30
 
-// minEchoLine ignores fragments too short to carry any signal.
 const minEchoLine = 3
 
 // StripArtifactEcho removes from text every paragraph that merely repeats a
@@ -73,7 +72,6 @@ func StripArtifactEcho(text string, docs []string) (clean string, removed int) {
 	return strings.TrimSpace(strings.Join(kept, "\n\n")), removed
 }
 
-// isEcho reports whether a paragraph is a copy of any one of the documents.
 func isEcho(para string, docs []string) bool {
 	total, hits := 0, 0
 	structural := false
@@ -181,7 +179,6 @@ func splitParagraphs(s string) []string {
 	return out
 }
 
-// frontKeys are the only front-matter keys a saved document may carry.
 var frontKeys = map[string]bool{
 	"title": true, "author": true, "date": true,
 	"language": true, "paper": true, "orientation": true,

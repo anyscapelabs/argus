@@ -8,7 +8,6 @@ import (
 //go:embed data/catalog.json
 var raw []byte
 
-// OAuth describes OAuth configuration for an integration.
 type OAuth struct {
 	Mode   string   `json:"mode"` // google | dynamic
 	Scopes []string `json:"scopes"`
@@ -19,7 +18,6 @@ type OAuth struct {
 	ProbeTool string `json:"probeTool,omitempty"`
 }
 
-// Item represents an integration in the catalog.
 type Item struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -32,12 +30,10 @@ type Item struct {
 	Enabled     bool   `json:"enabled,omitempty"`
 }
 
-// Catalog holds integration items.
 type Catalog struct {
 	items []Item
 }
 
-// Default loads the embedded catalog.
 func Default() (*Catalog, error) {
 	var items []Item
 	if err := json.Unmarshal(raw, &items); err != nil {
@@ -56,14 +52,12 @@ func Load(path string) (*Catalog, error) {
 	return Default()
 }
 
-// Items returns all catalog items.
 func (c *Catalog) Items() []Item {
 	out := make([]Item, len(c.items))
 	copy(out, c.items)
 	return out
 }
 
-// IDs returns every integration id, in catalog order.
 func (c *Catalog) IDs() []string {
 	out := make([]string, 0, len(c.items))
 	for _, it := range c.items {
@@ -72,7 +66,6 @@ func (c *Catalog) IDs() []string {
 	return out
 }
 
-// Get returns an item by id.
 func (c *Catalog) Get(id string) (Item, bool) {
 	for _, it := range c.items {
 		if it.ID == id {
@@ -82,7 +75,6 @@ func (c *Catalog) Get(id string) (Item, bool) {
 	return Item{}, false
 }
 
-// Save writes the catalog to a file.
 func (c *Catalog) Save(path string) error {
 	return nil
 }

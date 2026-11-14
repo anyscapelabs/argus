@@ -6,17 +6,14 @@ import (
 )
 
 func (s *Service) computeCost(usage Protocol.Usage, modelRef string) *float64 {
-	// try catalog
 	cat := s.Core.Store.Get()
 	if m, ok := cat.Get(modelRef); ok && m.Cost != nil {
 		return computeCostFromPrice(usage, m.Cost)
 	}
-	// custom models
 	rows, err := s.Core.DB.ListAllCustomModels()
 	if err == nil {
 		for _, cm := range rows {
 			if cm.Ref() == modelRef {
-				// build cost
 				cost := &Models.Cost{}
 				if cm.PriceKnown {
 					cost.Input = &cm.PriceInput

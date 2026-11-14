@@ -5,6 +5,7 @@ import { PiArrowBendUpRightFill } from 'react-icons/pi'
 import { HiDotsHorizontal } from 'react-icons/hi'
 import WebsiteCard, { isHttpUrl } from './WebsiteCard'
 import CodeBlock from './CodeBlock'
+import MarkdownTable, { hasMarkdownTable } from './MarkdownTable'
 import { linkify, linkLabel } from '../../lib/linkify'
 import { ReactionBadge, ReactionPicker } from './ReactionPicker'
 
@@ -13,7 +14,6 @@ type AgentBubbleProps = {
   error?: string
   status?: string
   children?: string
-  /** Extra class names for the bubble container. */
   className?: string
   onReply?: () => void
   onReact?: (emoji: string | null) => void
@@ -96,17 +96,13 @@ function AgentBubble({
     )
   }
   return (
-    <div className={`group flex w-fit max-w-full items-start gap-2 ${className}`}>
-      <div className="markdown relative max-w-xl select-text break-words rounded-xl border border-primary bg-secondary px-3 py-2 text-sm">
+    <div className={`group flex w-fit max-w-full items-center gap-2 ${className}`}>
+      <div className={`markdown relative ${hasMarkdownTable(text) ? 'max-w-3xl' : 'max-w-xl'} select-text break-words rounded-xl border border-primary bg-secondary px-3 py-2 text-sm`}>
         <Markdown
           remarkPlugins={[remarkGfm]}
           components={{
             pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
-            table: ({ children }) => (
-              <div className="my-2 w-full max-w-full overflow-hidden rounded-2xl">
-                <table className="w-full border-separate border-spacing-0 text-left text-xs">{children}</table>
-              </div>
-            ),
+            table: ({ children }) => <MarkdownTable>{children}</MarkdownTable>,
             a: ({ href, children }) => {
               if (!href || !isHttpUrl(href)) {
                 return (

@@ -1,9 +1,3 @@
-// The transcript weave: turns stored messages into the ordered feed the chat
-// draws, interleaving time chips, notices, artifact cards, the takeover card
-// and the connector card between the rows they happened between. Pure logic —
-// no React, no events — so the placement rules can change without touching the
-// component that renders the result.
-
 import { HOUR_MS, dayChipLabel, dayKey, msgStamp } from './time'
 import type { ArtifactView } from '../domains/artifacts/hooks'
 import type { TakeoverRequestView } from '../domains/browser/api'
@@ -23,12 +17,8 @@ export type TranscriptItem =
   | { kind: 'askUserCard'; id: string }
   | { kind: 'fileWriteCard'; id: string; write: FileWrite }
 
-// VoiceNote is a finished voice call recorded into the transcript: when it
-// happened and how long it lasted. It renders as a notifier under the chat the
-// way a permission notice does.
 export type VoiceNote = { id: string; created_at: number; seconds: number }
 
-// parseVoiceRecord reads the JSON a persisted 'voice' message row carries.
 // Anything unreadable degrades to a bare card with no transcript to open.
 function parseVoiceRecord(text: string): { seconds: number; turns: VoiceTurn[] } {
   try {
@@ -37,16 +27,10 @@ function parseVoiceRecord(text: string): { seconds: number; turns: VoiceTurn[] }
       return { seconds: typeof rec.seconds === 'number' ? rec.seconds : 0, turns: rec.turns }
     }
   } catch {
-    // fall through to the empty record
   }
   return { seconds: 0, turns: [] }
 }
 
-// Time chips woven into the transcript: a chip opens the conversation and
-// every new local day, and repeats the clock whenever an hour or more has
-// passed since the previous message. Every chip names the day — "Today at
-// 9:12am", "Yesterday at 6:03pm", "Saturday at 11:58pm", "Oct 25 at 8:04am"
-// — so returning after a night reads the timeline instead of guessing it.
 // Notices ride the same weave: each one lands between the messages it sits
 // between in time, where it happened, not in a pile at the bottom. The connect
 // card rides it too, so the card keeps the place the sign-in was asked for
@@ -115,8 +99,6 @@ export function weaveTranscript({
     if (n.kind === 'mcp' && held(n.created_at)) continue
     extras.push({ id: `notice-${n.id}`, ts: n.created_at, notice: n })
   }
-  // A finished voice call is a note in the conversation: it happened at a moment
-  // and belongs between the messages around it, exactly like a notice.
   for (const v of voiceNotes ?? []) {
     extras.push({ id: `voice-${v.id}`, ts: v.created_at, voice: v })
   }
@@ -179,8 +161,6 @@ export function weaveTranscript({
     const ts = msgStamp(m)
     const start = m.created_at || ts
     if (m.kind === 'voice') {
-      // A persisted voice call: drawn as a transcript card exactly where the
-      // call happened, carrying its own record of turns and duration.
       const rec = parseVoiceRecord(m.text || '')
       if (ts && (!prevTs || dayKey(ts) !== dayKey(prevTs) || ts - prevTs >= HOUR_MS)) {
         items.push({ kind: 'chip', id: `chip-${m.id}`, label: dayChipLabel(ts) })
@@ -221,7 +201,6 @@ export function weaveTranscript({
     pushExtra(extras[ni])
     ni++
   }
-  // Nothing came after it, so this card is the newest thing in the room.
   placeCard()
   return items
 }

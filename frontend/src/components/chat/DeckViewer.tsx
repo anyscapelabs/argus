@@ -8,8 +8,6 @@ type Deck = {
   slides?: { layout?: string; title?: string; subtitle?: string; bullets?: string[]; left?: string[]; right?: string[] }[]
 }
 
-// parseDeck reads the deck JSON out of an artifact body, tolerating a malformed
-// body by returning an empty deck rather than crashing the view.
 function parseDeck(body: string): Deck {
   try {
     const d = JSON.parse(body)
@@ -19,9 +17,6 @@ function parseDeck(body: string): Deck {
   }
 }
 
-// DeckViewer is a slide-by-slide preview of a presentation. The artifact's body
-// is the deck JSON; the theme colours it; navigation moves between pages. It is
-// a preview, not an editor — the user saves the real .pptx separately.
 export default function DeckViewer({ artifact }: { artifact: ArtifactView }) {
   const deck = parseDeck(artifact.body ?? '')
   const slides = deck.slides ?? []

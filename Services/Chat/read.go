@@ -111,12 +111,8 @@ func (s *Service) GetChat(agentID string, beforeSeq, limit int) Shared.GetChatRe
 	return Shared.GetChatResult{Messages: out, NextBeforeSeq: nextBeforeSeq}
 }
 
-// chatPageLimit is one history page. Big enough to fill a screen and then
-// some; small enough that every page loads instantly.
 const chatPageLimit = 100
 
-// agentDisplayName resolves the current name of an agent, falling back to
-// the default when the profile is missing or unnamed.
 func agentDisplayName(s *Service, agentID string) string {
 	if profile, found, err := s.Core.DB.GetAgentProfile(agentID); err == nil && found && strings.TrimSpace(profile.AgentName) != "" {
 		return strings.TrimSpace(profile.AgentName)

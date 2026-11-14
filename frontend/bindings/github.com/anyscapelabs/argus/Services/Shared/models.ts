@@ -7,6 +7,9 @@ import * as Models$0 from "../../Models/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as Protocol$0 from "../../Protocol/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as Storage$0 from "../../Storage/models.js";
 
 export interface ActionError {
     "code": string;
@@ -43,6 +46,11 @@ export interface AgentStatusView {
     "last_active_ms": number;
     "busy": boolean;
 }
+
+/**
+ * AgentSummary is one agent as the sidebar lists it.
+ */
+export type AgentSummary = Storage$0.AgentSummary;
 
 export interface AllowedModel {
     "id": string;
@@ -190,6 +198,18 @@ export interface ChatModel {
     "provider_id": string;
     "provider_name": string;
     "model": ModelView;
+}
+
+/**
+ * CreateAgentResult is the outcome of creating a teammate agent: the new
+ * profile's identity so the caller can navigate to or address it, plus the
+ * usual action error.
+ */
+export interface CreateAgentResult {
+    "ok": boolean;
+    "agent_id"?: string;
+    "handle"?: string;
+    "error"?: ActionError | null;
 }
 
 export interface CustomModelInput {

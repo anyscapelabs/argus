@@ -28,8 +28,6 @@ export function useAgentStatus(agentID: string) {
           if (!cancelled) setStatus(null)
         })
     refresh()
-    // A turn starting or finishing is exactly what the tabs' rows describe:
-    // Busy flips at run start, Last active lands at run finish.
     const unsubs = [
       Events.On('chat:message', refresh),
       Events.On('chat:run_finished', refresh),

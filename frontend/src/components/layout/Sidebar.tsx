@@ -5,8 +5,7 @@ import { FiChevronLeft } from 'react-icons/fi'
 import { GrSettingsOption } from 'react-icons/gr'
 import { CgArrowsScrollV } from 'react-icons/cg'
 import { useAccount } from '../../domains/account/hooks'
-import { useAgentProfile } from '../../domains/models/hooks'
-import { useChatMessages } from '../../domains/chat/hooks'
+import { useAgents } from '../../domains/models/hooks'
 import { voiceMessagePreview } from '../../lib/voice'
 import VoiceIcon from '../chat/VoiceIcon'
 import AgentListItem from './AgentListItem'
@@ -18,6 +17,9 @@ type SidebarProps = {
   onOpenChat?: () => void
   onSignOut?: () => void
   agentActive?: boolean
+  onOpenNewAgent?: () => void
+  activeAgent?: string
+  onSelectAgent?: (agentID: string) => void
 }
 
 export default function Sidebar({
@@ -27,18 +29,24 @@ export default function Sidebar({
   onOpenChat,
   onSignOut,
   agentActive = false,
+  onOpenNewAgent,
+  activeAgent,
+  onSelectAgent,
 }: SidebarProps) {
   const { data: account } = useAccount()
-  const { data: agentProfile } = useAgentProfile('default')
-  const { data: messages = [] } = useChatMessages('default')
+  const { data: agents = [] } = useAgents()
   const avatar = account?.user?.image ?? '/argus-logo.svg'
   const [open, setOpen] = useState(false)
-  const agentAvatar = '/argus-logo.svg'
-  const lastMsg = messages.length ? messages[messages.length - 1] : null
-  const lastIsVoice = lastMsg?.kind === 'voice'
-  const lastText = lastIsVoice ? voiceMessagePreview(lastMsg?.text ?? '') : (lastMsg?.text ?? '')
-  const lastTime = lastMsg?.created_at ? new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
-  const agentName = agentProfile?.agent_name || 'Argus'
+  const listedAgents = agents.length > 0 ? agents : [{
+    id: 'default',
+    name: 'Argus',
+    avatar: '/argus-logo.svg',
+    handle: 'argus',
+    role: '',
+    last_message: '',
+    last_message_kind: '',
+    last_message_at: 0,
+  }]
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -81,6 +89,8 @@ export default function Sidebar({
         </button>
         <button
           type="button"
+          onClick={onOpenNewAgent}
+          aria-label="New agent"
           className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-primary bg-secondary text-primary transition-colors hover:bg-hover-secondary"
         >
           <IoAdd size={18} />
@@ -97,15 +107,30 @@ export default function Sidebar({
         </div>
       </div>
       <div className="flex flex-col gap-1 px-2">
-        <AgentListItem
-          avatar={agentAvatar}
-          name={agentName}
-          lastMessage={lastText}
-          lastMessageIcon={lastIsVoice ? <VoiceIcon size={11} className="shrink-0" /> : undefined}
-          time={lastTime}
-          active={agentActive}
-          onClick={onOpenChat}
-        />
+        {listedAgents.map((agent) => {
+          const voice = agent.last_message_kind === 'voice'
+          const preview = voice
+            ? voiceMessagePreview(agent.last_message)
+            : agent.last_message
+          const time = agent.last_message_at
+            ? new Date(agent.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : ''
+          return (
+            <AgentListItem
+              key={agent.id}
+              avatar={agent.avatar || '/argus-logo.svg'}
+              name={agent.name}
+              lastMessage={preview}
+              lastMessageIcon={voice ? <VoiceIcon size={11} className="shrink-0" /> : undefined}
+              time={time}
+              active={agentActive && (activeAgent || 'default') === agent.id}
+              onClick={() => {
+                if (onSelectAgent) onSelectAgent(agent.id)
+                else if (agent.id === 'default') onOpenChat?.()
+              }}
+            />
+          )
+        })}
       </div>
       <div ref={containerRef} className="relative mt-auto p-1">
         {open && (

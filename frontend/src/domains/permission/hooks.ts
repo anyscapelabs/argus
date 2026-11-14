@@ -51,13 +51,13 @@ export function useRespondPermission(agentID: string) {
 // handler the card's buttons call. The card never decides for itself — every
 // button tells the backend, and a failed save surfaces as a local notice
 // because no notice row exists for it in the conversation.
-export function usePermissionFlow() {
+export function usePermissionFlow(agentID = 'default') {
   const [permission, setPermission] = useState<PermissionRequestView | null>(null)
   const [errorNotice, setErrorNotice] = useState<string | null>(null)
-  const noticeLines = useNoticeLines('default')
+  const noticeLines = useNoticeLines(agentID)
   const noticeKeyText = noticeLines.map((n) => noticeText(n)).join('|')
   const qc = useQueryClient()
-  const key = noticesKey('default')
+  const key = noticesKey(agentID)
 
   // Only a failure the frontend caused itself: the Go side could not be
   // reached, so there is no notice row for the conversation to keep.
@@ -70,7 +70,7 @@ export function usePermissionFlow() {
     const unsubs = [
       Events.On('permission:requested', (event: any) => {
         const payload = (event?.data ?? event) as PermissionRequestView
-        if (!payload?.request_id) return
+        if (!payload?.request_id || payload.agent_id !== agentID) return
         setPermission(payload)
       }),
       Events.On('permission:resolved', (event: any) => {
@@ -80,7 +80,7 @@ export function usePermissionFlow() {
       }),
     ]
     return () => unsubs.forEach((u) => u && u())
-  }, [qc, key])
+  }, [agentID, qc])
 
   const decide = (decision: PermissionDecision) => {
     if (!permission) return

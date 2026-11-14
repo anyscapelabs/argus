@@ -8,7 +8,6 @@ type UserBubbleProps = {
   children?: string
   blocks?: Block[] | null
   align?: 'left' | 'right'
-  /** Extra class names for the bubble container. */
   className?: string
 }
 

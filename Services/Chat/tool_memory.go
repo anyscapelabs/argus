@@ -11,7 +11,6 @@ import (
 	"github.com/anyscapelabs/argus/Storage"
 )
 
-// runRememberTool saves one durable fact under a stable key.
 func runRememberTool(
 	s *Service,
 	ctx context.Context,
@@ -59,7 +58,6 @@ func runRememberTool(
 	return result("Saved under key \""+k+"\". It will appear in your context from now on.", false)
 }
 
-// runForgetTool deletes a saved memory by its key.
 func runForgetTool(
 	s *Service,
 	ctx context.Context,

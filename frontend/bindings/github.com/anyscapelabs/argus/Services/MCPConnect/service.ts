@@ -8,12 +8,55 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as Shared$0 from "../Shared/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as http$0 from "../../../../../net/http/models.js";
+
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as $models from "./models.js";
+
+/**
+ * BuildProviderAuthURL assembles the authorization URL for one server,
+ * pinning the account picker to the expected email when the user gave one.
+ */
+export function BuildProviderAuthURL(serverID: string, state: string, expectedEmail: string): $CancellablePromise<string> {
+    return $Call.ByID(80113030, serverID, state, expectedEmail);
+}
+
+/**
+ * DisconnectConnection revokes one account: its live client cache, its token
+ * and its row all go. When it was the server's last connection the shared
+ * session is dropped too, so nothing lingers that the user asked to remove.
+ */
+export function DisconnectConnection(serverID: string, connectionID: string): $CancellablePromise<void> {
+    return $Call.ByID(3372337352, serverID, connectionID);
+}
+
+/**
+ * ExchangeProviderCode trades the authorization code for a token, then reads
+ * the account email off userinfo so the caller can verify the pin and label
+ * the connection. The raw token body is returned verbatim: it is stored in
+ * the keyring exactly as the provider sent it.
+ */
+export function ExchangeProviderCode(serverID: string, code: string): $CancellablePromise<[string, string, string]> {
+    return $Call.ByID(717717475, serverID, code);
+}
 
 /**
  * Integrations lists the connectors Argus offers, with local connection state.
  */
 export function Integrations(): $CancellablePromise<Shared$0.IntegrationView[] | null> {
     return $Call.ByID(2712563097);
+}
+
+/**
+ * ListCatalog assembles the integrations page: the fixed catalog of servers,
+ * each annotated with its connected accounts and, per account, the agents
+ * bound to it with their access tiers.
+ */
+export function ListCatalog(): $CancellablePromise<$models.ConnectorCatalogView[] | null> {
+    return $Call.ByID(1227487737);
 }
 
 /**
@@ -43,6 +86,22 @@ export function Register(agentID: string, agentName: string, serverID: string): 
     return $Call.ByID(1379753735, agentID, agentName, serverID);
 }
 
+/**
+ * RegisterRoutes mounts the integrations catalog, the per-agent binding
+ * management and the server-side OAuth connect flow on an HTTP mux.
+ */
+export function RegisterRoutes(mux: http$0.ServeMux | null): $CancellablePromise<void> {
+    return $Call.ByID(1088695021, mux);
+}
+
+/**
+ * RemoveBotBinding detaches an agent from a connection without touching the
+ * connection itself: the account stays signed in for everyone else.
+ */
+export function RemoveBotBinding(connectionID: string, agentID: string): $CancellablePromise<void> {
+    return $Call.ByID(4178573756, connectionID, agentID);
+}
+
 export function Respond(requestID: string, decision: string): $CancellablePromise<Shared$0.ActionResult> {
     return $Call.ByID(343225399, requestID, decision);
 }
@@ -53,4 +112,12 @@ export function Respond(requestID: string, decision: string): $CancellablePromis
  */
 export function ServerIDs(): $CancellablePromise<string[] | null> {
     return $Call.ByID(3597572653);
+}
+
+/**
+ * UpsertBotBinding attaches an agent to a connection, or changes its access
+ * tier. An empty tier means draft: new bindings never start with send rights.
+ */
+export function UpsertBotBinding(connectionID: string, agentID: string, accessLevel: string): $CancellablePromise<void> {
+    return $Call.ByID(1811375703, connectionID, agentID, accessLevel);
 }

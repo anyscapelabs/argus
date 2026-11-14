@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import AgentGem, { isAvatarColor } from '../AgentGem'
 
 export type AgentListItemProps = {
   avatar?: string
@@ -29,7 +30,11 @@ export default function AgentListItem({
       }`}
     >
       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${active ? 'border-accent-secondary bg-accent-secondary/10' : 'border-primary bg-secondary'}`}>
-        <img src={avatar} alt="" className="h-8 w-8 rounded-full" />
+        {isAvatarColor(avatar) ? (
+          <AgentGem color={avatar} className="h-8 w-8" />
+        ) : (
+          <img src={avatar} alt="" className="h-8 w-8 rounded-full" />
+        )}
       </div>
       <div className="min-w-0 flex-1">
         <div className={`truncate text-sm font-medium ${active ? 'text-primary' : 'text-primary'}`}>{name}</div>

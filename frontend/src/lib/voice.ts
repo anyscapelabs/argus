@@ -12,7 +12,6 @@ export function voiceMessagePreview(text: string): string {
       return `Voice message · ${formatVoiceTime(record.seconds)}`
     }
   } catch {
-    // fall through
   }
   return 'Voice message'
 }

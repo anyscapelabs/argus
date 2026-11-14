@@ -11,10 +11,6 @@ type VoiceNotifierProps = {
   onEnd?: () => void
 }
 
-// statusLabel is the short word beside the icon while the call is starting or
-// running. "connecting" covers the socket + setup; "live" means the model is
-// listening and the user can speak; "paused" means the mic is muted but the
-// call is still open.
 function statusLabel(status: VoiceStatus, paused: boolean): string {
   if (paused) return 'Paused'
   switch (status) {
@@ -27,10 +23,6 @@ function statusLabel(status: VoiceStatus, paused: boolean): string {
   }
 }
 
-// VoiceNotifier is the floating card for a live voice call: voice icon on the
-// left, the status ("Connecting…" then "Voice message"), and a running clock
-// like 02:32 that appears only once the call has actually connected. Pause mutes
-// the mic while keeping the conversation open; stop ends the call.
 export default function VoiceNotifier({ status, time, paused = false, onTogglePause, onEnd }: VoiceNotifierProps) {
   const running = status === 'live'
   return (

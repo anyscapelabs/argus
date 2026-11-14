@@ -2,10 +2,6 @@ import { HiOutlineDocumentDuplicate } from "react-icons/hi"
 import { HiOutlinePresentationChartBar } from "react-icons/hi"
 
 type ArtifactCardProps = {
-  // The stored title, which is the document's own front-matter title or its first
-  // heading — the same string the agent was told it saved, and the one the panel
-  // lists. There is no default: a card without a document to name should not be
-  // on screen at all.
   title: string
   words?: number
   version?: number

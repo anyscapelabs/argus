@@ -259,7 +259,6 @@ func TestWithoutErroredPairsDropsErroredPair(t *testing.T) {
 	}
 }
 
-// TestWithoutErroredPairsKeepsSuccessfulPair: clean pairs are untouched.
 func TestWithoutErroredPairsKeepsSuccessfulPair(t *testing.T) {
 	out := []Protocol.Message{
 		msg(Protocol.RoleUser, text("hi")),
@@ -292,7 +291,6 @@ func TestDropUnnamedCallsKeepsNamedOnes(t *testing.T) {
 	}
 }
 
-// row is a persisted message in the shapes the send path writes.
 func row(id string, seq int, role string, status string, textArg string) Storage.Message {
 	return Storage.Message{ID: id, Seq: seq, Role: role, Status: status, Text: textArg}
 }

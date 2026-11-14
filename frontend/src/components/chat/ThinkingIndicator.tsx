@@ -1,15 +1,12 @@
 import { motion, useReducedMotion } from 'framer-motion'
 
 export type ThinkingChip = {
-  /** Favicon URL for the site currently shown, if one is known. */
   favicon?: string
   title: string
 }
 
 export type ThinkingIndicatorProps = {
-  /** Live status text to show instead of the static Thinking… label. */
   text?: string | null
-  /** A web-search result site: favicon plus title cycling in the indicator. */
   chip?: ThinkingChip | null
 }
 

@@ -17,7 +17,6 @@ func BehaviorPrompt(db *Storage.DB, agentID string) string {
 	}
 	var out strings.Builder
 
-	// 1. Hard negative constraints (explicit user corrections & anti-preferences).
 	if avoids, err := db.ListAvoidMemories(agentID, 12); err == nil && len(avoids) > 0 {
 		out.WriteString("\n## Do NOT repeat (learned user constraints)\n")
 		out.WriteString("Explicit things the user disliked or told you to avoid; strictly obey unless the current message overrides them:\n")
@@ -28,7 +27,6 @@ func BehaviorPrompt(db *Storage.DB, agentID string) string {
 		}
 	}
 
-	// 2. Statistical style signals inferred from thumbs up/down reactions.
 	samples, err := db.ListReactionSamples(agentID, 200)
 	if err != nil {
 		return out.String()

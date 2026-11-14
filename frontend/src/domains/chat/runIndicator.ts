@@ -1,39 +1,49 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Events } from '@wailsio/runtime'
 import { StatusLine } from '../../components/chat/statusLine'
+import {
+  TERMINAL_WAIT_AFTER_MS,
+  TERMINAL_WAITING_LABEL,
+  isTerminalTool,
+  terminalRunningLabel,
+  toolStatusLabel,
+} from '../../components/chat/toolStatus'
 
-// What the Argus indicator shows while a run is on: a paced status label
-// (Thinking/Typing/Running…), optionally a favicon chip for the site a search
-// surfaced or the browser is driving. One effect owns the whole wire: run
-// bookkeeping, the status line pace, and the tool events that drive the chip.
 export type RunIndicator = {
   status: string | null
   chip: { favicon: string; title: string } | null
   runActive: boolean
   setRunActive: (v: boolean) => void
-  // Sets the indicator to Thinking… for a send the user just made.
   beginThink: () => void
   statusLineRef: React.RefObject<StatusLine | null>
 }
 
-const messagesKey = ['chat', 'default', 'history']
-const usageKey = ['chat', 'default', 'usage']
+const agentsKey = ['models', 'agents']
 
-export function useRunIndicator(invalidate: (key: string[]) => void): RunIndicator {
+export function useRunIndicator(
+  agentID: string,
+  invalidate: (key: string[]) => Promise<void> | void,
+): RunIndicator {
   const [status, setStatus] = useState<string | null>(null)
   const [runActive, setRunActive] = useState(false)
   const statusLineRef = useRef<StatusLine | null>(null)
-  // Sites a web search just returned: the indicator cycles favicon plus
-  // result title while the model works on the answer.
   const [searchSources, setSearchSources] = useState<{ host: string; title: string }[]>([])
   const [sourceIdx, setSourceIdx] = useState(0)
-  // The site the agent is driving right now, from the browser tool's own events.
-  // One entry, not a cycle: there is exactly one page under the cursor.
   const [browsing, setBrowsing] = useState<{ host: string; title: string } | null>(null)
 
   useEffect(() => {
+    const messagesKey = ['chat', agentID, 'history']
+    const usageKey = ['chat', agentID, 'usage']
     const line = new StatusLine(setStatus)
     statusLineRef.current = line
+    // A command that runs for a while stops being "Running …" and becomes
+    // "Waiting for output": the agent is blocked on the terminal, and the
+    // indicator should say so instead of looking idle or vanishing.
+    let terminalWait: ReturnType<typeof setTimeout> | null = null
+    const clearTerminalWait = () => {
+      if (terminalWait) clearTimeout(terminalWait)
+      terminalWait = null
+    }
     const unsubs = [
       Events.On('agent:activity', (event: any) => {
         const payload = (event?.data ?? event) as
@@ -41,17 +51,18 @@ export function useRunIndicator(invalidate: (key: string[]) => void): RunIndicat
               kind?: string
               command?: string
               tool?: string
+              agent_id?: string
               sources?: { host?: string; title?: string }[]
               page?: { host?: string; title?: string; action?: string; tab?: number }
             }
           | undefined
         if (!payload?.kind) return
+        if (payload.agent_id && payload.agent_id !== agentID) return
         const isSearch = payload.tool === 'web_search'
         const isBrowser = payload.tool === 'browser'
         if (payload.kind === 'tool_started') {
           const cmd = (payload.command ?? '').trim()
           if (payload.tool === 'web_search') {
-            // The query itself is noise here; the found sites speak instead.
             setSearchSources([])
             line.set('Searching the web', 'tool')
           } else if (payload.tool === 'ask_user') {
@@ -61,16 +72,14 @@ export function useRunIndicator(invalidate: (key: string[]) => void): RunIndicat
             // tool_results event names it as soon as Chrome has answered.
             setBrowsing(null)
             line.set('Opening a page', 'tool')
+          } else if (isTerminalTool(payload.tool)) {
+            clearTerminalWait()
+            line.set(terminalRunningLabel(cmd), 'tool')
+            terminalWait = setTimeout(() => line.set(TERMINAL_WAITING_LABEL, 'tool'), TERMINAL_WAIT_AFTER_MS)
           } else {
-            const short = cmd.length > 60 ? cmd.slice(0, 60) + '…' : cmd
-            line.set(
-              cmd.length > 0 ? `Running ${short} in the terminal` : 'Running a command in the terminal',
-              'tool',
-            )
+            line.set(toolStatusLabel(payload.tool), 'tool')
           }
         } else if (payload.kind === 'tool_results' && isSearch) {
-          // Show the found sites (favicon + title, cycling) while the model
-          // works on the answer, instead of dropping straight back to text.
           const sites = (payload.sources ?? []).filter(
             (s): s is { host: string; title: string } => !!s?.host && !!s?.title,
           )
@@ -86,10 +95,27 @@ export function useRunIndicator(invalidate: (key: string[]) => void): RunIndicat
           // A finished browser action leaves the page where it was; clearing the
           // line here would make the indicator blink between every step.
         } else {
-          line.clear()
+          clearTerminalWait()
+          // A finished tool is always followed by another model turn. Going
+          // blank here is what made the indicator disappear between steps;
+          // hand over to Thinking… until the next tool or the reply.
+          if (payload.kind === 'tool_finished') line.set('Thinking…', 'label')
+          else line.clear()
         }
       }),
-      Events.On('chat:message', () => {
+      // The backend announces every model turn, including the ones between
+      // tool rounds that no other event covers.
+      Events.On('chat:phase', (event: any) => {
+        const payload = (event?.data ?? event) as { agent_id?: string; phase?: string } | undefined
+        if (payload?.agent_id && payload.agent_id !== agentID) return
+        if (payload?.phase !== 'thinking') return
+        clearTerminalWait()
+        line.set('Thinking…', 'label')
+      }),
+      Events.On('chat:message', (event: any) => {
+        const payload = (event?.data ?? event) as { agent_id?: string } | undefined
+        void invalidate(agentsKey)
+        if (payload?.agent_id && payload.agent_id !== agentID) return
         setRunActive(true)
         line.set('Thinking…', 'label')
         invalidate(messagesKey)
@@ -99,45 +125,48 @@ export function useRunIndicator(invalidate: (key: string[]) => void): RunIndicat
         const ev = (event?.data ?? event) as { event?: { type?: string; delta?: { kind?: string } } } | undefined
         const type = ev?.event?.type
         const deltaKind = ev?.event?.delta?.kind
-        // First text token → switch indicator from Thinking… to Typing…
         if (type === 'block_delta' && deltaKind === 'text') {
           line.set('Typing…', 'label')
         }
       }),
-      // chat:typing fires from the Send path on the first text token
-      Events.On('chat:typing', () => {
-        // Text is streaming: the source cycle's job is done.
+      Events.On('chat:typing', (event: any) => {
+        const payload = (event?.data ?? event) as { agent_id?: string } | undefined
+        if (payload?.agent_id && payload.agent_id !== agentID) return
         setSearchSources([])
         setBrowsing(null)
         line.set('Typing…', 'label')
       }),
-      Events.On('chat:run_finished', () => {
-        setSearchSources([])
-        setBrowsing(null)
-        line.reset()
-        setRunActive(false)
-        invalidate(messagesKey)
-        invalidate(usageKey)
+      Events.On('chat:run_finished', (event: any) => {
+        const payload = (event?.data ?? event) as { agent_id?: string } | undefined
+        void invalidate(agentsKey)
+        if (payload?.agent_id && payload.agent_id !== agentID) return
+        clearTerminalWait()
+        // Keep the indicator up until the final reply is in the transcript.
+        // Dropping it first leaves a gap, then the bubble pops in: a flicker.
+        void Promise.all([invalidate(messagesKey), invalidate(usageKey)]).then(() => {
+          setSearchSources([])
+          setBrowsing(null)
+          line.reset()
+          setRunActive(false)
+        })
       }),
     ]
     return () => {
       unsubs.forEach((u) => u && u())
+      clearTerminalWait()
       line.dispose()
       if (statusLineRef.current === line) {
         statusLineRef.current = null
       }
     }
-  }, [invalidate])
+  }, [agentID, invalidate])
 
-  // Rotate the web-search sites every couple seconds so each result gets a
-  // beat on screen.
   useEffect(() => {
     if (searchSources.length < 2) return
     const t = setInterval(() => setSourceIdx((i) => (i + 1) % searchSources.length), 2600)
     return () => clearInterval(t)
   }, [searchSources])
 
-  // Current chip for the indicator: favicon + title of the site shown now.
   const chip = useMemo(() => {
     if (searchSources.length > 0) {
       const s = searchSources[sourceIdx % searchSources.length]

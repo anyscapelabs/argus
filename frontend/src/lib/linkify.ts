@@ -1,8 +1,6 @@
 // Markdown link normalization shared by the chat bubbles and the artifact
 // viewer. `linkify` wraps bare URLs in angle brackets so react-markdown emits
 // real anchors, while keeping code spans/fences and markdown links intact.
-// `linkLabel` reduces a rendered link's children to their text label (or null
-// for image links).
 
 import { isValidElement, type ReactNode } from 'react'
 import type { ReactElement } from 'react'

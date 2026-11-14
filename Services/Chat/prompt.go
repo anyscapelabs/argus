@@ -1,6 +1,8 @@
 package Chat
 
 import (
+	"database/sql"
+	"fmt"
 	"strings"
 
 	"github.com/anyscapelabs/argus/Storage"
@@ -55,5 +57,38 @@ func systemPromptFor(profile Storage.AgentProfile, withTools bool) string {
 	b.WriteString("- Act first, then report the result. Ask one focused question only when a genuinely missing fact blocks progress.\n")
 	b.WriteString("- If one method fails, try a sensible alternative in the same turn before reporting the blocker.\n")
 	b.WriteString("- Never guess that a side effect succeeded. Trust the tool result and say plainly when a human-only check, credential, approval, or missing fact stops you.\n")
+	return b.String()
+}
+
+// Delegated runs receive a bounded report contract so their result remains useful
+// when injected into the delegator's context.
+func BuildSystemPrompt(db *sql.DB, agentID, basePrompt string, isDelegated bool) string {
+	var b strings.Builder
+	b.WriteString(strings.TrimSpace(basePrompt))
+
+	if notes, err := Storage.ListAgentMemory(db, agentID); err == nil && len(notes) > 0 {
+		b.WriteString("\n\n## Agent Working Memory\n")
+		for _, n := range notes {
+			fmt.Fprintf(&b, "- **%s**: %s\n", n.Key, n.Value)
+		}
+	}
+
+	if mates, err := Storage.ListAgentTeammates(db, agentID); err == nil && len(mates) > 0 {
+		b.WriteString("\n\n## Teammate Agents\n")
+		b.WriteString("Delegate specialist work with `message_agent` instead of writing @handle in plain text.\n")
+		for _, m := range mates {
+			role := m.Role
+			if role == "" {
+				role = "General agent"
+			}
+			fmt.Fprintf(&b, "- `@%s` (%s): %s\n", m.Handle, m.Name, role)
+		}
+	}
+
+	if isDelegated {
+		b.WriteString("\n\n## Delegated Run Contract\n")
+		b.WriteString("This task came from a teammate agent. Execute within your bound tool permissions and end with a concise report under 2000 characters using sections: **Actions Taken**, **Key Findings**, **Decisions Needed**.\n")
+	}
+
 	return b.String()
 }

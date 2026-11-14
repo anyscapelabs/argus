@@ -16,28 +16,20 @@ import (
 	"strings"
 )
 
-// routerSearchPath is appended to the router's base URL (which already ends in
-// /v1) to reach the search endpoint. The base "http://host:8080/v1" plus
-// "/search" is exactly "http://host:8080/v1/search".
 const routerSearchPath = "/search"
 
-// RouterClient queries the Anyscape Gateway's web search endpoint.
 type RouterClient struct {
-	// Base is the router base URL, including its /v1 suffix.
 	Base string
-	// Key is the service-account key sent as a bearer token.
 	Key  string
 	HTTP *http.Client
 }
 
-// RouterAnswer is the response the router returns for one query.
 type RouterAnswer struct {
 	Query    string         `json:"query"`
 	Provider string         `json:"provider"`
 	Results  []RouterResult `json:"results"`
 }
 
-// RouterResult is one hit as the router reports it.
 type RouterResult struct {
 	Title   string `json:"title"`
 	URL     string `json:"url"`
@@ -105,10 +97,8 @@ func (c *RouterClient) Search(ctx context.Context, query string, maxResults int)
 	return Answer{Query: q, Results: results}
 }
 
-// searchURL builds the router's search endpoint from the base URL.
 func (c *RouterClient) searchURL() string {
 	base := strings.TrimRight(c.Base, "/")
-	// The base already carries /v1; a bare host needs it appended.
 	if !strings.HasSuffix(base, "/v1") {
 		base += "/v1"
 	}

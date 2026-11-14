@@ -8,8 +8,6 @@ import type { ActionResult } from '../../../bindings/github.com/anyscapelabs/arg
 
 export type TakeoverState = 'requested' | 'active' | 'done' | 'declined'
 
-// The three buttons. "takeover" starts the user driving, "done" hands the page
-// back and resumes the agent, "decline" ends it without their hands.
 export type TakeoverDecision = 'takeover' | 'done' | 'decline'
 
 // Mirrors Shared.TakeoverRequestView.
@@ -42,7 +40,6 @@ function asTakeoverState(value: string): TakeoverState {
 }
 export { asTakeoverState }
 
-// The browser:takeover:status payload: a settled state, without the screenshot.
 export type TakeoverStatus = {
   request_id: string
   agent_id: string

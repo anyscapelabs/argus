@@ -21,18 +21,12 @@ function errorMessage(error: unknown): string {
   return String(error)
 }
 
-// The pairing state the shell's router branches on: does the OS keyring hold
-// an agent key, with four exclusive outcomes — absent (never paired), pending
-// (checking), valid (paired and the backend confirms the key), invalid.
 export type PairingState =
   | { status: 'pending' }
   | { status: 'absent' }
   | { status: 'invalid'; message: string }
   | { status: 'valid' }
 
-// useAccount exposes the paired account snapshot (identity + plan + allowlist)
-// without coupling callers to the pairing state machine. Returns undefined
-// while loading or when no key is paired.
 export function useAccount() {
   return useQuery({
     queryKey: ['account', 'entitlements', ARGUS_API_URL],
@@ -61,7 +55,6 @@ export function usePairing(initialReady: boolean) {
 
   const check = useQuery({
     queryKey: ['account', 'entitlements', ARGUS_API_URL],
-    // Only worth a network round-trip once the keyring says a key exists.
     enabled: status.data === true,
     retry: retryUnlessAuthFailure,
     staleTime: 60_000,

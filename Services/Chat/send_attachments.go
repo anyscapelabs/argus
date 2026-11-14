@@ -11,10 +11,7 @@ import (
 	"github.com/anyscapelabs/argus/Storage"
 )
 
-// attachmentBlocks turns uploaded files into the pieces of a user message. An
-// image becomes a vision block (its bytes read from disk, base64); a document
-// becomes a fenced excerpt of its extracted text, headed by the file's name.
-// The excerpt travels only in the blocks — what the model reads, live and on
+// Attachment contents travel only in blocks — what the model reads, live and on
 // history replay — never in the message's text: the transcript shows a file
 // chip for the attachment, not the file's contents dumped into the chat.
 func (s *Service) attachmentBlocks(agentID string, ids []string) ([]Protocol.Block, *Shared.ActionError) {
@@ -91,9 +88,8 @@ func scrubImagesForNonVision(messages []Protocol.Message, target *Protocol.Targe
 	return out
 }
 
-// imageBlock loads one image's bytes and wraps them as a vision block. The data
-// is base64-encoded — every adapter (OpenAI, Anthropic, Gemini) expects the
-// wire value in base64 — and the media type travels with it.
+// Every adapter (OpenAI, Anthropic, Gemini) expects base64 image data accompanied
+// by its media type.
 func imageBlock(att Storage.Attachment) (Protocol.Block, bool) {
 	raw, err := os.ReadFile(att.DataPath)
 	if err != nil {

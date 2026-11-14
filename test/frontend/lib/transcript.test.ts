@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { weaveTranscript } from '../../../frontend/src/lib/transcript'
 
-// Fixed timestamps: 1 Jan 2026, spaced a day/moments apart.
 const T1 = Date.UTC(2026, 0, 1, 10, 0, 0)
 const T2 = Date.UTC(2026, 0, 2, 11, 0, 0)
 const T3 = Date.UTC(2026, 0, 2, 11, 30, 0)
@@ -43,7 +42,6 @@ describe('weaveTranscript', () => {
     )
     const kinds = out.map((i) => i.kind)
     expect(kinds[0]).toBe('chip')
-    // Day changed T1 → T2: two chips total.
     expect(out.filter((i) => i.kind === 'chip')).toHaveLength(2)
   })
 
@@ -160,7 +158,6 @@ describe('weaveTranscript', () => {
       expect(voice.turns).toHaveLength(2)
       expect(voice.turns?.[1].role).toBe('model')
     }
-    // The JSON record must never surface as a plain chat message.
     expect(out.some((i) => i.kind === 'msg' && i.msg.id === 'm9')).toBe(false)
   })
 

@@ -24,11 +24,9 @@ func applySearch(views []Shared.ModelView, search string) {
 			n++
 		}
 	}
-	// zero out tail
 	for i := n; i < len(views); i++ {
 		views[i] = Shared.ModelView{}
 	}
-	// Note: callers use len(views); compaction handled by pickAvailability filters
 }
 
 func searchTerms(search string) []string {

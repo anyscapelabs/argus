@@ -58,7 +58,6 @@
    `bg-black` is Tailwind's own #000000 and is deliberately not redefined —
    the canvas uses it directly. */
 @theme {
-    /* Grey ramp, darkest to lightest. */
     --color-grey-950: #0a0a0b;
     --color-grey-900: #131417;
     --color-grey-800: #242529;
@@ -67,36 +66,25 @@
     --color-grey-300: #b0b1b6;
     --color-grey-100: #e6e6e8;
 
-    /* UI face: Geist (variable, self-hosted from the geist package). */
     --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
-    /* Serif face for headings. */
     --font-serif: "Anthropic Serif", Georgia, serif;
-    /* Monospace face: Geist Mono (variable, self-hosted via @fontsource-variable). */
     --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
 
-    /* Background surfaces. */
     --color-tertiary: #363636;
 
-    /* Sidebar surface, darker than the primary canvas. */
     --color-sidebar: #0a0a0b;
 
-    /* Hover surfaces. */
     --color-hover-primary: #1f1f1f;
     --color-hover-secondary: #363636;
 
-    /* Accent. */
     --color-accent: #ffffff;
 
-    /* Accent hover, a subtle step down from white. */
     --color-hover-accent: #e6e6e8;
 
-    /* Foreground for accent backgrounds. */
     --color-foreground: #000000;
 
-    /* Secondary accent (purple). */
     --color-accent-secondary: #7B61FF;
 
-    /* Secondary accent hover. */
     --color-hover-accent-secondary: #6554C0;
 }
 
@@ -164,8 +152,6 @@
         --wails-draggable: drag;
     }
 
-    /* The React mount node should fill the viewport rather than wrap at
-       content height, so screens can lay out against 100dvh. */
     #root {
         min-height: 100dvh;
     }
@@ -193,7 +179,6 @@
     --wails-draggable: no-drag;
 }
 
-/* Shimmer text for thinking indicator. */
 @keyframes shimmer {
   0% {
     background-position: -200% 0;
@@ -212,7 +197,6 @@
   animation: shimmer 2s linear infinite;
 }
 
-/* Markdown rendering inside agent bubbles. */
 .markdown {
   line-height: 1.6;
   overflow-wrap: anywhere;
@@ -322,11 +306,17 @@
   font-weight: 600;
   padding: 0.4rem 0.5rem;
   background-color: var(--color-tertiary);
+  white-space: nowrap;
 }
 
 .markdown td {
   padding: 0.4rem 0.5rem;
   border-top: 1px solid var(--color-grey-700);
+  /* Floor so a column is never squeezed to a few letters; the table scrolls
+     sideways instead (see MarkdownTable). The cap keeps one long text cell
+     from stretching the whole table. */
+  min-width: 5rem;
+  max-width: 24rem;
 }
 .markdown ul {
     list-style-type: disc;

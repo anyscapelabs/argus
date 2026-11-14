@@ -29,8 +29,6 @@ func (s *Service) SaveVoiceCall(agentID string, turns []Shared.VoiceTurn, second
 		agentID = "default"
 	}
 
-	// Drop empty and whitespace-only turns; a transcript of silence has
-	// nothing worth a row.
 	clean := make([]Shared.VoiceTurn, 0, len(turns))
 	for _, t := range turns {
 		text := strings.TrimSpace(t.Text)
@@ -62,7 +60,6 @@ func (s *Service) SaveVoiceCall(agentID string, turns []Shared.VoiceTurn, second
 	return Shared.VoiceCallResult{Ok: true}
 }
 
-// voiceRows builds the single 'voice' row carrying a finished call's record.
 func (s *Service) voiceRows(agentID string, turns []Shared.VoiceTurn, seconds int) ([]Storage.Message, error) {
 	seq, err := s.Core.DB.NextSeq(agentID)
 	if err != nil {

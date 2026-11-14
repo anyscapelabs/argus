@@ -24,7 +24,6 @@ import (
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
 
-// takeoverStates the frontend knows.
 const (
 	takeoverRequested = "requested"
 	takeoverActive    = "active"
@@ -44,13 +43,10 @@ var captchaPatterns = regexp.MustCompile(
 	`(?i)(g-recaptcha|recaptcha|google-challenge|h-?captcha|cf-?turnstile|turnstile|challenge-platform|verify you are(?: a)? human|are you a robot|not a robot|prove you(?:'|’)re(?: a)? human)`,
 )
 
-// userTakeover holds one card from raise to settlement.
 type userTakeover struct {
 	view Shared.TakeoverRequestView
 }
 
-// captchaDetected answers whether snapshot text carries a challenge the agent
-// cannot pass alone.
 func captchaDetected(text string) bool {
 	return captchaPatterns.MatchString(text)
 }
@@ -117,8 +113,6 @@ func (s *Service) RegisterTakeover(agentID, agentName, reason string) (Shared.Ta
 	return r.view, nil
 }
 
-// RespondTakeover is the binding the card's buttons call. decisions:
-// takeover | done | decline.
 func (s *Service) RespondTakeover(requestID, decision string) Shared.ActionResult {
 	r, ok := s.takeoverStore.Get(requestID)
 	if !ok {
@@ -190,8 +184,7 @@ func (s *Service) emitTakeover(r *userTakeover, state, msg string) {
 	})
 }
 
-// finishTakeover is for endings that come from the backend side (a failed
-// TakeOver call): the notice row keeps what happened.
+// Backend-side endings still persist a notice row recording what happened.
 func (s *Service) finishTakeover(r *userTakeover, state, msg string) {
 	if s.Browser != nil {
 		s.Browser.HandBack()
@@ -245,8 +238,7 @@ func takeoverSteerText(r *userTakeover, state string) string {
 	return ""
 }
 
-// noticeTextForTakeover is the sentence the conversation keeps after the card
-// ends. Kind "takeover" keeps the row out of the permission cards' wardrobe.
+// Kind "takeover" keeps the row out of the permission cards' wardrobe.
 func noticeTextForTakeover(v Shared.TakeoverRequestView, state, msg string) string {
 	switch state {
 	case takeoverDone:
@@ -267,7 +259,6 @@ func whereOf(v Shared.TakeoverRequestView) string {
 	return "the page"
 }
 
-// persistTakeoverNotice writes the settled state into the notices table.
 func (s *Service) persistTakeoverNotice(r *userTakeover, state, msg string) {
 	Shared.PersistNotice(s.Core, r.view.AgentID, r.view.AgentName, "browser", state, "takeover", noticeTextForTakeover(r.view, state, msg))
 }

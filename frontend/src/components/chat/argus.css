@@ -5,12 +5,10 @@
 .argus .ar-pose { transform-origin: 50% 60%; transition: transform 1.1s cubic-bezier(.4, 0, .2, 1); }
 .argus .ar-gaze { transition: transform .9s cubic-bezier(.4, 0, .2, 1); }
 
-/* ---------- IDLE: gentle float, slow head drift, lazy eye wander, blink ---------- */
 .argus[data-state="idle"] .ar-motion { animation: ar-floatY 3.4s ease-in-out infinite alternate, ar-tiltIdle 5.6s ease-in-out infinite alternate; }
 .argus[data-state="idle"] .ar-gm     { animation: ar-lookX 7.3s ease-in-out infinite alternate, ar-lookY 5.1s ease-in-out infinite alternate; }
 .argus[data-state="idle"] .ar-lid    { animation: ar-blink 5s ease-in-out infinite; }
 
-/* ---------- THINKING: eyes flick right, then squint (shorter), head hops and settles; loops ---------- */
 .argus[data-state="thinking"] .ar-pose   { transform: rotate(-4deg) translateY(-2px); }
 .argus[data-state="thinking"] .ar-motion { animation: ar-think-head 3.8s ease-in-out infinite; }
 .argus[data-state="thinking"] .ar-gaze   { transform: translate(0, -6px); }
@@ -21,14 +19,12 @@
 .argus[data-state="thinking"] .ar-cap-b  { animation: ar-think-capB 3.8s infinite; }
 .argus[data-state="thinking"] .ar-lid    { animation: ar-blink 7s ease-in-out infinite; }
 
-/* ---------- TYPING: head leans in, soft keystroke rhythm, eyes look down and sweep like reading ---------- */
 .argus[data-state="typing"] .ar-pose   { transform: rotate(4deg) translateY(8px); }
 .argus[data-state="typing"] .ar-motion { animation: ar-keys 2.2s ease-in-out infinite, ar-tiltType 3.1s ease-in-out infinite alternate; }
 .argus[data-state="typing"] .ar-gaze   { transform: translate(0, 22px); }
 .argus[data-state="typing"] .ar-gm     { animation: ar-readX 1.9s ease-in-out infinite alternate, ar-readY 2.7s ease-in-out infinite alternate; }
 .argus[data-state="typing"] .ar-lid    { animation: ar-blink 6.5s ease-in-out infinite; }
 
-/* two-keyframe loops with "alternate" give smooth, continuous back-and-forth with no hard stops */
 @keyframes ar-floatY    { from { translate: 0 0; }       to { translate: 0 -7px; } }
 @keyframes ar-tiltIdle  { from { rotate: -1.4deg; }      to { rotate: 1.4deg; } }
 @keyframes ar-tiltType  { from { rotate: -.9deg; }       to { rotate: .9deg; } }
@@ -37,7 +33,6 @@
 @keyframes ar-readX     { from { translate: -17px 0; }   to { translate: 17px 0; } }
 @keyframes ar-readY     { from { transform: translateY(-1px); } to { transform: translateY(4px); } }
 @keyframes ar-blink     { 0%, 90%, 100% { transform: scaleX(1); } 94.5% { transform: scaleX(.1); } }
-/* thinking sequence (3.8s): flick right -> squint -> hold -> release. Overshoot curves give the bounce */
 @keyframes ar-think-eyes {
   0%   { translate: 0 0; animation-timing-function: cubic-bezier(.34, 1.56, .64, 1); }
   12%, 58% { translate: 22px -3px; }

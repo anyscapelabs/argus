@@ -11,13 +11,10 @@ import (
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
 
-// resultFn renders one tool_result block for the model.
 type resultFn = func(text string, isError bool) Protocol.Block
 
-// activityFn emits a live status the chat shows while nothing else streams.
 type activityFn = func(kind, command string)
 
-// toolRunner is the uniform executor one tool registers as.
 type toolRunner func(
 	s *Service,
 	ctx context.Context,
@@ -53,8 +50,7 @@ var toolRunners = map[string]toolRunner{
 	Permission.TerminalTool: runTerminalTool,
 }
 
-// runFileToolDispatch adapts the three file operations to the common registry
-// signature while preserving their shared permission gate.
+// The shared permission gate must run before any of the three file operations.
 func runFileToolDispatch(
 	s *Service,
 	ctx context.Context,
@@ -67,9 +63,7 @@ func runFileToolDispatch(
 	return s.runFileTool(ctx, call, result, activity, agentID, agentName)
 }
 
-// runTool executes one tool_use block and returns the tool_result block the
-// model should see. Permission gating happens inside each runner, before
-// anything executes.
+// Each runner performs its own permission check before executing anything.
 func (s *Service) runTool(ctx context.Context, runID, agentID, agentName string, call Protocol.ToolCall) Protocol.Block {
 	result := resultFn(func(text string, isError bool) Protocol.Block {
 		limit := maxResultChars(call.Name)
@@ -110,7 +104,6 @@ func (s *Service) runTool(ctx context.Context, runID, agentID, agentName string,
 	return result("unknown tool: "+call.Name, true)
 }
 
-// runConversationReadTool adapts the history tool to the registry signature.
 func runConversationReadTool(
 	s *Service,
 	_ context.Context,
@@ -124,7 +117,6 @@ func runConversationReadTool(
 	return s.runConversationRead(agentID, call, result, activity)
 }
 
-// runCreateSlidesToolDispatch adapts the slides tool to the registry signature.
 func runCreateSlidesToolDispatch(
 	s *Service,
 	_ context.Context,
@@ -138,7 +130,6 @@ func runCreateSlidesToolDispatch(
 	return s.runCreateSlidesTool(call, agentID, result, activity)
 }
 
-// runWriteArtifactTool adapts the artifact tool to the registry signature.
 func runWriteArtifactTool(
 	s *Service,
 	_ context.Context,
@@ -152,7 +143,6 @@ func runWriteArtifactTool(
 	return s.runArtifactTool(call, agentID, result, activity)
 }
 
-// runBrowserTool adapts the browser tool to the registry signature.
 func runBrowserTool(
 	s *Service,
 	ctx context.Context,

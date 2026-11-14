@@ -2,7 +2,9 @@ package Chat
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 
@@ -19,18 +21,24 @@ import (
 
 const defaultMaxOutputTokens = int64(4096)
 
-// maxToolRounds bounds the agent loop: model turn + tool execution pairs.
-const maxToolRounds = 12
+// maxToolRounds is a runaway backstop for the agent loop (model turn + tool
+// execution pairs), not a work budget. It used to be 12, which ended any
+// multi-step coding or ops task mid-plan. Real limits live elsewhere: context
+// is kept in check by compactRunMessages, and a model stuck repeating itself
+// is caught by stuckRoundLimit.
+const maxToolRounds = 250
 
 // maxModelRetries bounds retries per model turn when the provider failed in
 // a retryable way (429, 5xx, timeout). Long unattended runs die on a single
 // blip otherwise.
 const maxModelRetries = 2
 
-// wrapUpDirective is injected as a final user turn when the round budget is
-// exhausted, so the run ends with an honest summary instead of a canned lie.
-const wrapUpDirective = "You have reached the tool-round limit for this run. Do not call any more tools. " +
-	"Tell the user plainly what you already did, what you learned, and what could not be finished."
+// wrapUpDirective is injected as a final user turn when a run has to stop
+// early (round backstop or a repeating loop), so the run ends with an honest
+// summary instead of a canned lie.
+const wrapUpDirective = "This run has to stop here. Do not call any more tools. " +
+	"Tell the user plainly what you already did, what is still unfinished, and the single next step, " +
+	"and say they can reply \"continue\" to pick up from where you stopped."
 
 func (s *Service) Send(agentID, text string) Shared.SendResult {
 	return s.send(agentID, text, nil, false, "", nil)
@@ -226,7 +234,6 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
 
-	// contexto through userSeq (the user message was inserted above)
 	// Only a short recent window is replayed; anything older is reached through
 	// conversation_read. Every model the router allows can call tools, so there
 	// is no long-replay fallback.
@@ -274,8 +281,6 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 			sysPrompt += lessons
 		}
 	}
-	// Timezone and the approximate location — resolved fresh per send so
-	// dates and local reasoning stay correct.
 	if loc := Location.Current(sCtx(), s.Core.DB); loc.Timezone != "" {
 		sysPrompt += loc.Prompt()
 	}
@@ -397,4 +402,86 @@ func (s *Service) ensureAgent(agentID string) (Storage.AgentProfile, error) {
 		return p, err
 	}
 	return p, nil
+}
+
+// ResolveMentionTarget routes a leading "@handle prompt" straight to that
+// agent instead of the default one, so talking to a teammate needs no tool
+// call. A leading @ that names nobody stays with the default agent and keeps
+// its text: the model, not the router, decides what an unknown @ means.
+func ResolveMentionTarget(db *sql.DB, defaultAgentID, prompt string) (string, string) {
+	trimmed := strings.TrimSpace(prompt)
+	if !strings.HasPrefix(trimmed, "@") {
+		return defaultAgentID, trimmed
+	}
+
+	parts := strings.SplitN(trimmed, " ", 2)
+	ag, err := Storage.GetAgentByHandle(db, parts[0])
+	if err != nil {
+		return defaultAgentID, trimmed
+	}
+	if len(parts) == 1 {
+		return ag.ID, ""
+	}
+	return ag.ID, strings.TrimSpace(parts[1])
+}
+
+// SteerActiveRun injects a mid-run user instruction that the run loop drains
+// at the next round boundary. It is queued rather than pushed into memory so
+// the loop — the only writer of the model's history — stays in charge of
+// where the note lands.
+func SteerActiveRun(db *sql.DB, agentID, threadID, instruction string) error {
+	body := strings.TrimSpace(instruction)
+	if body == "" {
+		return nil
+	}
+	return Storage.EnqueueAgentMessage(db, Storage.AgentMessage{
+		ID:          "steer_" + uuid.NewString(),
+		ThreadID:    threadID,
+		FromAgentID: "user",
+		ToAgentID:   agentID,
+		Kind:        "steer",
+		Body:        body,
+		Status:      "queued",
+		Urgent:      true,
+	})
+}
+
+// HandleUserChatSend routes one user prompt (mention syntax included) to the
+// right agent. An agent that is mid-run gets its prompt as steering; an idle
+// agent gets it as queued mail and a wake, so nothing the user says is ever
+// dropped between runs.
+func HandleUserChatSend(
+	db *sql.DB,
+	defaultAgentID string,
+	threadID string,
+	prompt string,
+	isActive bool,
+	wakeFn func(agentID string),
+) (string, error) {
+	targetID, cleanPrompt := ResolveMentionTarget(db, defaultAgentID, prompt)
+	if cleanPrompt == "" {
+		return targetID, fmt.Errorf("prompt cannot be empty")
+	}
+	if threadID == "" {
+		threadID = "thr_" + uuid.NewString()
+	}
+	if isActive {
+		return targetID, SteerActiveRun(db, targetID, threadID, cleanPrompt)
+	}
+	err := Storage.EnqueueAgentMessage(db, Storage.AgentMessage{
+		ID:          "umsg_" + uuid.NewString(),
+		ThreadID:    threadID,
+		FromAgentID: "user",
+		ToAgentID:   targetID,
+		Kind:        "user",
+		Body:        cleanPrompt,
+		Status:      "queued",
+	})
+	if err != nil {
+		return targetID, err
+	}
+	if wakeFn != nil {
+		wakeFn(targetID)
+	}
+	return targetID, nil
 }

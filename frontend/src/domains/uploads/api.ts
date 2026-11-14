@@ -1,10 +1,6 @@
 import * as UploadsService from '../../../bindings/github.com/anyscapelabs/argus/Services/Uploads/service.js'
 import type { AttachmentView } from '../../../bindings/github.com/anyscapelabs/argus/Services/Shared/models.js'
 
-// Everything the UI may ask of an uploaded file. The bridge is thin: turn the
-// file's bytes into base64 (what the backend accepts), unwrap the result
-// envelopes, and surface refusals as errors.
-
 export type PendingAttachment = {
   id: string
   filename: string
@@ -12,19 +8,16 @@ export type PendingAttachment = {
   dataUrl?: string
 }
 
-// mediaTypeOf pulls the mime out of a data URL ("data:image/png;base64,…").
 export function mediaTypeOf(dataUrl: string): string {
   const m = /^data:([^;,]+)[;,]/.exec(dataUrl)
   return m ? m[1] : ''
 }
 
-// dataOf pulls the bare base64 out of a data URL.
 export function dataOf(dataUrl: string): string {
   const comma = dataUrl.indexOf(',')
   return comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl
 }
 
-// fileToBase64 reads a browser File as a base64 string for the upload bridge.
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -40,8 +33,6 @@ function fileToBase64(file: File): Promise<string> {
   })
 }
 
-// uploadFile stores one file and returns its attachment metadata, or throws with
-// the backend's reason (bad type, too large).
 export async function uploadFile(agentID: string, file: File): Promise<AttachmentView> {
   const data = await fileToBase64(file)
   const res = await UploadsService.Upload(agentID, file.name, file.type || '', data)

@@ -31,9 +31,8 @@ func messageIsOpaqueProviderError(e *Protocol.Error) bool {
 	return false
 }
 
-// friendlyError replaces an opaque provider message with one a person can
-// act on. The raw body and code are kept in the database (error_raw), so
-// debugging is unaffected — only the visible string changes.
+// Only the visible opaque provider message is replaced; the raw body and code
+// remain in the database for debugging.
 func friendlyError(e *Protocol.Error) {
 	if e == nil || !messageIsOpaqueProviderError(e) {
 		return

@@ -32,10 +32,8 @@ const echoGuardTailSec = 0.3
 // does not. Raise it if the model still cuts itself off, lower it if barge-in
 // stops working.
 const bargeInRMS = 0.05
-// voiceName is the prebuilt Gemini voice used for every call.
 const voiceName = 'Alnilam'
 
-// base64FromBytes encodes a binary buffer for the wire.
 function base64FromBytes(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf)
   let binary = ''
@@ -77,7 +75,6 @@ function pcm16(input: Float32Array): Int16Array {
   return out
 }
 
-// rms is the root-mean-square loudness of a mic buffer, 0 (silence) to 1.
 function rms(input: Float32Array): number {
   let sum = 0
   for (let i = 0; i < input.length; i++) sum += input[i] * input[i]
@@ -109,11 +106,7 @@ export function useLiveCall({ agentID = 'default' }: UseLiveCallOptions = {}) {
   const [status, setStatus] = useState<VoiceStatus>('idle')
   const [elapsed, setElapsed] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  // paused mutes the microphone without tearing the call down: no frames leave
-  // while paused, and the model simply hears silence until it is lifted.
   const [paused, setPaused] = useState(false)
-  // lastCall describes the most recently finished call (null until one ends
-  // with something said), so the caller can persist it to the transcript.
   const [lastCall, setLastCall] = useState<VoiceCallSummary | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
@@ -132,7 +125,6 @@ export function useLiveCall({ agentID = 'default' }: UseLiveCallOptions = {}) {
   const nextPlayTimeRef = useRef(0)
   const playingRef = useRef<Set<AudioBufferSourceNode>>(new Set())
   const sessionRef = useRef('')
-  // frameCountRef caps the one-time server-frame diagnostics to the first few.
   const frameCountRef = useRef(0)
   // Transcript accumulation. inputBufRef/modelBufRef hold the utterance being
   // transcribed (Google streams the text in fragments); turnsRef holds every
@@ -148,9 +140,6 @@ export function useLiveCall({ agentID = 'default' }: UseLiveCallOptions = {}) {
     }
   }
 
-  // flushTurns closes the utterances in flight: whatever the transcription
-  // fragments built up becomes a turn, and the buffers start empty. A side
-  // with no text produces no turn.
   const flushTurns = useCallback(() => {
     const said = inputBufRef.current.trim()
     const answered = modelBufRef.current.trim()
@@ -203,7 +192,6 @@ export function useLiveCall({ agentID = 'default' }: UseLiveCallOptions = {}) {
       try {
         src.stop()
       } catch {
-        // already stopped
       }
     }
     playingRef.current.clear()
@@ -267,7 +255,6 @@ export function useLiveCall({ agentID = 'default' }: UseLiveCallOptions = {}) {
     [send],
   )
 
-  // handleServerFrame processes a message from the model.
   const handleServerFrame = useCallback(
     (raw: string) => {
       let frame: any
@@ -277,8 +264,6 @@ export function useLiveCall({ agentID = 'default' }: UseLiveCallOptions = {}) {
         return
       }
       if (frameCountRef.current < 5) {
-        // The first frames say everything about why a call is silent:
-        // setupComplete, an error, or audio.
         frameCountRef.current++
         console.debug(`[voice] server frame ${frameCountRef.current}:`, Object.keys(frame).join(','))
       }
@@ -319,7 +304,6 @@ export function useLiveCall({ agentID = 'default' }: UseLiveCallOptions = {}) {
             for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
             scheduleAudio(bytes.buffer)
           } else if (part.text) {
-            // Model transcript text (also mirrored to onTranscript if wired).
             setStatus((s) => (s === 'connecting' ? 'live' : s))
           }
         }
@@ -421,7 +405,6 @@ export function useLiveCall({ agentID = 'default' }: UseLiveCallOptions = {}) {
       wsRef.current = ws
 
       ws.onopen = () => {
-        // The router accepted the call — say so out loud.
         connectBeep()
         // No model here on purpose: the router resolves its configured default
         // and injects it into the setup frame before forwarding upstream.
@@ -529,9 +512,6 @@ export function useLiveCall({ agentID = 'default' }: UseLiveCallOptions = {}) {
     setStatus('ended')
   }, [flushTurns])
 
-  // togglePause mutes or unmutes the mic mid-call. The session stays open, so
-  // the user can step away from the conversation and rejoin it where it left
-  // off instead of hanging up.
   const togglePause = useCallback(() => {
     pausedRef.current = !pausedRef.current
     setPaused(pausedRef.current)
@@ -546,7 +526,6 @@ export function useLiveCall({ agentID = 'default' }: UseLiveCallOptions = {}) {
     return () => unsubscribe?.()
   }, [end])
 
-  // formatElapsed renders seconds as MM:SS (or H:MM:SS past an hour).
   const display = useCallback(() => {
     const m = Math.floor(elapsed / 60)
     const s = elapsed % 60

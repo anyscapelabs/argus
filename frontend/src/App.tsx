@@ -5,6 +5,7 @@ import { FiWifiOff } from 'react-icons/fi'
 import { Time } from '../bindings/events'
 import Toolbar from './components/layout/Toolbar'
 import Sidebar from './components/layout/Sidebar'
+import { NewAgentCard } from './components/NewAgentCard'
 import SettingsSidebar from './components/settings/SettingsSidebar'
 import Spinner from './components/Spinner'
 import { getChat } from './domains/chat/api'
@@ -27,7 +28,9 @@ export default function App() {
   const { data: account } = useAccount()
   const [page, setPage] = useState<Page>('signin')
   const [openArtifact, setOpenArtifact] = useState<string | null>(null)
+  const [newAgentOpen, setNewAgentOpen] = useState(false)
   const [sidebarMode, setSidebarMode] = useState<'main' | 'settings'>('main')
+  const [activeAgent, setActiveAgent] = useState('default')
   const [settingsReturn, setSettingsReturn] = useState<'home' | 'chat'>('home')
   const [integrationsReturn, setIntegrationsReturn] = useState<'home' | 'chat'>('chat')
   const [pendingSend, setPendingSend] = useState<{
@@ -39,7 +42,11 @@ export default function App() {
 
   const [booted, setBooted] = useState(false)
 
-  // Settle initial route once keyring check completes.
+  const openAgent = (id: string) => {
+    setActiveAgent(id)
+    setPage('chat')
+  }
+
   useEffect(() => {
     if (booted || pairing.status === 'pending') return
     setBooted(true)
@@ -54,7 +61,6 @@ export default function App() {
     setPage('signin')
   }, [pairing.status, booted])
 
-  // Guard authenticated screens if key is signed out or revoked.
   useEffect(() => {
     if (!booted || pairing.status === 'valid') return
     if (page === 'home' || page === 'chat' || page === 'settings' || page === 'integrations') {
@@ -62,7 +68,6 @@ export default function App() {
     }
   }, [booted, pairing.status, page])
 
-  // Resume existing default conversation on home landing.
   useEffect(() => {
     if (!booted || pairing.status !== 'valid' || page !== 'home') return
     let cancelled = false
@@ -100,6 +105,23 @@ export default function App() {
       <Suspense fallback={null}>
         <ArtifactViewer artifactID={openArtifact} onBack={() => setOpenArtifact(null)} />
       </Suspense>
+    </div>
+  ) : null
+
+  const newAgentOverlay = newAgentOpen ? (
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4"
+      onMouseDown={() => setNewAgentOpen(false)}
+    >
+      <div role="presentation" onMouseDown={(e) => e.stopPropagation()}>
+        <NewAgentCard
+          onClose={() => setNewAgentOpen(false)}
+          onCreated={(agentID) => {
+            setNewAgentOpen(false)
+            openAgent(agentID)
+          }}
+        />
+      </div>
     </div>
   ) : null
 
@@ -166,6 +188,9 @@ export default function App() {
               }}
               onOpenChat={() => setPage('chat')}
               agentActive={false}
+              activeAgent={activeAgent}
+              onSelectAgent={openAgent}
+              onOpenNewAgent={() => setNewAgentOpen(true)}
               onSignOut={() => {
                 void leave.mutateAsync()
               }}
@@ -199,6 +224,9 @@ export default function App() {
               }}
               onOpenChat={() => setPage('chat')}
               agentActive={false}
+              activeAgent={activeAgent}
+              onSelectAgent={openAgent}
+              onOpenNewAgent={() => setNewAgentOpen(true)}
               onSignOut={() => {
                 void leave.mutateAsync()
               }}
@@ -237,11 +265,16 @@ export default function App() {
               }}
               onOpenChat={() => setPage('chat')}
               agentActive={true}
+              activeAgent={activeAgent}
+              onSelectAgent={openAgent}
+              onOpenNewAgent={() => setNewAgentOpen(true)}
               onSignOut={() => {
                 void leave.mutateAsync()
               }}
             />
             <Chat
+              key={activeAgent}
+              agentID={activeAgent}
               pendingSend={pendingSend}
               onPendingConsumed={() => setPendingSend(null)}
               onOpenArtifact={(id) => setOpenArtifact(id)}
@@ -250,6 +283,7 @@ export default function App() {
           </div>
         )}
       </Suspense>
+      {newAgentOverlay}
     </div>
   )
 }

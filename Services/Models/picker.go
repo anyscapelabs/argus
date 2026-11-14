@@ -103,7 +103,6 @@ func (s *Service) Assemble(cat *Catalog.Catalog, provider Provider.Provider, ove
 		sections = append(sections, Shared.Section{ID: "recommended", Title: "Recommended", Models: recommendedModels(s, all, recMain.Ref, recCheap.Ref, options)})
 	}
 	availModels := pickAvailability(all, Shared.AvailabilityAvailable, Shared.AvailabilityUnverified)
-	// remove recommended models to avoid duplicate React keys
 	if recMain.Ref != "" {
 		filtered := availModels[:0]
 		for _, m := range availModels {

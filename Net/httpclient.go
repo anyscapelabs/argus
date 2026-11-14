@@ -12,7 +12,6 @@ import (
 	"time"
 )
 
-// Profile is the call shape a client serves.
 type Profile int
 
 const (
@@ -44,7 +43,6 @@ var oneshotClient = &http.Client{
 	CheckRedirect: noRedirects("list-models calls"),
 }
 
-// Client returns the shared client for the profile.
 func Client(p Profile) *http.Client {
 	if p == Oneshot {
 		return oneshotClient

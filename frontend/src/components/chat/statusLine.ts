@@ -17,9 +17,7 @@ export type StatusKind = 'label' | 'thought' | 'tool'
 const PRIORITY: Record<StatusKind, number> = { label: 0, thought: 1, tool: 2 }
 
 export type StatusTimings = {
-  /** How long a label waits before it first appears. */
   labelDelayMs: number
-  /** Minimum time each kind stays on screen once shown. */
   labelDwellMs: number
   thoughtDwellMs: number
   toolDwellMs: number
@@ -46,7 +44,6 @@ export class StatusLine {
     private readonly t: StatusTimings = DEFAULT_TIMINGS,
   ) {}
 
-  /** Ask for a status. The newest request wins; dwell rules decide when it appears. */
   set(text: string, kind: StatusKind) {
     if (this.wanted?.text === text && this.wanted.kind === kind) return
     this.wanted = { text, kind }
@@ -54,7 +51,6 @@ export class StatusLine {
     this.tick()
   }
 
-  /** Ask for the status to go away once it has had its minimum time. */
   clear() {
     this.wanted = null
     this.tick()
@@ -70,7 +66,6 @@ export class StatusLine {
     else this.tick()
   }
 
-  /** Hide immediately and forget everything (run finished or cancelled). */
   reset() {
     this.wanted = null
     this.hide()
@@ -87,7 +82,6 @@ export class StatusLine {
 
     if (!shown) {
       if (!wanted) return
-      // Real content shows at once. Only the generic label waits a beat.
       const wait = wanted.kind === 'label' ? this.t.labelDelayMs - (now - this.wantedAt) : 0
       if (wait > 0) {
         this.later(wait)
@@ -149,7 +143,6 @@ export class StatusLine {
  * half-written sentence never reaches the screen.
  */
 export function latestSentence(thought: string): string | null {
-  // Only the tail matters, and scanning less keeps this cheap per token.
   const tail = thought.slice(-700)
   const parts = tail.match(/(?:\d\.\d|[^.!?\n])+[.!?]+(?=\s)|[^\n]+(?=\n)/g)
   const last = parts?.[parts.length - 1]

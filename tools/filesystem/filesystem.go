@@ -33,8 +33,6 @@ var skipDirs = map[string]bool{
 	"dist": true, "target": true, ".idea": true, ".vscode": true,
 }
 
-// ReadResult is one read_file call: the requested window of the file plus how
-// it relates to the whole file, so the model can page instead of guessing.
 type ReadResult struct {
 	Path       string `json:"path"`
 	Offset     int    `json:"offset"`
@@ -44,7 +42,6 @@ type ReadResult struct {
 	Content    string `json:"content"`
 }
 
-// WriteResult is one write_file call.
 type WriteResult struct {
 	Path   string `json:"path"`
 	Action string `json:"action"`
@@ -60,7 +57,6 @@ type GrepMatch struct {
 	Text string `json:"text"`
 }
 
-// GrepResult is one grep_files call.
 type GrepResult struct {
 	Pattern   string      `json:"pattern"`
 	Matches   []GrepMatch `json:"matches"`

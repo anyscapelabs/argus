@@ -297,21 +297,7 @@ func startsOrphaned(out []Protocol.Message, start int) bool {
 // context, kept between 2k and recentHistoryTokens. Older turns come back
 // through conversation_read. Unknown models are assumed to have a 24k context.
 func (s *Service) historyBudgetTokens(modelRef, providerID, modelID string) int64 {
-	ctxLen := int64(0)
-	if m, ok := s.Core.Store.Get().Get(modelRef); ok && m.Limits != nil {
-		ctxLen = m.Limits.Context
-	} else if rows, err := s.Core.DB.ListCustomModels(providerID); err == nil {
-		for _, cm := range rows {
-			if cm.ModelID == modelID {
-				ctxLen = cm.ContextWindow
-				break
-			}
-		}
-	}
-	if ctxLen <= 0 {
-		ctxLen = 24000
-	}
-	b := ctxLen / 10
+	b := s.modelContextTokens(modelRef, providerID, modelID) / 10
 	if b > recentHistoryTokens {
 		b = recentHistoryTokens
 	}

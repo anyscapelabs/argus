@@ -28,13 +28,9 @@ import (
 
 type Service struct {
 	Core *Shared.Core
-	// Permissions is the permission gate every tool call must pass.
 	Permissions *Permission.Service
-	// MCP is the MCP manager service.
 	MCP *MCP.Service
-	// MCPConnect handles MCP connection approval flow.
 	MCPConnect *MCPConnect.Service
-	// Skills holds the embedded and installed Agent Skills registry.
 	Skills *Skills.Service
 	// Artifacts stores the documents the agent writes. Unattended-safe by
 	// design: unlike the file tools it needs no permission grant, which is what
@@ -48,7 +44,7 @@ type Service struct {
 
 	mu       sync.Mutex
 	cancels  map[string]context.CancelFunc
-	agentRun map[string]string // agentID -> runID
+	agentRun map[string]string
 
 	// liveSessions own the cancellable, serialized execution context behind the
 	// Live API's compact search_tools/invoke_tool gateway.
@@ -62,16 +58,12 @@ type Service struct {
 	captchaAskAt  map[string]time.Time
 	captchaMu     sync.Mutex
 
-	// startedAtMs is when the app booted; the right panel reads uptime off
-	// it instead of the backend ticking a timer.
 	startedAtMs int64
 
 	doneMu       sync.Mutex
 	doneHandlers []func(RunOutcome)
 }
 
-// RunOutcome is the summary of a finished agent run. The scheduler subscribes
-// to these to close the loop on scheduled fires.
 type RunOutcome struct {
 	RunID              string
 	AgentID            string
@@ -283,10 +275,6 @@ func reasoningLevel(raw string) Protocol.ReasoningLevel {
 	return Protocol.ReasoningUnset
 }
 
-// Status is the small dashboard the right panel's Details tab renders: when
-// the app started (uptime), when the agent last finished a turn (last
-// active), and whether a run is on right now (online vs working). One
-// snapshot per call; the panel recomputes the relative wording locally.
 func (s *Service) Status(agentID string) Shared.AgentStatusResult {
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.AgentStatusResult{Error: aerr}

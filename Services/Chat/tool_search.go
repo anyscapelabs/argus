@@ -9,8 +9,6 @@ import (
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
 
-// runWebSearchTool searches the public web and reports the found sites as a
-// live activity source while the answer streams into the transcript.
 func runWebSearchTool(
 	s *Service,
 	ctx context.Context,

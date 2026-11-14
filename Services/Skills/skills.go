@@ -21,7 +21,6 @@ import (
 //go:embed data/skills.json data/*/SKILL.md
 var embeddedFS embed.FS
 
-// SkillMeta is Level 1 metadata loaded from skills.json / YAML frontmatter.
 type SkillMeta struct {
 	ID           string   `json:"id"`
 	Name         string   `json:"name"`
@@ -31,13 +30,11 @@ type SkillMeta struct {
 	AutoEnable   bool     `json:"auto_enable"`
 }
 
-// SkillDoc is Level 2 content returned when read_skill is called.
 type SkillDoc struct {
 	Meta SkillMeta `json:"meta"`
 	Body string    `json:"body"`
 }
 
-// Service manages built-in and agent-enabled skills.
 type Service struct {
 	Core   *Shared.Core
 	loaded bool
@@ -65,7 +62,6 @@ func (s *Service) ensureLoaded() {
 	}
 }
 
-// All returns all registered skill metadata entries.
 func (s *Service) All() []SkillMeta {
 	s.ensureLoaded()
 	out := make([]SkillMeta, len(s.metas))
@@ -73,7 +69,6 @@ func (s *Service) All() []SkillMeta {
 	return out
 }
 
-// Get looks up a skill by id.
 func (s *Service) Get(id string) (SkillMeta, bool) {
 	s.ensureLoaded()
 	m, ok := s.byID[strings.TrimSpace(id)]
@@ -106,7 +101,6 @@ func (s *Service) IsEnabled(agentID, skillID string, connectedServers map[string
 	return false
 }
 
-// Enable persists an explicit enable toggle for an agent skill.
 func (s *Service) Enable(agentID, skillID string) error {
 	if _, ok := s.Get(skillID); !ok {
 		return fmt.Errorf("unknown skill: %s", skillID)
@@ -117,7 +111,6 @@ func (s *Service) Enable(agentID, skillID string) error {
 	return s.Core.DB.SetAgentSkillState(agentID, skillID, true)
 }
 
-// Disable persists an explicit disable toggle for an agent skill.
 func (s *Service) Disable(agentID, skillID string) error {
 	if s.Core == nil || s.Core.DB == nil {
 		return fmt.Errorf("storage not ready")
@@ -125,7 +118,6 @@ func (s *Service) Disable(agentID, skillID string) error {
 	return s.Core.DB.SetAgentSkillState(agentID, skillID, false)
 }
 
-// ReadSkill returns Level 2 SKILL.md body (with YAML frontmatter stripped).
 func (s *Service) ReadSkill(agentID, skillID string) (SkillDoc, bool) {
 	meta, ok := s.Get(skillID)
 	if !ok {

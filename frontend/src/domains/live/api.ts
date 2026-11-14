@@ -33,7 +33,6 @@ export async function endLiveSession(sessionID: string): Promise<void> {
   await ChatService.EndLiveSession(sessionID)
 }
 
-// saveVoiceCall persists a finished back-and-forth as one transcript card.
 export async function saveVoiceCall(
   agentID: string,
   turns: VoiceTurn[],

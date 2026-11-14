@@ -10,7 +10,6 @@ import (
 	"strings"
 )
 
-// runFileTool is the read/write/grep path all three filesystem tools share.
 // The gate comes first: no byte moves on disk until the user answers through
 // the permission card — or until a stored grant answers on their behalf, and
 // an unattended run is refused with a notice instead of hanging.
@@ -21,8 +20,6 @@ func (s *Service) runFileTool(
 	activity func(kind, command string),
 	agentID, agentName string,
 ) Protocol.Block {
-	// gate asks through the permission card and converts the answer into an
-	// early error result (skip=true).
 	gate := func(summary string) (bool, Protocol.Block) {
 		decision, err := Permission.Request(ctx, s.Permissions, agentID, agentName, Permission.FileAccessTool, summary)
 		if err != nil {

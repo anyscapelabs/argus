@@ -4,29 +4,27 @@ import { useAgentProfile, useSaveAgentProfile } from '../../domains/models/hooks
 import { useScheduledTasks, useSetTaskPaused } from '../../domains/scheduler/hooks'
 import { useArtifacts } from '../../domains/artifacts/hooks'
 import { useAgentStatus } from '../../domains/status/hooks'
-import { lastActiveLabel, nextFireLabel } from '../../lib/time'
+import { artifactDateLabel, lastActiveLabel, nextFireLabel } from '../../lib/time'
 import { GoPencil } from 'react-icons/go'
 import { BsLayoutSidebarInset } from 'react-icons/bs'
 import { FiMoreHorizontal } from 'react-icons/fi'
 import { TiDocumentText } from 'react-icons/ti'
 
 type RightPanelProps = {
+  agentID?: string
   onClose?: () => void
   agentName?: string
-  // Opens one document in the viewer. The list lives here, but a document is
-  // full-screen reading, so the click leaves the panel and the app decides where
-  // it lands.
   onOpenArtifact?: (artifactID: string) => void
 }
 
 const TABS = ['Details', 'Routines', 'Artifacts']
 
-export default function RightPanel({ onClose, onOpenArtifact }: RightPanelProps) {
-  const { data: profile } = useAgentProfile('default')
+export default function RightPanel({ agentID = 'default', onClose, onOpenArtifact }: RightPanelProps) {
+  const { data: profile } = useAgentProfile(agentID)
   const saveProfile = useSaveAgentProfile()
   const { data: routines, isLoading: routinesLoading, error: routinesError } = useScheduledTasks()
-  const { data: artifacts, isLoading: artifactsLoading } = useArtifacts('default')
-  const { status, now } = useAgentStatus('default')
+  const { data: artifacts, isLoading: artifactsLoading } = useArtifacts(agentID)
+  const { status, now } = useAgentStatus(agentID)
   const setTaskPaused = useSetTaskPaused()
   const [agentName, setAgentName] = useState('Argus')
   const [active, setActive] = useState(TABS[0])
@@ -72,10 +70,11 @@ export default function RightPanel({ onClose, onOpenArtifact }: RightPanelProps)
             onChange={(e) => setAgentName(e.target.value)}
             onBlur={() => {
               saveProfile.mutate({
-                id: 'default',
+                id: agentID,
                 avatar: profile?.avatar ?? '',
                 agent_name: agentName,
                 model_ref: profile?.model_ref ?? '',
+                system_prompt: profile?.system_prompt ?? '',
                 updated_at: profile?.updated_at ?? '',
               })
             }}
@@ -154,8 +153,6 @@ export default function RightPanel({ onClose, onOpenArtifact }: RightPanelProps)
                     <div className="flex items-center justify-between gap-3 px-3 py-2">
                       <div className="flex min-w-0 flex-col">
                         <span className="truncate text-sm font-medium text-primary">{r.title}</span>
-                        {/* A routine is described by its rhythm; a reminder by
-                            the thing it has to say. */}
                         <span className="truncate text-sm text-grey-300">
                           {r.kind === 'reminder' ? r.prompt : r.summary}
                         </span>
@@ -228,7 +225,7 @@ export default function RightPanel({ onClose, onOpenArtifact }: RightPanelProps)
                       <span className="truncate text-sm text-primary">{a.title}</span>
                     </button>
                     <span className="shrink-0 text-xs text-secondary opacity-0 transition-opacity group-hover:opacity-100">
-                      {lastActiveLabel(a.updated_at, now)}
+                      {artifactDateLabel(a.updated_at, now)}
                     </span>
                     <button
                       type="button"

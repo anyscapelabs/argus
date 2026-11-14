@@ -8,8 +8,6 @@ import (
 	"strings"
 )
 
-// activitySources converts search hits into the compact view the live
-// indicator cycles through; host names matter more than full URLs there.
 func activitySources(results []Search.Result) []Shared.ActivitySource {
 	out := make([]Shared.ActivitySource, 0, 4)
 	for _, r := range results {

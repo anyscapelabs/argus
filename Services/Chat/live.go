@@ -7,8 +7,7 @@ import (
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
 
-// LiveConfig returns a ready-to-open WebSocket URL for a live voice call. The
-// desktop deliberately does not name a model: the router resolves the configured
+// The desktop deliberately does not name a live model: the router resolves the configured
 // default (the JSON entry flagged `default`) and injects it into the setup frame
 // itself, so the app never has to know a model id. The account key rides in the
 // URL's query because a WebSocket client (the webview) cannot set custom headers
@@ -46,8 +45,6 @@ func (s *Service) LiveConfig(agentID string) Shared.LiveConfigResult {
 	}}
 }
 
-// routerBaseURL resolves the router provider's base URL, honouring any
-// per-provider override stored in the database.
 func (s *Service) routerBaseURL() string {
 	if s.Core == nil || s.Core.Store == nil {
 		return ""
@@ -63,8 +60,6 @@ func (s *Service) routerBaseURL() string {
 	return strings.TrimRight(base, "/")
 }
 
-// liveWSURL turns the router's http(s) base URL into the /v1/live WebSocket
-// endpoint carrying only the account key as a query param.
 func liveWSURL(base, key string) string {
 	u, err := url.Parse(base)
 	if err != nil {

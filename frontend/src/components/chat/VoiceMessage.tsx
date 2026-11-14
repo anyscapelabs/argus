@@ -6,13 +6,8 @@ import VoiceTranscript from './VoiceTranscript'
 import type { VoiceTurn } from '../../domains/live/api'
 import { formatVoiceTime } from '../../lib/voice'
 
-// VoiceMessage is a finished voice call in the transcript: the same notifier
-// line the call raised while it was live, now a card that opens. Clicking it
-// unfolds the call's transcript inline, written with the chat's own bubbles.
 export default function VoiceMessage({ seconds, turns }: { seconds: number; turns: VoiceTurn[] }) {
   const [open, setOpen] = useState(false)
-  // A record with nothing readable has no transcript to reveal; the line then
-  // stays a plain card.
   const openable = turns.length > 0
   return (
     <div className="flex w-full flex-col items-center">

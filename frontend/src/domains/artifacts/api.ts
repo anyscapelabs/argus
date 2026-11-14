@@ -6,11 +6,6 @@ import type {
   ExportFormatView,
 } from '../../../bindings/github.com/anyscapelabs/argus/Services/Shared/models.js'
 
-// Everything the UI may ask of a document. The bridge is deliberately thin: the
-// backend owns validation, versioning and rendering, and this file owns only the
-// three things a browser cannot do — unwrap the result envelopes, choose where an
-// export lands, and turn a cancelled dialog into "nothing happened".
-
 export async function listArtifacts(agentID: string): Promise<ArtifactView[]> {
   const res = await ArtifactsService.List(agentID)
   if (res?.error) throw new Error(res.error.message)
@@ -32,9 +27,6 @@ export async function exportFormats(): Promise<ExportFormatView[]> {
   return res.formats ?? []
 }
 
-// exportDeckPPTX writes a deck's PowerPoint where the user chose. A deck has no
-// menu of formats — it is one file, a .pptx — so this is a single action rather
-// than one of several targets.
 export async function exportDeckPPTX(
   artifactID: string,
   title: string,
@@ -64,7 +56,6 @@ function fileStem(title: string): string {
   return cleaned || 'document'
 }
 
-// exportArtifact renders the document and writes it where the user just chose.
 // The dialog is the consent: the backend is never handed a path the user did not
 // name, and a cancelled dialog returns null rather than an error.
 export async function exportArtifact(

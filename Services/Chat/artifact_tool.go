@@ -10,11 +10,8 @@ import (
 	"github.com/anyscapelabs/argus/Services/Chat/Present"
 )
 
-// artifactEchoFallback stands in for a reply that contained nothing but a copy
-// of the saved document.
 const artifactEchoFallback = "I've saved that as an artifact."
 
-// invalidCallMessage is the tool result for a call whose arguments did not parse.
 // For write_artifact the usual cause is a body cut off by the output limit, and
 // the model's instinct after a failure is to paste the document into the chat, so
 // the message says what to do instead.
@@ -27,9 +24,8 @@ func invalidCallMessage(tool string) string {
 	return "invalid tool call: the arguments were not valid JSON"
 }
 
-// runArtifactTool is the write_artifact handler. It stays out of runTool so the
-// artifact rules (what is saved, what the model is told, what the card shows) can
-// change without touching the dispatcher every other tool shares.
+// This stays out of runTool so artifact rules can change without touching the
+// dispatcher every other tool shares.
 func (s *Service) runArtifactTool(
 	call Protocol.ToolCall,
 	agentID string,
@@ -62,8 +58,6 @@ func (s *Service) runArtifactTool(
 		return result("could not save the document: "+res.Error.Message, true)
 	}
 	if res.Rejected {
-		// The document was not stored, so the finding list is the whole
-		// answer: line numbers and the rule, enough to fix in this turn.
 		return result("The document was NOT saved. It broke the document rules:\n"+
 			res.Findings+"\nCorrect those lines and call write_artifact again. "+
 			"Do not paste the document into the chat instead.", true)
@@ -88,9 +82,7 @@ func (s *Service) runArtifactTool(
 	return result(b.String(), false)
 }
 
-// artifactBodiesSince returns the stored text of every document this agent saved
-// or extended at or after since. The artifacts table is the source of truth for
-// what the card shows, so it is also the source of truth for what the chat text
+// The artifacts table is the source of truth for both the card and the text chat
 // must not repeat.
 func (s *Service) artifactBodiesSince(agentID string, since int64) []string {
 	list, err := s.Core.DB.ListArtifacts(agentID, 20)
@@ -125,7 +117,6 @@ func (s *Service) withoutArtifactEcho(agentID string, since int64, blocks []Prot
 	return out, dropped
 }
 
-// stripEchoFromBlocks is the pure half of withoutArtifactEcho.
 func stripEchoFromBlocks(blocks []Protocol.Block, docs []string) ([]Protocol.Block, int) {
 	if len(docs) == 0 {
 		return blocks, 0
