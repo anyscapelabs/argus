@@ -28,6 +28,8 @@ export interface AgentProfile {
     "agent_name": string;
     "model_ref": string;
     "system_prompt": string;
+    "role": string;
+    "role_instructions": string;
     "updated_at": string;
 }
 
@@ -321,6 +323,7 @@ export interface IntegrationView {
     "description": string;
     "icon": string;
     "connected": boolean;
+    "tools"?: string[] | null;
 }
 
 export interface KeyStatus {
@@ -404,6 +407,10 @@ export interface MCPConnectRequestView {
     "server_name": string;
     "description": string;
     "icon": string;
+    "connection_id"?: string;
+    "label"?: string;
+    "expected_email"?: string;
+    "access_level"?: string;
 
     /**
      * State carries the card's last known state so a restored card shows what

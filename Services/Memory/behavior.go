@@ -104,12 +104,14 @@ func BehaviorPrompt(db *Storage.DB, agentID string) string {
 
 // RecordToolLesson saves a compact recovery note when an MCP tool call fails
 // and then succeeds on retry in the same run, preventing repeat schema mistakes.
-func RecordToolLesson(db *Storage.DB, agentID, toolName, errText, goodArgsJSON string) {
+func RecordToolLesson(db *Storage.DB, agentID, serverID, toolName, errText, goodArgsJSON string) {
 	if db == nil || toolName == "" {
 		return
 	}
-	parts := strings.SplitN(toolName, "__", 2)
-	serverID := parts[0]
+	if serverID == "" {
+		parts := strings.SplitN(toolName, "__", 2)
+		serverID = parts[0]
+	}
 	errShort := strings.Join(strings.Fields(errText), " ")
 	if len(errShort) > 140 {
 		errShort = errShort[:140]

@@ -36,24 +36,28 @@ type Tool struct {
 
 // Manager manages MCP server connections and discovered tools.
 type Manager struct {
-	mu      sync.RWMutex
-	servers map[string]*serverConn
-	configs map[string]ServerConfig
-	tools   []Tool
+	mu          sync.RWMutex
+	servers     map[string]*serverConn
+	connections map[string]*serverConn
+	configs     map[string]ServerConfig
+	tools       []Tool
 }
 
 type serverConn struct {
-	cfg    ServerConfig
-	client *mcp.Client
-	sess   *mcp.ClientSession
-	cancel context.CancelFunc
+	cfg          ServerConfig
+	serverID     string
+	connectionID string
+	client       *mcp.Client
+	sess         *mcp.ClientSession
+	cancel       context.CancelFunc
 }
 
 // New creates a new MCP manager.
 func New() *Manager {
 	return &Manager{
-		servers: make(map[string]*serverConn),
-		configs: make(map[string]ServerConfig),
+		servers:     make(map[string]*serverConn),
+		connections: make(map[string]*serverConn),
+		configs:     make(map[string]ServerConfig),
 	}
 }
 
@@ -208,10 +212,11 @@ func (m *Manager) connectLocked(ctx context.Context, cfg ServerConfig) error {
 
 	connCtx, connCancel := context.WithCancel(context.Background())
 	sc := &serverConn{
-		cfg:    cfg,
-		client: c,
-		sess:   sess,
-		cancel: connCancel,
+		cfg:      cfg,
+		serverID: cfg.ID,
+		client:   c,
+		sess:     sess,
+		cancel:   connCancel,
 	}
 	m.servers[cfg.ID] = sc
 
@@ -240,32 +245,43 @@ func (m *Manager) ListServerIDs() []string {
 			out = append(out, id)
 		}
 	}
+	for _, sc := range m.connections {
+		if sc.sess != nil {
+			out = append(out, sc.serverID)
+		}
+	}
 	sort.Strings(out)
-	return out
+	return compactStrings(out)
 }
 
 // refreshToolsLocked refreshes tool list (caller must hold lock).
 func (m *Manager) refreshToolsLocked() {
 	var tools []Tool
-	for id, sc := range m.servers {
+	seen := map[string]bool{}
+	collect := func(id string, sc *serverConn) {
 		if sc.sess == nil {
-			continue
+			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		res, err := sc.sess.ListTools(ctx, &mcp.ListToolsParams{})
 		cancel()
 		if err != nil {
 			log.Printf("mcp: list tools failed for %s: %v", id, err)
-			continue
+			return
 		}
 		for _, t := range res.Tools {
+			key := sc.serverID + "\x00" + t.Name
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
 			var schema map[string]interface{}
 			if t.InputSchema != nil {
 				b, _ := json.Marshal(t.InputSchema)
 				_ = json.Unmarshal(b, &schema)
 			}
 			tools = append(tools, Tool{
-				ServerID:    id,
+				ServerID:    sc.serverID,
 				ServerName:  sc.cfg.Name,
 				Name:        t.Name,
 				Description: t.Description,
@@ -276,6 +292,12 @@ func (m *Manager) refreshToolsLocked() {
 			log.Printf("mcp: %s connected but returned 0 tools", id)
 		}
 	}
+	for id, sc := range m.servers {
+		collect(id, sc)
+	}
+	for id, sc := range m.connections {
+		collect(id, sc)
+	}
 	m.tools = tools
 }
 
@@ -283,6 +305,14 @@ func (m *Manager) refreshToolsLocked() {
 func (m *Manager) CallTool(ctx context.Context, serverID, toolName string, args map[string]interface{}) (*mcp.CallToolResult, error) {
 	m.mu.RLock()
 	sc, ok := m.servers[serverID]
+	if !ok {
+		for _, candidate := range m.connections {
+			if candidate.serverID == serverID {
+				sc, ok = candidate, true
+				break
+			}
+		}
+	}
 	m.mu.RUnlock()
 	if !ok {
 		return nil, errors.New("mcp server not connected")
@@ -307,10 +337,18 @@ func (m *Manager) Disconnect() {
 			sc.sess.Close()
 		}
 	}
+	for _, sc := range m.connections {
+		if sc.cancel != nil {
+			sc.cancel()
+		}
+		if sc.sess != nil {
+			_ = sc.sess.Close()
+		}
+	}
 	m.servers = make(map[string]*serverConn)
+	m.connections = make(map[string]*serverConn)
 	m.tools = nil
 }
-
 
 func (m *Manager) RefreshTools() {
 	m.mu.Lock()
@@ -328,4 +366,17 @@ func (m *Manager) ToolCount(serverID string) int {
 		}
 	}
 	return n
+}
+
+func compactStrings(values []string) []string {
+	if len(values) < 2 {
+		return values
+	}
+	out := values[:0]
+	for _, value := range values {
+		if len(out) == 0 || out[len(out)-1] != value {
+			out = append(out, value)
+		}
+	}
+	return out
 }

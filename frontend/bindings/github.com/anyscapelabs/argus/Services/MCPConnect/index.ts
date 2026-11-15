@@ -9,5 +9,6 @@ export {
 export type {
     AgentBindingView,
     ConnectionView,
-    ConnectorCatalogView
+    ConnectorCatalogView,
+    DisconnectImpactView
 } from "./models.js";

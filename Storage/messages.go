@@ -41,6 +41,11 @@ const MessageKindSteering = "steering"
 // which is why the send path that writes it marks the run unattended.
 const MessageKindScheduled = "scheduled"
 
+// MessageKindDelegated is a teammate-authored task materialized into the
+// target agent's normal history. It is hidden from the human transcript but
+// otherwise follows the same send/runTurn path as every other turn.
+const MessageKindDelegated = "delegated"
+
 // MessageKindToolRound marks intermediate assistant tool calls and their result
 // carriers. They remain model history but never become loose chat bubbles; the
 // final assistant row is the only user-facing result of a turn.

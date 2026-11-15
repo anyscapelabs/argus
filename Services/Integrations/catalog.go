@@ -19,15 +19,16 @@ type OAuth struct {
 }
 
 type Item struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Icon        string `json:"icon"`
-	URL         string `json:"url,omitempty"`
-	OAuth       OAuth  `json:"oauth"`
-	Type        string `json:"type,omitempty"`
-	ConfigPath  string `json:"configPath,omitempty"`
-	Enabled     bool   `json:"enabled,omitempty"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Icon        string   `json:"icon"`
+	URL         string   `json:"url,omitempty"`
+	OAuth       OAuth    `json:"oauth"`
+	Type        string   `json:"type,omitempty"`
+	ConfigPath  string   `json:"configPath,omitempty"`
+	Enabled     bool     `json:"enabled,omitempty"`
+	Tools       []string `json:"tools,omitempty"`
 }
 
 type Catalog struct {

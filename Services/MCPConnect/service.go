@@ -2,6 +2,7 @@ package MCPConnect
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/anyscapelabs/argus/Services/Integrations"
 	"github.com/anyscapelabs/argus/Services/MCP"
 	"github.com/anyscapelabs/argus/Services/Shared"
+	"github.com/anyscapelabs/argus/Storage"
 	"github.com/google/uuid"
 )
 
@@ -19,6 +21,7 @@ const requestTTL = 10 * time.Minute
 
 type request struct {
 	view   Shared.MCPConnectRequestView
+	mode   string // new | bind | reauth
 	cancel context.CancelFunc
 	expire *time.Timer
 }
@@ -60,16 +63,20 @@ func (s *Service) emit(r *request, state, msg string) {
 		toolCount = len(s.MCP.ListTools())
 	}
 	s.Core.EmitEvent(Shared.EventMCPConnectStatus, map[string]any{
-		"request_id":  r.view.RequestID,
-		"agent_id":    r.view.AgentID,
-		"server_id":   r.view.ServerID,
-		"server_name": r.view.ServerName,
-		"description": r.view.Description,
-		"icon":        r.view.Icon,
-		"created_at":  r.view.CreatedAt,
-		"state":       state,
-		"error":       msg,
-		"tool_count":  toolCount,
+		"request_id":     r.view.RequestID,
+		"agent_id":       r.view.AgentID,
+		"server_id":      r.view.ServerID,
+		"server_name":    r.view.ServerName,
+		"description":    r.view.Description,
+		"icon":           r.view.Icon,
+		"connection_id":  r.view.ConnectionID,
+		"label":          r.view.Label,
+		"expected_email": r.view.ExpectedEmail,
+		"access_level":   r.view.AccessLevel,
+		"created_at":     r.view.CreatedAt,
+		"state":          state,
+		"error":          msg,
+		"tool_count":     toolCount,
 	})
 }
 
@@ -156,8 +163,10 @@ func toolPrefix(serverID string) string {
 	return strings.NewReplacer("-", "_", ".", "_").Replace(serverID)
 }
 
-// Register returns shown | pending | connected | unknown.
-func (s *Service) Register(agentID, agentName, serverID string) string {
+// Register returns shown | pending | connected | duplicate | unknown. A
+// connection id requests access to an existing account; without one, a fresh
+// account is authenticated and then bound to the requesting agent.
+func (s *Service) Register(agentID, agentName, serverID, label, expectedEmail, connectionID, accessLevel string) string {
 	cat := s.catalog()
 	if cat == nil {
 		return "unknown"
@@ -166,22 +175,71 @@ func (s *Service) Register(agentID, agentName, serverID string) string {
 	if !ok {
 		return "unknown"
 	}
-	if s.MCP != nil && s.MCP.Manager().IsConnected(serverID) {
-		return "connected"
+	if accessLevel != "read" && accessLevel != "full" {
+		accessLevel = "draft"
+	}
+	db := s.sqlDB()
+	if db == nil {
+		return "unknown"
+	}
+	label = strings.TrimSpace(label)
+	expectedEmail = strings.TrimSpace(expectedEmail)
+	mode := "new"
+	if connectionID != "" {
+		conn, found, err := Storage.GetMCPConnection(db, connectionID)
+		if err != nil || !found || conn.ServerID != serverID {
+			return "unknown"
+		}
+		for _, bound := range mustAgentConnections(db, agentID) {
+			if bound.ConnectionID == connectionID && conn.Status == "connected" && bound.AccessLevel == accessLevel {
+				return "connected"
+			}
+		}
+		if label == "" {
+			label = conn.Label
+		}
+		if expectedEmail == "" {
+			expectedEmail = conn.ExpectedEmail
+		}
+		if conn.Status == "connected" {
+			mode = "bind"
+		} else {
+			mode = "reauth"
+		}
+	} else {
+		if label != "" {
+			exists, err := Storage.ConnectionLabelExists(db, serverID, label, "")
+			if err != nil || exists {
+				return "duplicate"
+			}
+		}
+		connectionID = "conn_" + uuid.NewString()
+		if label == "" && expectedEmail == "" {
+			for _, bound := range mustAgentConnections(db, agentID) {
+				if bound.ServerID == serverID && bound.Status == "connected" {
+					return "connected"
+				}
+			}
+		}
 	}
 	if _, busy := s.store.Live(agentID); busy {
 		return "pending"
 	}
 	id, _ := uuid.NewV7()
 	r := &request{
+		mode: mode,
 		view: Shared.MCPConnectRequestView{
-			RequestID:   id.String(),
-			AgentID:     agentID,
-			AgentName:   agentName,
-			ServerID:    it.ID,
-			ServerName:  it.Name,
-			Description: it.Description,
-			Icon:        it.Icon,
+			RequestID:     id.String(),
+			AgentID:       agentID,
+			AgentName:     agentName,
+			ServerID:      it.ID,
+			ServerName:    it.Name,
+			Description:   it.Description,
+			Icon:          it.Icon,
+			ConnectionID:  connectionID,
+			Label:         label,
+			ExpectedEmail: expectedEmail,
+			AccessLevel:   accessLevel,
 			// The instant the card joins the conversation. The frontend weaves it
 			// into the transcript here, so it stays at the point the agent asked
 			// for the sign-in rather than following newer messages to the bottom.
@@ -234,15 +292,134 @@ func (s *Service) runConnect(ctx context.Context, r *request) {
 		s.retryable(r, "MCP service not available")
 		return
 	}
-	err := s.MCP.ConnectRemote(ctx, r.view.ServerID, true)
+	if r.mode == "bind" {
+		conn, found, err := Storage.GetMCPConnection(s.sqlDB(), r.view.ConnectionID)
+		if err != nil || !found || conn.Status != "connected" {
+			if err == nil {
+				err = fmt.Errorf("account needs to be reconnected before it can be bound")
+			}
+			s.retryable(r, err.Error())
+			return
+		}
+		if err := Storage.UpsertAgentConnection(s.sqlDB(), r.view.AgentID, r.view.ConnectionID, r.view.AccessLevel); err != nil {
+			s.retryable(r, err.Error())
+			return
+		}
+		s.Core.EmitEvent(Shared.EventIntegrationsChanged, nil)
+		s.finish(r.view.RequestID, "connected", "")
+		return
+	}
+	var err error
+	if r.mode == "reauth" {
+		err = s.MCP.ReconnectRemoteConnection(ctx, r.view.ServerID, r.view.ConnectionID, r.view.ExpectedEmail)
+	} else {
+		err = s.MCP.ConnectRemoteConnection(ctx, r.view.ServerID, r.view.ConnectionID, r.view.ExpectedEmail, true)
+	}
+	if err == nil {
+		err = s.finishConnection(r, ctx)
+	}
 	switch {
 	case err == nil:
+		s.Core.EmitEvent(Shared.EventIntegrationsChanged, nil)
 		s.finish(r.view.RequestID, "connected", "")
 	case errors.Is(err, context.Canceled):
+		if m := s.manager(); m != nil {
+			m.CloseConnection(r.view.ConnectionID)
+		}
+		_ = MCP.DeleteSessionToken(r.view.ServerID, r.view.ConnectionID)
+		s.markReauthNeeded(r)
 		s.retryable(r, "Sign-in cancelled")
 	default:
+		if m := s.manager(); m != nil {
+			m.CloseConnection(r.view.ConnectionID)
+		}
+		_ = MCP.DeleteSessionToken(r.view.ServerID, r.view.ConnectionID)
+		s.markReauthNeeded(r)
 		s.retryable(r, err.Error())
 	}
+}
+
+func (s *Service) finishConnection(r *request, ctx context.Context) error {
+	db := s.sqlDB()
+	if db == nil {
+		return fmt.Errorf("storage unavailable")
+	}
+	email := ""
+	var item Integrations.Item
+	hasItem := false
+	if catalog := s.catalog(); catalog != nil {
+		item, hasItem = catalog.Get(r.view.ServerID)
+	}
+	if hasItem && item.OAuth.Mode == "google" {
+		var err error
+		email, err = MCP.SessionAccountEmail(ctx, r.view.ServerID, r.view.ConnectionID)
+		if err != nil {
+			return err
+		}
+		if err := MCP.VerifyAuthorizedEmail(r.view.ExpectedEmail, email); err != nil {
+			if m := s.manager(); m != nil {
+				m.CloseConnection(r.view.ConnectionID)
+			}
+			_ = MCP.DeleteSessionToken(r.view.ServerID, r.view.ConnectionID)
+			return err
+		}
+	}
+	label := strings.TrimSpace(r.view.Label)
+	if label == "" {
+		label = email
+	}
+	if label == "" {
+		label = r.view.ServerName + " account"
+	}
+	if exists, err := Storage.ConnectionLabelExists(db, r.view.ServerID, label, r.view.ConnectionID); err != nil {
+		return err
+	} else if exists {
+		return fmt.Errorf("%s already has an account labelled %q", r.view.ServerName, label)
+	}
+	conn := Storage.MCPConnection{
+		ID: r.view.ConnectionID, ServerID: r.view.ServerID, Label: label,
+		AccountEmail: email, ExpectedEmail: r.view.ExpectedEmail, Status: "connected",
+	}
+	if hasItem {
+		conn.Scopes = strings.Join(item.OAuth.Scopes, " ")
+	}
+	if r.mode == "reauth" {
+		current, found, err := Storage.GetMCPConnection(db, r.view.ConnectionID)
+		if err != nil || !found {
+			if err == nil {
+				err = fmt.Errorf("connection not found")
+			}
+			return err
+		}
+		if conn.AccountEmail == "" {
+			conn.AccountEmail = current.AccountEmail
+		}
+		if conn.ExpectedEmail == "" {
+			conn.ExpectedEmail = current.ExpectedEmail
+		}
+		if conn.Scopes == "" {
+			conn.Scopes = current.Scopes
+		}
+		if err := Storage.UpdateMCPConnection(db, conn); err != nil {
+			return err
+		}
+	} else if err := Storage.CreateMCPConnection(db, conn); err != nil {
+		return err
+	}
+	r.view.Label = label
+	return Storage.UpsertAgentConnection(db, r.view.AgentID, r.view.ConnectionID, r.view.AccessLevel)
+}
+
+func (s *Service) markReauthNeeded(r *request) {
+	if r.mode == "reauth" && s.sqlDB() != nil {
+		_ = Storage.SetMCPConnectionStatus(s.sqlDB(), r.view.ConnectionID, "needs_reauth")
+		s.Core.EmitEvent(Shared.EventIntegrationsChanged, nil)
+	}
+}
+
+func mustAgentConnections(db *sql.DB, agentID string) []Storage.AgentConnection {
+	connections, _ := Storage.ListAgentConnectionsForAgent(db, agentID)
+	return connections
 }
 
 func (s *Service) retryable(r *request, msg string) {
@@ -315,6 +492,10 @@ func (s *Service) steerText(v Shared.MCPConnectRequestView, state string) string
 	}
 	switch state {
 	case "connected":
+		account := strings.TrimSpace(v.Label)
+		if account != "" {
+			name += " (" + account + ")"
+		}
 		tools := 0
 		if s.MCP != nil {
 			for _, t := range s.MCP.ListTools() {
@@ -379,7 +560,7 @@ func (s *Service) settledFromStore(agentID string) (Shared.MCPConnectRequestView
 		return Shared.MCPConnectRequestView{}, false
 	}
 	n, ok, err := s.Core.DB.LatestNoticeOf(agentID, "mcp", "connected")
-	if err != nil || !ok || !s.MCP.HasStoredSession(n.Tool) {
+	if err != nil || !ok {
 		return Shared.MCPConnectRequestView{}, false
 	}
 	cat := s.catalog()
@@ -390,14 +571,32 @@ func (s *Service) settledFromStore(agentID string) (Shared.MCPConnectRequestView
 	if !found {
 		return Shared.MCPConnectRequestView{}, false
 	}
+	connections, err := Storage.ListAgentConnectionsForAgent(s.Core.DB.SQL(), agentID)
+	if err != nil {
+		return Shared.MCPConnectRequestView{}, false
+	}
+	var connection Storage.AgentConnection
+	for _, candidate := range connections {
+		if candidate.ServerID == n.Tool && candidate.Status == "connected" &&
+			s.MCP.HasStoredConnectionSession(candidate.ServerID, candidate.ConnectionID) {
+			connection = candidate
+			break
+		}
+	}
+	if connection.ConnectionID == "" {
+		return Shared.MCPConnectRequestView{}, false
+	}
 	return Shared.MCPConnectRequestView{
-		AgentID:     agentID,
-		AgentName:   n.AgentName,
-		ServerID:    it.ID,
-		ServerName:  it.Name,
-		Description: it.Description,
-		Icon:        it.Icon,
-		State:       "connected",
+		AgentID:      agentID,
+		AgentName:    n.AgentName,
+		ServerID:     it.ID,
+		ServerName:   it.Name,
+		Description:  it.Description,
+		Icon:         it.Icon,
+		ConnectionID: connection.ConnectionID,
+		Label:        connection.Label,
+		AccessLevel:  connection.AccessLevel,
+		State:        "connected",
 		// The settled notice is the only surviving stamp, so the restored card
 		// anchors where the sign-in landed. It keeps its place in the transcript
 		// from there, which is what the notice beside it does too.
@@ -430,6 +629,7 @@ func (s *Service) Integrations() []Shared.IntegrationView {
 			Description: it.Description,
 			Icon:        it.Icon,
 			Connected:   connected,
+			Tools:       it.Tools,
 		})
 	}
 	return out

@@ -37,6 +37,8 @@ func (s *Service) GetAgentProfile(id string) Shared.AgentProfileResult {
 		profile.AgentName = p.AgentName
 		profile.ModelRef = p.ModelRef
 		profile.SystemPrompt = p.SystemPrompt
+		profile.Role = p.Role
+		profile.RoleInstructions = p.RoleInstructions
 		profile.UpdatedAt = p.UpdatedAt
 	} else {
 		profile.AgentName = "Argus"
@@ -54,11 +56,13 @@ func (s *Service) SaveAgentProfile(profile Shared.AgentProfile) Shared.ActionRes
 		id = defaultAgentProfileID
 	}
 	if err := s.Core.DB.SaveAgentProfile(Storage.AgentProfile{
-		ID:           id,
-		Avatar:       profile.Avatar,
-		AgentName:    profile.AgentName,
-		ModelRef:     profile.ModelRef,
-		SystemPrompt: profile.SystemPrompt,
+		ID:               id,
+		Avatar:           profile.Avatar,
+		AgentName:        profile.AgentName,
+		ModelRef:         profile.ModelRef,
+		SystemPrompt:     profile.SystemPrompt,
+		Role:             profile.Role,
+		RoleInstructions: profile.RoleInstructions,
 	}); err != nil {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
@@ -89,6 +93,8 @@ func (s *Service) SetAgentModel(id, modelRef string) Shared.ActionResult {
 		profile.Avatar = existing.Avatar
 		profile.AgentName = existing.AgentName
 		profile.SystemPrompt = existing.SystemPrompt
+		profile.Role = existing.Role
+		profile.RoleInstructions = existing.RoleInstructions
 		profile.UpdatedAt = existing.UpdatedAt
 	}
 	profile.ModelRef = modelRef

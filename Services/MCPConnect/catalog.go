@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/anyscapelabs/argus/Services/MCP"
+	"github.com/anyscapelabs/argus/Services/Shared"
 	"github.com/anyscapelabs/argus/Storage"
 )
 
@@ -29,8 +30,13 @@ type ConnectionView struct {
 	ConnectionID string             `json:"connection_id"`
 	Label        string             `json:"label"`
 	AccountEmail string             `json:"account_email"`
+	Scopes       string             `json:"scopes"`
 	Status       string             `json:"status"`
 	Bindings     []AgentBindingView `json:"bindings"`
+}
+
+type DisconnectImpactView struct {
+	Connection ConnectionView `json:"connection"`
 }
 
 // ConnectorCatalogView is one integration server as the catalog shows it: how
@@ -96,12 +102,13 @@ func (s *Service) ListCatalog(_ context.Context) ([]ConnectorCatalogView, error)
 			ConnectionID: c.ID,
 			Label:        lbl,
 			AccountEmail: c.AccountEmail,
+			Scopes:       c.Scopes,
 			Status:       c.Status,
 			Bindings:     byConn[c.ID],
 		})
 	}
 
-	catalog := defaultConnectorCatalog()
+	catalog := s.connectorCatalog()
 	for i := range catalog {
 		catalog[i].Connections = byServer[catalog[i].ServerID]
 		if catalog[i].Connections == nil {
@@ -121,7 +128,11 @@ func (s *Service) UpsertBotBinding(_ context.Context, connectionID, agentID, acc
 	if db == nil {
 		return fmt.Errorf("storage unavailable")
 	}
-	return Storage.UpsertAgentConnection(db, agentID, connectionID, accessLevel)
+	if err := Storage.UpsertAgentConnection(db, agentID, connectionID, accessLevel); err != nil {
+		return err
+	}
+	s.Core.EmitEvent(Shared.EventIntegrationsChanged, nil)
+	return nil
 }
 
 // RemoveBotBinding detaches an agent from a connection without touching the
@@ -134,13 +145,51 @@ func (s *Service) RemoveBotBinding(_ context.Context, connectionID, agentID stri
 	if db == nil {
 		return fmt.Errorf("storage unavailable")
 	}
-	return Storage.RemoveAgentConnection(db, agentID, connectionID)
+	if err := Storage.RemoveAgentConnection(db, agentID, connectionID); err != nil {
+		return err
+	}
+	s.Core.EmitEvent(Shared.EventIntegrationsChanged, nil)
+	return nil
 }
 
-// DisconnectConnection revokes one account: its live client cache, its token
-// and its row all go. When it was the server's last connection the shared
-// session is dropped too, so nothing lingers that the user asked to remove.
-func (s *Service) DisconnectConnection(_ context.Context, serverID, connectionID string) error {
+// PreviewDisconnect returns the account and every agent binding a disconnect
+// would remove. The UI presents this before the destructive action.
+func (s *Service) PreviewDisconnect(_ context.Context, connectionID string) (DisconnectImpactView, error) {
+	db := s.sqlDB()
+	if db == nil {
+		return DisconnectImpactView{}, fmt.Errorf("storage unavailable")
+	}
+	conn, found, err := Storage.GetMCPConnection(db, connectionID)
+	if err != nil || !found {
+		if err == nil {
+			err = fmt.Errorf("connection not found")
+		}
+		return DisconnectImpactView{}, err
+	}
+	bindings, err := Storage.ListAllConnectionBindings(db)
+	if err != nil {
+		return DisconnectImpactView{}, err
+	}
+	view := ConnectionView{
+		ConnectionID: conn.ID, Label: conn.Label, AccountEmail: conn.AccountEmail,
+		Scopes: conn.Scopes, Status: conn.Status, Bindings: []AgentBindingView{},
+	}
+	for _, binding := range bindings {
+		if binding.ConnectionID != connectionID {
+			continue
+		}
+		view.Bindings = append(view.Bindings, AgentBindingView{
+			AgentID: binding.AgentID, Handle: binding.Handle,
+			AgentName: binding.AgentName, AccessLevel: binding.AccessLevel,
+		})
+	}
+	return DisconnectImpactView{Connection: view}, nil
+}
+
+// DisconnectConnection derives the server from storage, refuses new calls,
+// cancels the account session, revokes Google grants best-effort, then removes
+// the token and row (whose bindings cascade).
+func (s *Service) DisconnectConnection(ctx context.Context, connectionID string) error {
 	if connectionID == "" {
 		return fmt.Errorf("connection_id is required")
 	}
@@ -148,25 +197,54 @@ func (s *Service) DisconnectConnection(_ context.Context, serverID, connectionID
 	if db == nil {
 		return fmt.Errorf("storage unavailable")
 	}
-	if m := s.manager(); m != nil {
-		m.CloseConnection(connectionID)
-	}
-	_ = MCP.DeleteSessionToken(serverID, connectionID)
-	if err := Storage.DeleteMCPConnection(db, connectionID); err != nil {
-		return err
-	}
-	remaining, err := Storage.ListMCPConnections(db)
+	conn, found, err := Storage.GetMCPConnection(db, connectionID)
 	if err != nil {
 		return err
 	}
-	for _, c := range remaining {
-		if c.ServerID == serverID {
-			return nil // another account still needs this server's session
+	if !found {
+		return fmt.Errorf("connection not found")
+	}
+	if err := Storage.SetMCPConnectionStatus(db, connectionID, "disconnecting"); err != nil {
+		return err
+	}
+	s.Core.EmitEvent(Shared.EventIntegrationsChanged, nil)
+	if m := s.manager(); m != nil {
+		m.CloseConnection(connectionID)
+	}
+	if cat := s.catalog(); cat != nil {
+		if item, ok := cat.Get(conn.ServerID); ok && item.OAuth.Mode == "google" {
+			_ = MCP.RevokeGoogleSession(ctx, conn.ServerID, connectionID)
 		}
 	}
-	if m := s.manager(); m != nil && serverID != "" {
-		m.DisconnectServer(serverID)
+	_ = MCP.DeleteSessionToken(conn.ServerID, connectionID)
+	if err := Storage.DeleteMCPConnection(db, connectionID); err != nil {
+		return err
 	}
+	s.Core.EmitEvent(Shared.EventIntegrationsChanged, nil)
+	return nil
+}
+
+func (s *Service) RenameConnection(_ context.Context, connectionID, label string) error {
+	db := s.sqlDB()
+	if db == nil {
+		return fmt.Errorf("storage unavailable")
+	}
+	conn, found, err := Storage.GetMCPConnection(db, connectionID)
+	if err != nil || !found {
+		if err == nil {
+			err = fmt.Errorf("connection not found")
+		}
+		return err
+	}
+	if exists, err := Storage.ConnectionLabelExists(db, conn.ServerID, label, connectionID); err != nil {
+		return err
+	} else if exists {
+		return fmt.Errorf("%s already has an account labelled %q", conn.ServerID, strings.TrimSpace(label))
+	}
+	if err := Storage.RenameMCPConnection(db, connectionID, label); err != nil {
+		return err
+	}
+	s.Core.EmitEvent(Shared.EventIntegrationsChanged, nil)
 	return nil
 }
 
@@ -201,7 +279,7 @@ var providerRegistry = map[string]providerOAuthMeta{
 			"https://www.googleapis.com/auth/gmail.compose",
 		},
 	},
-	"gdrive": {
+	"google-drive": {
 		DisplayName:  "Google Drive",
 		MultiAccount: true,
 		AuthURL:      "https://accounts.google.com/o/oauth2/v2/auth",
@@ -213,21 +291,76 @@ var providerRegistry = map[string]providerOAuthMeta{
 	},
 }
 
-// defaultConnectorCatalog is the server list the catalog always shows, in a
-// deliberate order; per-connection state is merged in by ListCatalog.
-func defaultConnectorCatalog() []ConnectorCatalogView {
-	order := []string{"gmail", "gdrive"}
-	out := make([]ConnectorCatalogView, 0, len(order))
-	for _, id := range order {
-		m := providerRegistry[id]
+func (s *Service) connectorCatalog() []ConnectorCatalogView {
+	cat := s.catalog()
+	if cat == nil {
+		return nil
+	}
+	out := make([]ConnectorCatalogView, 0, len(cat.Items()))
+	for _, item := range cat.Items() {
+		if item.URL == "" {
+			continue
+		}
 		out = append(out, ConnectorCatalogView{
-			ServerID:     id,
-			DisplayName:  m.DisplayName,
-			MultiAccount: m.MultiAccount,
+			ServerID:     item.ID,
+			DisplayName:  item.Name,
+			MultiAccount: true,
 			Connections:  []ConnectionView{},
 		})
 	}
 	return out
+}
+
+// AgentPromptBlock describes only this agent's usable accounts, plus the
+// machine-level accounts it may ask the user to bind.
+func (s *Service) AgentPromptBlock(agentID string, withTools bool) string {
+	db := s.sqlDB()
+	if db == nil {
+		return ""
+	}
+	bound, err := Storage.ListAgentConnectionsForAgent(db, agentID)
+	if err != nil {
+		return ""
+	}
+	all, err := Storage.ListMCPConnections(db)
+	if err != nil {
+		return ""
+	}
+	boundIDs := map[string]bool{}
+	var b strings.Builder
+	b.WriteString("\n## Your connected accounts\n")
+	if len(bound) == 0 {
+		b.WriteString("- None.\n")
+	}
+	for _, conn := range bound {
+		boundIDs[conn.ConnectionID] = true
+		label := conn.Label
+		if label == "" {
+			label = conn.AccountEmail
+		}
+		fmt.Fprintf(&b, "- %s / %s (%s, access:%s, connection_id:%s)\n",
+			conn.ServerID, label, conn.Status, conn.AccessLevel, conn.ConnectionID)
+	}
+	var available []string
+	for _, conn := range all {
+		if boundIDs[conn.ID] || conn.Status != "connected" {
+			continue
+		}
+		label := conn.Label
+		if label == "" {
+			label = conn.AccountEmail
+		}
+		available = append(available, fmt.Sprintf("- %s / %s (connection_id:%s)", conn.ServerID, label, conn.ID))
+	}
+	if len(available) > 0 {
+		b.WriteString("Accounts connected on this machine but not bound to you:\n")
+		b.WriteString(strings.Join(available, "\n"))
+		b.WriteString("\n")
+	}
+	if withTools {
+		b.WriteString("Use connect_mcp to request a new account or user-approved access to an existing connection_id. Never imply you can use an unbound account.\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // callbackPath is the redirect URI path both legs of the server-side flow

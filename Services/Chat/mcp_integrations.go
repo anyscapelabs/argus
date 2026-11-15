@@ -2,8 +2,10 @@ package Chat
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/anyscapelabs/argus/Services/MCP"
 	"github.com/anyscapelabs/argus/Storage"
@@ -38,10 +40,7 @@ func BuildAgentMCPTools(ctx context.Context, db *sql.DB, mgr *MCP.Manager, agent
 		return nil, nil
 	}
 
-	serverCount := make(map[string]int, len(conns))
-	for _, c := range conns {
-		serverCount[c.ServerID]++
-	}
+	prefixes := connectionPrefixes(conns)
 
 	var specs []ToolSpec
 	for _, c := range conns {
@@ -53,22 +52,56 @@ func BuildAgentMCPTools(ctx context.Context, db *sql.DB, mgr *MCP.Manager, agent
 			continue
 		}
 
-		prefix := c.ServerID
-		if serverCount[c.ServerID] > 1 {
-			prefix = slugPrefix(c.ServerID, c.Label)
-		}
-
 		for _, t := range client.Tools() {
 			desc := t.Description
 			if c.AccountEmail != "" {
 				desc = fmt.Sprintf("[%s | access:%s] %s", c.AccountEmail, c.AccessLevel, desc)
 			}
 			specs = append(specs, ToolSpec{
-				Name:        prefix + "__" + t.Name,
+				Name:        projectedMCPToolName(prefixes[c.ConnectionID], t.Name),
 				Description: desc,
 				InputSchema: t.InputSchema,
 			})
 		}
 	}
 	return specs, nil
+}
+
+func connectionPrefixes(conns []Storage.AgentConnection) map[string]string {
+	serverCount := map[string]int{}
+	for _, conn := range conns {
+		serverCount[conn.ServerID]++
+	}
+	out := make(map[string]string, len(conns))
+	used := map[string]bool{}
+	for _, conn := range conns {
+		prefix := normalizeMCPPrefix(conn.ServerID)
+		if serverCount[conn.ServerID] > 1 {
+			prefix = slugPrefix(conn.ServerID, conn.Label)
+		}
+		if used[prefix] {
+			suffix := strings.TrimPrefix(conn.ConnectionID, "conn_")
+			if len(suffix) > 8 {
+				suffix = suffix[len(suffix)-8:]
+			}
+			prefix += "_" + normalizeMCPPrefix(suffix)
+		}
+		used[prefix] = true
+		out[conn.ConnectionID] = prefix
+	}
+	return out
+}
+
+func projectedMCPToolName(prefix, tool string) string {
+	name := prefix + "__" + tool
+	if len(name) > 64 {
+		sum := sha256.Sum256([]byte(name))
+		suffix := fmt.Sprintf("_%x", sum[:4])
+		name = name[:64-len(suffix)] + suffix
+	}
+	return name
+}
+
+func normalizeMCPPrefix(value string) string {
+	return strings.NewReplacer("-", "_", ".", "_").Replace(strings.ToLower(strings.TrimSpace(value)))
 }

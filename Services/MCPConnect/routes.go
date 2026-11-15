@@ -2,10 +2,14 @@ package MCPConnect
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 
 	"github.com/anyscapelabs/argus/Services/MCP"
+	"github.com/anyscapelabs/argus/Services/Shared"
 	"github.com/anyscapelabs/argus/Storage"
 	"github.com/google/uuid"
 )
@@ -16,6 +20,9 @@ type pendingOAuth struct {
 	ServerID      string
 	Label         string
 	ExpectedEmail string
+	ConnectionID  string
+	AgentID       string
+	AccessLevel   string
 }
 
 var (
@@ -31,6 +38,8 @@ func (s *Service) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/integrations/oauth/callback", s.handleOAuthCallback)
 	mux.HandleFunc("PUT /api/integrations/connections/{connection_id}/agents/{agent_id}", s.handleUpsertBinding)
 	mux.HandleFunc("DELETE /api/integrations/connections/{connection_id}/agents/{agent_id}", s.handleRemoveBinding)
+	mux.HandleFunc("GET /api/integrations/connections/{connection_id}/disconnect-preview", s.handlePreviewDisconnect)
+	mux.HandleFunc("PATCH /api/integrations/connections/{connection_id}", s.handleRenameConnection)
 	mux.HandleFunc("DELETE /api/integrations/connections/{connection_id}", s.handleDisconnectConnection)
 }
 
@@ -41,6 +50,9 @@ func (s *Service) handleBeginConnect(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Label         string `json:"label"`
 		ExpectedEmail string `json:"expected_email"`
+		ConnectionID  string `json:"connection_id"`
+		AgentID       string `json:"agent_id"`
+		AccessLevel   string `json:"access_level"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
 
@@ -50,6 +62,9 @@ func (s *Service) handleBeginConnect(w http.ResponseWriter, r *http.Request) {
 		ServerID:      srvID,
 		Label:         body.Label,
 		ExpectedEmail: body.ExpectedEmail,
+		ConnectionID:  body.ConnectionID,
+		AgentID:       body.AgentID,
+		AccessLevel:   body.AccessLevel,
 	}
 	oauthMu.Unlock()
 
@@ -91,8 +106,19 @@ func (s *Service) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	connID := "conn_" + uuid.NewString()
-	if err := MCP.SaveSessionToken(pending.ServerID, connID, tokRaw); err != nil {
+	connID := pending.ConnectionID
+	if connID == "" {
+		connID = "conn_" + uuid.NewString()
+	}
+	meta, ok := providerRegistry[pending.ServerID]
+	if !ok {
+		http.Error(w, "unsupported integration provider", http.StatusBadRequest)
+		return
+	}
+	if err := MCP.SaveOAuthSession(
+		pending.ServerID, connID, os.Getenv(meta.ClientIDEnv), os.Getenv(meta.SecretEnv),
+		meta.AuthURL, meta.TokenURL, meta.Scopes, tokRaw,
+	); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -101,15 +127,60 @@ func (s *Service) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "storage unavailable", http.StatusInternalServerError)
 		return
 	}
-	_ = Storage.CreateMCPConnection(db, Storage.MCPConnection{
+	label := strings.TrimSpace(pending.Label)
+	if label == "" {
+		label = strings.TrimSpace(email)
+	}
+	if label == "" {
+		label = meta.DisplayName + " account"
+	}
+	if exists, err := Storage.ConnectionLabelExists(db, pending.ServerID, label, connID); err != nil || exists {
+		_ = MCP.DeleteSessionToken(pending.ServerID, connID)
+		if err == nil {
+			err = fmt.Errorf("%s already has an account labelled %q", meta.DisplayName, label)
+		}
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+	connection := Storage.MCPConnection{
 		ID:            connID,
 		ServerID:      pending.ServerID,
-		Label:         pending.Label,
+		Label:         label,
 		AccountEmail:  email,
 		ExpectedEmail: pending.ExpectedEmail,
 		Scopes:        scopes,
 		Status:        "connected",
-	})
+	}
+	if existing, found, err := Storage.GetMCPConnection(db, connID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	} else if found {
+		if existing.ServerID != pending.ServerID {
+			http.Error(w, "connection belongs to another integration", http.StatusBadRequest)
+			return
+		}
+		if err := Storage.UpdateMCPConnection(db, connection); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else if err := Storage.CreateMCPConnection(db, connection); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if pending.AgentID != "" {
+		if err := Storage.UpsertAgentConnection(db, pending.AgentID, connID, pending.AccessLevel); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	if s.MCP != nil {
+		if err := s.MCP.ConnectRemoteConnection(r.Context(), pending.ServerID, connID, pending.ExpectedEmail, false); err != nil {
+			_ = Storage.SetMCPConnectionStatus(db, connID, "needs_reauth")
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+	}
+	s.Core.EmitEvent(Shared.EventIntegrationsChanged, nil)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("Connected. You may close this window."))
 }
@@ -155,9 +226,33 @@ func (s *Service) handleRemoveBinding(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) handleDisconnectConnection(w http.ResponseWriter, r *http.Request) {
 	connID := r.PathValue("connection_id")
-	serverID := r.URL.Query().Get("server_id")
 
-	if err := s.DisconnectConnection(r.Context(), serverID, connID); err != nil {
+	if err := s.DisconnectConnection(r.Context(), connID); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Service) handlePreviewDisconnect(w http.ResponseWriter, r *http.Request) {
+	impact, err := s.PreviewDisconnect(r.Context(), r.PathValue("connection_id"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(impact)
+}
+
+func (s *Service) handleRenameConnection(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Label string `json:"label"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if err := s.RenameConnection(r.Context(), r.PathValue("connection_id"), body.Label); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

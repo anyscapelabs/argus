@@ -17,6 +17,7 @@ import (
 
 	"github.com/anyscapelabs/argus/Services/Integrations"
 	"github.com/anyscapelabs/argus/Services/Shared"
+	"github.com/anyscapelabs/argus/Storage"
 )
 
 var (
@@ -50,19 +51,32 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 // a session that cannot be renewed on its own is left for the connect card, and
 // the failure is silent because the user never asked for these servers today.
 func (s *Service) restoreRemoteSessions(cat *Integrations.Catalog) {
-	for _, it := range cat.Items() {
-		stored := tokenStore{serverID: it.ID}
-		if it.URL == "" || !stored.hasSession() {
+	if s.Core == nil || s.Core.DB == nil {
+		return
+	}
+	db := s.Core.DB.SQL()
+	agentIDs, _ := Storage.ListAllAgentIDs(db)
+	_ = MigrateLegacyTokens(db, cat.IDs(), agentIDs)
+	connections, err := Storage.ListMCPConnections(db)
+	if err != nil {
+		return
+	}
+	for _, conn := range connections {
+		if conn.Status != "connected" || !(tokenStore{serverID: conn.ServerID, connectionID: conn.ID}).hasSession() {
 			continue
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		_ = s.ConnectRemote(ctx, it.ID, false)
+		err := s.ConnectRemoteConnection(ctx, conn.ServerID, conn.ID, conn.ExpectedEmail, false)
 		cancel()
+		if err != nil {
+			_ = Storage.SetMCPConnectionStatus(db, conn.ID, "needs_reauth")
+		}
 	}
 }
 
-// ServiceShutdown disconnects all servers.
-func (s *Service) ServiceShutdown(ctx context.Context) error {
+// ServiceShutdown disconnects all servers. Wails' lifecycle interface takes no
+// context; a context parameter makes the hook silently ineligible.
+func (s *Service) ServiceShutdown() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.manager != nil {
@@ -274,6 +288,12 @@ func githubClient() (*oauthex.ClientCredentials, error) { return clientCreds("gi
 
 // ConnectRemote connects a remote MCP server with OAuth.
 func (s *Service) ConnectRemote(ctx context.Context, serverID string, interactive bool) error {
+	return s.ConnectRemoteConnection(ctx, serverID, "", "", interactive)
+}
+
+// ConnectRemoteConnection dials one account with its own persisted OAuth
+// session. connectionID is empty only for the legacy server-level API.
+func (s *Service) ConnectRemoteConnection(ctx context.Context, serverID, connectionID, expectedEmail string, interactive bool) error {
 	s.mu.RLock()
 	cat := s.catalog
 	m := s.manager
@@ -288,12 +308,21 @@ func (s *Service) ConnectRemote(ctx context.Context, serverID string, interactiv
 	if !ok {
 		return errors.New("unknown integration")
 	}
-	spec := RemoteSpec{ID: it.ID, Name: it.Name, URL: it.URL, Scopes: it.OAuth.Scopes, ProbeTool: it.OAuth.ProbeTool}
+	spec := RemoteSpec{
+		ID: it.ID, ConnectionID: connectionID, Name: it.Name, URL: it.URL,
+		Scopes: append([]string(nil), it.OAuth.Scopes...), ProbeTool: it.OAuth.ProbeTool,
+		ExpectedEmail: expectedEmail,
+	}
 	switch it.OAuth.Mode {
 	case "google":
+		spec.Scopes = append(spec.Scopes, "openid", "email")
 		c, err := googleClient()
 		if err != nil {
-			return err
+			var ok bool
+			c, ok = (tokenStore{serverID: serverID, connectionID: connectionID}).clientCredentials()
+			if !ok {
+				return err
+			}
 		}
 		spec.Client = c
 	case "github":
@@ -311,6 +340,20 @@ func (s *Service) ConnectRemote(ctx context.Context, serverID string, interactiv
 	return m.ConnectRemote(ctx, spec, interactive)
 }
 
+// ReconnectRemoteConnection retains the database connection and its agent
+// bindings, but replaces the invalid OAuth session behind it.
+func (s *Service) ReconnectRemoteConnection(ctx context.Context, serverID, connectionID, expectedEmail string) error {
+	s.mu.RLock()
+	m := s.manager
+	s.mu.RUnlock()
+	if m == nil {
+		return errors.New("mcp not initialized")
+	}
+	m.CloseConnection(connectionID)
+	_ = DeleteSessionToken(serverID, connectionID)
+	return s.ConnectRemoteConnection(ctx, serverID, connectionID, expectedEmail, true)
+}
+
 // HasStoredSession reports whether an integration was signed in on this
 // machine before, whether or not it is connected right now. The connect card
 // uses it to rebuild a settled card after a restart; it is preferred over
@@ -318,6 +361,10 @@ func (s *Service) ConnectRemote(ctx context.Context, serverID string, interactiv
 // asked for during that window would otherwise disappear.
 func (s *Service) HasStoredSession(serverID string) bool {
 	return tokenStore{serverID: serverID}.hasSession()
+}
+
+func (s *Service) HasStoredConnectionSession(serverID, connectionID string) bool {
+	return tokenStore{serverID: serverID, connectionID: connectionID}.hasSession()
 }
 
 // DisconnectRemote disconnects a remote server.

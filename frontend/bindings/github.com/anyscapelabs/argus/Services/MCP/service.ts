@@ -43,6 +43,14 @@ export function ConnectRemote(serverID: string, interactive: boolean): $Cancella
 }
 
 /**
+ * ConnectRemoteConnection dials one account with its own persisted OAuth
+ * session. connectionID is empty only for the legacy server-level API.
+ */
+export function ConnectRemoteConnection(serverID: string, connectionID: string, expectedEmail: string, interactive: boolean): $CancellablePromise<void> {
+    return $Call.ByID(261514202, serverID, connectionID, expectedEmail, interactive);
+}
+
+/**
  * DisconnectRemote disconnects a remote server.
  */
 export function DisconnectRemote(serverID: string): $CancellablePromise<void> {
@@ -54,6 +62,10 @@ export function DisconnectRemote(serverID: string): $CancellablePromise<void> {
  */
 export function GetToolsForChat(): $CancellablePromise<$models.Tool[] | null> {
     return $Call.ByID(1405229386);
+}
+
+export function HasStoredConnectionSession(serverID: string, connectionID: string): $CancellablePromise<boolean> {
+    return $Call.ByID(2044464155, serverID, connectionID);
 }
 
 /**
@@ -107,6 +119,14 @@ export function LoadFromFile(path: string): $CancellablePromise<void> {
  */
 export function Manager(): $CancellablePromise<$models.Manager | null> {
     return $Call.ByID(2009178193);
+}
+
+/**
+ * ReconnectRemoteConnection retains the database connection and its agent
+ * bindings, but replaces the invalid OAuth session behind it.
+ */
+export function ReconnectRemoteConnection(serverID: string, connectionID: string, expectedEmail: string): $CancellablePromise<void> {
+    return $Call.ByID(893450845, serverID, connectionID, expectedEmail);
 }
 
 /**

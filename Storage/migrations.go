@@ -31,6 +31,7 @@ func (db *DB) migrate() error {
 		migration17,
 		migration18,
 		migration19,
+		migration20,
 	}
 
 	for i := version; i < len(migrations); i++ {
@@ -623,6 +624,51 @@ func migration19(db *DB) error {
 			status TEXT NOT NULL DEFAULT 'completed',
 			created_at INTEGER NOT NULL
 		)`,
+	}
+	for _, q := range statements {
+		if _, err := db.conn.Exec(q); err != nil {
+			if strings.Contains(err.Error(), "duplicate column name") {
+				continue
+			}
+			return err
+		}
+	}
+	return backfillAgentHandles(db.conn)
+}
+
+// migration20 finishes the persistence model introduced by migration19. A
+// hidden profile owns user-wide memories so the existing foreign keys remain
+// useful, role instructions no longer have to compete with the general system
+// prompt, and the temporary agent_memory sketchpad is folded into memory_items.
+// Connection labels are made unique per server after disambiguating any rows
+// created by the earlier unconstrained schema.
+func migration20(db *DB) error {
+	statements := []string{
+		`ALTER TABLE agent_profiles ADD COLUMN role_instructions TEXT NOT NULL DEFAULT ''`,
+		`INSERT OR IGNORE INTO agent_profiles
+			(id, avatar, agent_name, model_ref, system_prompt, updated_at, handle, role, role_instructions)
+		 VALUES ('default', '/logo.png', 'Argus', NULL, '', CURRENT_TIMESTAMP, '', '', '')`,
+		`INSERT OR IGNORE INTO agent_profiles
+			(id, avatar, agent_name, model_ref, system_prompt, updated_at, handle, role, role_instructions)
+		 VALUES ('__global_memory__', '', '', NULL, '', CURRENT_TIMESTAMP, '', '', '')`,
+		`INSERT OR IGNORE INTO memory_items (
+			id, agent_id, key, value, scope, confidence, source_type,
+			source_message_id, source_run_id, revision, created_at, updated_at
+		 ) SELECT 'agent-note:' || agent_id || ':' || mem_key, agent_id, 'agent_note:' || mem_key,
+			mem_value, 'always', 1.0, 'agent_note', mem_key, '', 1, updated_at, updated_at
+		 FROM agent_memory`,
+		`DROP TABLE IF EXISTS agent_memory`,
+		`UPDATE mcp_connections AS current
+		 SET label = current.label || ' ' || current.id
+		 WHERE TRIM(current.label) <> '' AND EXISTS (
+			SELECT 1 FROM mcp_connections AS earlier
+			WHERE earlier.server_id = current.server_id
+			  AND lower(TRIM(earlier.label)) = lower(TRIM(current.label))
+			  AND (earlier.created_at < current.created_at
+			       OR (earlier.created_at = current.created_at AND earlier.id < current.id))
+		 )`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_mcp_connections_server_label
+		 ON mcp_connections(server_id, label COLLATE NOCASE) WHERE TRIM(label) <> ''`,
 	}
 	for _, q := range statements {
 		if _, err := db.conn.Exec(q); err != nil {

@@ -26,6 +26,7 @@ import (
 	"github.com/anyscapelabs/argus/Services/Scheduler"
 	"github.com/anyscapelabs/argus/Services/Shared"
 	"github.com/anyscapelabs/argus/Storage"
+	"github.com/google/uuid"
 )
 
 // defaultModelCaller is the HTTP build's stand-in for a model provider. It
@@ -80,7 +81,11 @@ func main() {
 			http.Error(w, "prompt is required", http.StatusBadRequest)
 			return
 		}
-		agentID, err := Chat.HandleUserChatSend(db, "default", body.ThreadID, body.Prompt, runner.IsBusy("default"), runner.WakeAgent)
+		if body.ThreadID == "" {
+			body.ThreadID = "thr_" + uuid.NewString()
+		}
+		targetID, _ := Chat.ResolveMentionTarget(db, "default", body.Prompt)
+		agentID, err := Chat.HandleUserChatSend(db, "default", body.ThreadID, body.Prompt, runner.IsBusy(targetID), runner.WakeAgent)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

@@ -50,7 +50,7 @@ func (s *Service) runTypedGatewayTool(
 		return result(invalidCallMessage(outer.Name), true), ""
 	}
 	if outer.Name == liveSearchToolsDef.Name {
-		found := s.searchAvailableTools(discovered, Shared.IsScheduledFire(ctx), !Shared.IsUnattended(ctx), outer.Input)
+		found := s.searchAvailableTools(agentID, discovered, Shared.IsScheduledFire(ctx), !Shared.IsUnattended(ctx), outer.Input)
 		if found.Error != nil {
 			return result(found.Error.Message, true), ""
 		}
@@ -109,7 +109,7 @@ func (s *Service) skillsPromptBlock(agentID string, withTools bool) string {
 	if reg == nil {
 		return ""
 	}
-	return reg.PromptBlock(agentID, s.connectedServerSet())
+	return reg.PromptBlock(agentID, s.connectedServerSet(agentID))
 }
 
 // readSkillGateway loads Level-2 SKILL.md instructions and unlocks the skill's
@@ -150,14 +150,16 @@ func (s *Service) readSkillGateway(agentID string, discovered map[string]bool, a
 	for _, c := range doc.Meta.Connectors {
 		connSet[c] = true
 	}
-	for _, def := range s.liveToolCatalog(false, true) {
+	for _, def := range s.liveToolCatalog(agentID, false, true) {
 		if allowedSet[def.Name] {
 			unlocked = append(unlocked, def)
 			discovered[def.Name] = true
 			continue
 		}
 		for c := range connSet {
-			if strings.HasPrefix(def.Name, mcpServerPrefix(c)) {
+			prefix := normalizeMCPPrefix(c)
+			if strings.HasPrefix(def.Name, prefix+"__") ||
+				(strings.HasPrefix(def.Name, prefix+"_") && strings.Contains(def.Name, "__")) {
 				unlocked = append(unlocked, def)
 				discovered[def.Name] = true
 				break

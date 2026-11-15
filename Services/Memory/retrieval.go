@@ -88,6 +88,7 @@ func Select(db *Storage.DB, agentID, query string, tokenBudget, maxItems int, al
 		Key        string  `json:"key"`
 		Value      string  `json:"value"`
 		Scope      string  `json:"scope"`
+		Visibility string  `json:"visibility"`
 		Confidence float64 `json:"confidence"`
 	}
 	selected := Selection{}
@@ -96,7 +97,15 @@ func Select(db *Storage.DB, agentID, query string, tokenBudget, maxItems int, al
 		if len(selected.Items) == maxItems {
 			break
 		}
-		entry := wireMemory{candidate.Memory.Key, candidate.Memory.Value, candidate.Memory.Scope, candidate.Memory.Confidence}
+		key := candidate.Memory.Key
+		if candidate.Memory.SourceType == "agent_note" && candidate.Memory.SourceMessageID != "" {
+			key = candidate.Memory.SourceMessageID
+		}
+		visibility := "agent"
+		if candidate.Memory.AgentID == Storage.GlobalMemoryAgentID {
+			visibility = "global"
+		}
+		entry := wireMemory{key, candidate.Memory.Value, candidate.Memory.Scope, visibility, candidate.Memory.Confidence}
 		entryJSON, _ := json.Marshal(entry)
 		candidate.EstimatedTokens = estimateTokens(string(entryJSON))
 		prospective := append(wire, entry)

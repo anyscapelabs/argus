@@ -110,8 +110,116 @@ func DrainQueuedAgentMessages(db *sql.DB, agentID string) ([]AgentMessage, error
 	return msgs, nil
 }
 
+// ClaimNextAgentMessage reserves one queued item without touching the rest of
+// the inbox. Desktop wakes use this to materialize exactly one normal chat run;
+// messages for other threads remain queued for their own run.
+func ClaimNextAgentMessage(db *sql.DB, agentID string) (AgentMessage, bool, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return AgentMessage{}, false, err
+	}
+	defer tx.Rollback()
+	var m AgentMessage
+	var rb, urgent int
+	err = tx.QueryRow(`
+		SELECT id, thread_id, parent_message_id, from_agent_id, to_agent_id,
+		       kind, body, status, report_back, urgent, hops, created_at
+		FROM agent_messages
+		WHERE to_agent_id = ? AND status = 'queued'
+		ORDER BY urgent DESC, created_at ASC LIMIT 1`, agentID).Scan(
+		&m.ID, &m.ThreadID, &m.ParentMessageID, &m.FromAgentID, &m.ToAgentID,
+		&m.Kind, &m.Body, &m.Status, &rb, &urgent, &m.Hops, &m.CreatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return AgentMessage{}, false, tx.Commit()
+	}
+	if err != nil {
+		return AgentMessage{}, false, err
+	}
+	m.ReportBack = rb == 1
+	m.Urgent = urgent == 1
+	now := time.Now().UnixMilli()
+	res, err := tx.Exec(`UPDATE agent_messages SET status = 'delivered', delivered_at = ?
+		WHERE id = ? AND status = 'queued'`, now, m.ID)
+	if err != nil {
+		return AgentMessage{}, false, err
+	}
+	if n, _ := res.RowsAffected(); n != 1 {
+		return AgentMessage{}, false, tx.Commit()
+	}
+	if err := tx.Commit(); err != nil {
+		return AgentMessage{}, false, err
+	}
+	m.Status = "delivered"
+	m.DeliveredAt = now
+	return m, true, nil
+}
+
+// DrainQueuedAgentMessagesForThread claims only mail the active run can
+// consume. This avoids the old drain-and-requeue race where a fresh random
+// thread repeatedly bounced delegated work back to the inbox.
+func DrainQueuedAgentMessagesForThread(db *sql.DB, agentID, threadID string) ([]AgentMessage, error) {
+	if threadID == "" {
+		return nil, nil
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.Query(`
+		SELECT id, thread_id, parent_message_id, from_agent_id, to_agent_id,
+		       kind, body, status, report_back, urgent, hops, created_at
+		FROM agent_messages
+		WHERE to_agent_id = ? AND status = 'queued'
+		  AND kind NOT IN ('request', 'user')
+		  AND (thread_id = ? OR kind = 'steer')
+		ORDER BY urgent DESC, created_at ASC`, agentID, threadID)
+	if err != nil {
+		return nil, err
+	}
+	var messages []AgentMessage
+	for rows.Next() {
+		var m AgentMessage
+		var rb, urgent int
+		if err := rows.Scan(
+			&m.ID, &m.ThreadID, &m.ParentMessageID, &m.FromAgentID, &m.ToAgentID,
+			&m.Kind, &m.Body, &m.Status, &rb, &urgent, &m.Hops, &m.CreatedAt,
+		); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		m.ReportBack = rb == 1
+		m.Urgent = urgent == 1
+		messages = append(messages, m)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	now := time.Now().UnixMilli()
+	for i := range messages {
+		if _, err := tx.Exec(`UPDATE agent_messages SET status = 'delivered', delivered_at = ?
+			WHERE id = ? AND status = 'queued'`, now, messages[i].ID); err != nil {
+			return nil, err
+		}
+		messages[i].Status = "delivered"
+		messages[i].DeliveredAt = now
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return messages, nil
+}
+
 func MarkAgentMessageStatus(db *sql.DB, id, status string) error {
 	now := time.Now().UnixMilli()
+	if status == "queued" || status == "delivered" {
+		_, err := db.Exec(`UPDATE agent_messages SET status = ?, completed_at = 0 WHERE id = ?`, status, id)
+		return err
+	}
 	_, err := db.Exec(
 		`UPDATE agent_messages SET status = ?, completed_at = ? WHERE id = ?`,
 		status, now, id,

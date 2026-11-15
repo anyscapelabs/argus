@@ -16,23 +16,26 @@ import (
 
 // RemoteSpec describes a remote MCP server.
 type RemoteSpec struct {
-	ID        string
-	Name      string
-	URL       string
-	Scopes    []string
-	ProbeTool string                     // read-only tool that triggers the auth challenge; empty => not needed
-	Callback  string                     // path appended to the loopback redirect URI; providers match it exactly
-	Client    *oauthex.ClientCredentials // nil => dynamic registration
+	ID            string
+	ConnectionID  string
+	Name          string
+	URL           string
+	Scopes        []string
+	ExpectedEmail string
+	ProbeTool     string                     // read-only tool that triggers the auth challenge; empty => not needed
+	Callback      string                     // path appended to the loopback redirect URI; providers match it exactly
+	Client        *oauthex.ClientCredentials // nil => dynamic registration
 }
 
 func (m *Manager) ConnectRemote(ctx context.Context, spec RemoteSpec, interactive bool) error {
 	m.mu.RLock()
-	_, already := m.servers[spec.ID]
+	_, alreadyServer := m.servers[spec.ID]
+	_, alreadyConnection := m.connections[spec.ConnectionID]
 	m.mu.RUnlock()
-	if already {
+	if (spec.ConnectionID == "" && alreadyServer) || (spec.ConnectionID != "" && alreadyConnection) {
 		return nil
 	}
-	store := tokenStore{serverID: spec.ID}
+	store := tokenStore{serverID: spec.ID, connectionID: spec.ConnectionID}
 	redirectURL := PlaceholderRedirectURL
 	// The listener is bound before the handler is built because its port is
 	// part of the redirect URI, and the URI has to be inside the authorization
@@ -50,7 +53,7 @@ func (m *Manager) ConnectRemote(ctx context.Context, spec RemoteSpec, interactiv
 	}
 	cfg := &auth.AuthorizationCodeHandlerConfig{
 		RedirectURL:              redirectURL,
-		AuthorizationCodeFetcher: fetchCode(interactive, cb),
+		AuthorizationCodeFetcher: fetchCode(interactive, cb, spec.ExpectedEmail),
 		RequestRefreshToken:      true,
 		NewTokenSource: func(c context.Context, oc *oauth2.Config, t *oauth2.Token) (oauth2.TokenSource, error) {
 			_ = store.save(oc, t)
@@ -117,11 +120,18 @@ func (m *Manager) ConnectRemote(ctx context.Context, spec RemoteSpec, interactiv
 		return err
 	}
 	m.mu.Lock()
-	m.servers[spec.ID] = &serverConn{
-		cfg:    ServerConfig{ID: spec.ID, Name: spec.Name, Enabled: true},
-		client: client,
-		sess:   sess,
-		cancel: cancel,
+	sc := &serverConn{
+		cfg:          ServerConfig{ID: spec.ID, Name: spec.Name, Enabled: true},
+		serverID:     spec.ID,
+		connectionID: spec.ConnectionID,
+		client:       client,
+		sess:         sess,
+		cancel:       cancel,
+	}
+	if spec.ConnectionID == "" {
+		m.servers[spec.ID] = sc
+	} else {
+		m.connections[spec.ConnectionID] = sc
 	}
 	m.refreshToolsLocked()
 	m.mu.Unlock()
@@ -196,8 +206,15 @@ func oauthClientName() string {
 func (m *Manager) IsConnected(id string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	_, ok := m.servers[id]
-	return ok
+	if _, ok := m.servers[id]; ok {
+		return true
+	}
+	for _, sc := range m.connections {
+		if sc.serverID == id && sc.sess != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Manager) DisconnectServer(id string) {
@@ -211,6 +228,18 @@ func (m *Manager) DisconnectServer(id string) {
 			_ = sc.sess.Close()
 		}
 		delete(m.servers, id)
+	}
+	for connectionID, sc := range m.connections {
+		if sc.serverID != id {
+			continue
+		}
+		if sc.cancel != nil {
+			sc.cancel()
+		}
+		if sc.sess != nil {
+			_ = sc.sess.Close()
+		}
+		delete(m.connections, connectionID)
 	}
 	m.refreshToolsLocked()
 }

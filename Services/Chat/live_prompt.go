@@ -26,6 +26,17 @@ func (s *Service) liveSystemPrompt(profile Storage.AgentProfile) string {
 	b.WriteString(agentName(profile))
 	b.WriteString(", the user's personal AI assistant inside the Argus desktop app, speaking in a live voice call. ")
 	b.WriteString("Answer briefly, naturally, and conversationally. Do not read markdown, JSON, URLs, or raw tool output aloud; summarize what matters. Only say your name when directly asked.\n")
+	if role := strings.TrimSpace(profile.Role); role != "" {
+		b.WriteString("\n## Your role\n")
+		b.WriteString(role)
+		b.WriteString("\n")
+		if instructions := strings.TrimSpace(profile.RoleInstructions); instructions != "" {
+			b.WriteString(instructions)
+			b.WriteString("\n")
+		}
+	} else {
+		b.WriteString("\nWhen the user explicitly describes your job or specialty, discover and call set_my_role so it persists for teammate routing.\n")
+	}
 
 	b.WriteString("\n## Tools\n")
 	b.WriteString("- Use web_search for news, current events, live facts, and anything that may have changed. Never claim you lack web access before trying it.\n")
@@ -54,13 +65,17 @@ func (s *Service) liveSystemPrompt(profile Storage.AgentProfile) string {
 		b.WriteString("\n")
 	}
 	if s.MCPConnect != nil {
-		if integrations := s.MCPConnect.PromptBlock(false); integrations != "" {
+		if integrations := s.MCPConnect.AgentPromptBlock(profile.ID, true); integrations != "" {
 			b.WriteString(integrations)
 			b.WriteString("\n")
 		}
 	}
 	if skillsBlock := s.skillsPromptBlock(profile.ID, true); skillsBlock != "" {
 		b.WriteString(skillsBlock)
+		b.WriteString("\n")
+	}
+	if team := BuildSystemPrompt(s.Core.DB.SQL(), profile.ID, "", false); strings.TrimSpace(team) != "" {
+		b.WriteString(team)
 		b.WriteString("\n")
 	}
 	return strings.TrimSpace(b.String())

@@ -10,6 +10,7 @@ import (
 	"github.com/anyscapelabs/argus/Services/Chat"
 	"github.com/anyscapelabs/argus/Services/MCP"
 	"github.com/anyscapelabs/argus/Services/Shared"
+	"github.com/anyscapelabs/argus/Storage"
 	"github.com/google/uuid"
 )
 
@@ -93,31 +94,66 @@ func (r *LoopRunner) SendScheduledWake(agentID, text string, prepared func(Share
 	if prepared != nil {
 		prepared(Shared.SendResult{Ok: true, RunID: runID})
 	}
-	go r.run(runID, agentID, text)
+	go r.run(runID, agentID, text, nil)
 	return Shared.SendResult{Ok: true, RunID: runID}
 }
 
 // run executes one scheduled turn: the wake text as the opening user turn,
 // guarded tools, and the outcome handed to the engine when the loop settles.
-func (r *LoopRunner) run(runID, agentID, text string) {
+func (r *LoopRunner) run(runID, agentID, text string, mail *Storage.AgentMessage) {
 	defer func() {
 		r.mu.Lock()
 		delete(r.busy, agentID)
 		r.mu.Unlock()
+		r.WakeAgent(agentID)
 	}()
 
 	threadID := "thr_" + uuid.NewString()
 	hops := 0
+	delegated := false
+	if mail != nil {
+		if mail.ThreadID != "" {
+			threadID = mail.ThreadID
+		}
+		hops = mail.Hops
+		delegated = mail.Kind == "request"
+	}
+	tools := Chat.TeamToolSpecs()
+	if r.mgr != nil {
+		if projected, err := Chat.BuildAgentMCPTools(context.Background(), r.db, r.mgr, agentID); err == nil {
+			tools = append(tools, projected...)
+		}
+	}
 	cfg := Chat.LoopConfig{
 		AgentID:  agentID,
 		ThreadID: threadID,
-		System:   Chat.BuildSystemPrompt(r.db, agentID, "", false),
+		System:   Chat.StoredSystemPrompt(r.db, agentID, true, delegated),
+		Opening:  text,
+		BaseHops: hops,
+		Tools:    tools,
 		Turn:     r.turn,
 		Exec: func(ctx context.Context, cfg Chat.LoopConfig, call Chat.ToolCall) (string, error) {
-			return Chat.ExecuteGuardedTool(ctx, r.db, r.mgr, cfg.AgentID, cfg.ThreadID, hops, call.Name, call.Args, r.WakeAgent)
+			return Chat.ExecuteGuardedTool(ctx, r.db, r.mgr, cfg.AgentID, cfg.ThreadID, cfg.BaseHops, call.Name, call.Args, r.WakeAgent)
 		},
 	}
-	_, err := Chat.RunAgentLoop(context.Background(), r.db, cfg)
+	response, err := Chat.RunAgentLoop(context.Background(), r.db, cfg)
+	if mail != nil {
+		status := "completed"
+		report := response.Text
+		if err != nil {
+			status = "failed"
+			report = "Delegated run failed: " + err.Error()
+		}
+		if mail.Kind == "request" {
+			if finalizeErr := Chat.FinalizeDelegatedRun(r.db, *mail, report, status); finalizeErr != nil {
+				log.Printf("scheduler: could not finalize delegated request %s: %v", mail.ID, finalizeErr)
+			} else if mail.ReportBack {
+				r.WakeAgent(mail.FromAgentID)
+			}
+		} else {
+			_ = Storage.MarkAgentMessageStatus(r.db, mail.ID, status)
+		}
+	}
 
 	out := Chat.RunOutcome{RunID: runID, AgentID: agentID, Status: "success"}
 	if err != nil {
@@ -156,7 +192,21 @@ func (r *LoopRunner) Pump(ctx context.Context) {
 			if busyNow {
 				continue
 			}
-			go r.run("run_"+uuid.NewString(), agentID, fmt.Sprintf("[Queued work ready] Check your inbox and act on what is waiting."))
+			mail, found, err := Storage.ClaimNextAgentMessage(r.db, agentID)
+			if err != nil || !found {
+				r.mu.Lock()
+				delete(r.busy, agentID)
+				r.mu.Unlock()
+				continue
+			}
+			text := mail.Body
+			switch mail.Kind {
+			case "request":
+				text = fmt.Sprintf("[Delegated task from %s] %s", mail.FromAgentID, mail.Body)
+			case "report":
+				text = fmt.Sprintf("[Report from %s] %s", mail.FromAgentID, mail.Body)
+			}
+			go r.run("run_"+uuid.NewString(), agentID, text, &mail)
 		}
 	}
 }

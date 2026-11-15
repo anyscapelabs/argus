@@ -17,6 +17,14 @@ import * as http$0 from "../../../../../net/http/models.js";
 import * as $models from "./models.js";
 
 /**
+ * AgentPromptBlock describes only this agent's usable accounts, plus the
+ * machine-level accounts it may ask the user to bind.
+ */
+export function AgentPromptBlock(agentID: string, withTools: boolean): $CancellablePromise<string> {
+    return $Call.ByID(2530038286, agentID, withTools);
+}
+
+/**
  * BuildProviderAuthURL assembles the authorization URL for one server,
  * pinning the account picker to the expected email when the user gave one.
  */
@@ -25,12 +33,12 @@ export function BuildProviderAuthURL(serverID: string, state: string, expectedEm
 }
 
 /**
- * DisconnectConnection revokes one account: its live client cache, its token
- * and its row all go. When it was the server's last connection the shared
- * session is dropped too, so nothing lingers that the user asked to remove.
+ * DisconnectConnection derives the server from storage, refuses new calls,
+ * cancels the account session, revokes Google grants best-effort, then removes
+ * the token and row (whose bindings cascade).
  */
-export function DisconnectConnection(serverID: string, connectionID: string): $CancellablePromise<void> {
-    return $Call.ByID(3372337352, serverID, connectionID);
+export function DisconnectConnection(connectionID: string): $CancellablePromise<void> {
+    return $Call.ByID(3372337352, connectionID);
 }
 
 /**
@@ -69,6 +77,14 @@ export function Pending(agentID: string): $CancellablePromise<Shared$0.MCPConnec
 }
 
 /**
+ * PreviewDisconnect returns the account and every agent binding a disconnect
+ * would remove. The UI presents this before the destructive action.
+ */
+export function PreviewDisconnect(connectionID: string): $CancellablePromise<$models.DisconnectImpactView> {
+    return $Call.ByID(3624815620, connectionID);
+}
+
+/**
  * PromptBlock says which connectors are live at this very moment. The chat
  * rebuilds it into the system prompt on every run, so a sign-in that finished
  * after the agent last looked is already in front of it: the user never has to
@@ -80,10 +96,12 @@ export function PromptBlock(withTools: boolean): $CancellablePromise<string> {
 }
 
 /**
- * Register returns shown | pending | connected | unknown.
+ * Register returns shown | pending | connected | duplicate | unknown. A
+ * connection id requests access to an existing account; without one, a fresh
+ * account is authenticated and then bound to the requesting agent.
  */
-export function Register(agentID: string, agentName: string, serverID: string): $CancellablePromise<string> {
-    return $Call.ByID(1379753735, agentID, agentName, serverID);
+export function Register(agentID: string, agentName: string, serverID: string, label: string, expectedEmail: string, connectionID: string, accessLevel: string): $CancellablePromise<string> {
+    return $Call.ByID(1379753735, agentID, agentName, serverID, label, expectedEmail, connectionID, accessLevel);
 }
 
 /**
@@ -100,6 +118,10 @@ export function RegisterRoutes(mux: http$0.ServeMux | null): $CancellablePromise
  */
 export function RemoveBotBinding(connectionID: string, agentID: string): $CancellablePromise<void> {
     return $Call.ByID(4178573756, connectionID, agentID);
+}
+
+export function RenameConnection(connectionID: string, label: string): $CancellablePromise<void> {
+    return $Call.ByID(444303776, connectionID, label);
 }
 
 export function Respond(requestID: string, decision: string): $CancellablePromise<Shared$0.ActionResult> {

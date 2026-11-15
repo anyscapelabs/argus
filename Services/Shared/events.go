@@ -22,6 +22,7 @@ const (
 	EventMCPConnectRequested = "mcp:connect:requested"
 	EventMCPConnectResolved  = "mcp:connect:resolved"
 	EventMCPConnectStatus    = "mcp:connect:status"
+	EventIntegrationsChanged = "integrations:changed"
 	EventActivity            = "agent:activity"
 	// EventScheduleUpdated fires whenever scheduled_tasks changes — the agent
 	// created or cancelled one, or the engine advanced, retired or paused it —
@@ -36,7 +37,7 @@ const (
 	// EventArtifactUpdated fires whenever artifacts changes: the agent wrote or
 	// extended a document, or one was deleted. The Artifacts panel refetches on
 	// it, so a report appears the moment it is stored rather than on remount.
-	EventArtifactUpdated = "artifact:updated"
+	EventArtifactUpdated  = "artifact:updated"
 	EventAskUserRequested = "ask_user:requested"
 	EventAskUserResolved  = "ask_user:resolved"
 )

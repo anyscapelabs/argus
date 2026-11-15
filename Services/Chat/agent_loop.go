@@ -21,7 +21,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *Service) runTurn(runID string, ctx context.Context, cancel context.CancelFunc, agentID, assistantID, modelRef, internalKind string, req Protocol.Request, target *Protocol.Target, profile Storage.AgentProfile, mr Storage.ModelRequest) {
+func (s *Service) runTurn(runID string, ctx context.Context, cancel context.CancelFunc, agentID, assistantID, modelRef, internalKind string, req Protocol.Request, target *Protocol.Target, profile Storage.AgentProfile, mr Storage.ModelRequest, envelope *runEnvelope) {
 	defer cancel()
 	trace := &Router.Trace{}
 	total := Protocol.Usage{}
@@ -75,6 +75,13 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	// message pair, so the next send replays what was actually done and an
 	// unattended follow-up turn cannot repeat or forget earlier commands.
 	for round := 0; round < maxToolRounds && !reachedEnd && !stuck; round++ {
+		runContext := Shared.AgentRun(ctx)
+		if inbox, err := DrainRoundInbox(s.Core.DB.SQL(), agentID, runContext.ThreadID); err == nil && len(inbox) > 0 {
+			req.Messages = append(req.Messages, Protocol.Message{
+				Role:   Protocol.RoleUser,
+				Blocks: []Protocol.Block{{Type: Protocol.BlockText, Text: strings.Join(inbox, "\n\n")}},
+			})
+		}
 		if n := compactRunMessages(req.Messages, runBudget); n > 0 {
 			log.Printf("chat: run %s compacted %d earlier messages to stay inside the context window", runID, n)
 		}
@@ -114,7 +121,11 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 				} else if prevErr, hadErr := failedToolCalls[innerName]; hadErr {
 					delete(failedToolCalls, innerName)
 					if s.Core != nil && s.Core.DB != nil {
-						Memory.RecordToolLesson(s.Core.DB, agentID, innerName, prevErr, call.Input)
+						serverID := ""
+						if target, err := ResolveAgentMCPTool(s.Core.DB.SQL(), agentID, innerName); err == nil {
+							serverID = target.ServerID
+						}
+						Memory.RecordToolLesson(s.Core.DB, agentID, serverID, innerName, prevErr, call.Input)
 					}
 				}
 			}
@@ -271,6 +282,24 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 		log.Printf("chat: could not finalize model request %s: %v", finalMR.ID, err)
 	}
 
+	if envelope != nil && envelope.Delegated != nil {
+		delegationStatus := "completed"
+		report := text
+		if reqStatus != "success" {
+			delegationStatus = "failed"
+			if errorMessage != "" {
+				report = "Delegated run failed: " + errorMessage
+			} else if report == "" {
+				report = "Delegated run did not complete."
+			}
+		}
+		if err := FinalizeDelegatedRun(s.Core.DB.SQL(), *envelope.Delegated, report, delegationStatus); err != nil {
+			log.Printf("chat: could not finalize delegated request %s: %v", envelope.Delegated.ID, err)
+		} else if envelope.Delegated.ReportBack {
+			s.WakeAgent(envelope.Delegated.FromAgentID)
+		}
+	}
+
 	s.mu.Lock()
 	delete(s.agentRun, agentID)
 	delete(s.cancels, runID)
@@ -284,6 +313,7 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 		AssistantMessageID: assistantID,
 		Status:             reqStatus,
 	})
+	s.WakeAgent(agentID)
 }
 
 // persistRound writes one completed tool round-trip to the chat: the
@@ -448,20 +478,12 @@ func callSignatureFromNames(names []string) string {
 // reports must be able to change the next round's plan without racing the
 // loop's history writes.
 func DrainRoundInbox(db *sql.DB, agentID, threadID string) ([]string, error) {
-	msgs, err := Storage.DrainQueuedAgentMessages(db, agentID)
+	msgs, err := Storage.DrainQueuedAgentMessagesForThread(db, agentID, threadID)
 	if err != nil {
 		return nil, err
 	}
 	var out []string
 	for _, m := range msgs {
-		if threadID != "" && m.ThreadID != threadID && m.Kind != "steer" {
-			// A message bound to another thread stays queued for that
-			// thread's own run.
-			if err := Storage.MarkAgentMessageStatus(db, m.ID, "queued"); err != nil {
-				log.Printf("chat: could not requeue cross-thread message %s: %v", m.ID, err)
-			}
-			continue
-		}
 		var line string
 		switch m.Kind {
 		case "steer":
@@ -474,6 +496,9 @@ func DrainRoundInbox(db *sql.DB, agentID, threadID string) ([]string, error) {
 			line = fmt.Sprintf("[%s from %s] %s", m.Kind, m.FromAgentID, m.Body)
 		}
 		out = append(out, line)
+		if err := Storage.MarkAgentMessageStatus(db, m.ID, "completed"); err != nil {
+			log.Printf("chat: could not complete delivered message %s: %v", m.ID, err)
+		}
 	}
 	return out, nil
 }
@@ -482,48 +507,40 @@ func DrainRoundInbox(db *sql.DB, agentID, threadID string) ([]string, error) {
 // started this run is marked handled, and — when the delegator asked for a
 // report — the run's final text is enqueued back to them so the next round
 // boundary on their side picks it up.
-func FinalizeDelegatedRun(db *sql.DB, requestID, fromAgentID, toAgentID, report, status string) error {
-	if requestID != "" {
-		if err := Storage.MarkAgentMessageStatus(db, requestID, status); err != nil {
+func FinalizeDelegatedRun(db *sql.DB, request Storage.AgentMessage, report, status string) error {
+	if request.ID != "" {
+		if err := Storage.MarkAgentMessageStatus(db, request.ID, status); err != nil {
 			return err
 		}
 	}
-	if status != "completed" || strings.TrimSpace(report) == "" {
+	if !request.ReportBack || strings.TrimSpace(report) == "" {
 		return nil
 	}
 	return Storage.EnqueueAgentMessage(db, Storage.AgentMessage{
-		ID:          "rep_" + uuid.NewString(),
-		FromAgentID: toAgentID,
-		ToAgentID:   fromAgentID,
-		Kind:        "report",
-		Body:        strings.TrimSpace(report),
-		Status:      "queued",
+		ID:              "rep_" + uuid.NewString(),
+		ThreadID:        request.ThreadID,
+		ParentMessageID: request.ID,
+		FromAgentID:     request.ToAgentID,
+		ToAgentID:       request.FromAgentID,
+		Kind:            "report",
+		Body:            strings.TrimSpace(report),
+		Status:          "queued",
+		Hops:            request.Hops,
 	})
 }
 
 func TeamToolSpecs() []ToolSpec {
-	return []ToolSpec{
-		{
-			Name:        "list_agents",
-			Description: "List the teammate agents you may delegate tasks to, with their handles and specialties.",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{}}`),
-		},
-		{
-			Name:        "message_agent",
-			Description: "Delegate a task to a teammate agent by handle. Set report_back true to receive their report at a later round boundary.",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"to":{"type":"string","description":"Teammate @handle"},"task":{"type":"string"},"report_back":{"type":"boolean"},"urgent":{"type":"boolean"}},"required":["to","task"]}`),
-		},
-		{
-			Name:        "save_agent_note",
-			Description: "Persist a durable working-memory note for yourself across runs. An empty value deletes the note.",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"key":{"type":"string"},"value":{"type":"string"}},"required":["key"]}`),
-		},
+	defs := []Protocol.ToolDef{listAgentsToolDef, messageAgentToolDef, saveAgentNoteToolDef, setMyRoleToolDef}
+	out := make([]ToolSpec, 0, len(defs))
+	for _, def := range defs {
+		out = append(out, ToolSpec{Name: def.Name, Description: def.Description, InputSchema: def.Schema})
 	}
+	return out
 }
 
 func isTeamTool(name string) bool {
 	switch name {
-	case "list_agents", "message_agent", "save_agent_note":
+	case "list_agents", "message_agent", "save_agent_note", "set_my_role":
 		return true
 	}
 	return false
@@ -549,11 +566,21 @@ func DispatchBuiltInTeamTool(
 		var in struct {
 			Key   string `json:"key"`
 			Value string `json:"value"`
+			Scope string `json:"scope"`
 		}
 		if err := json.Unmarshal([]byte(rawArgs), &in); err != nil {
 			return "", fmt.Errorf("invalid arguments: %w", err)
 		}
-		return HandleSaveAgentNote(db, callerID, in.Key, in.Value)
+		return HandleSaveAgentNote(db, callerID, threadID, in.Key, in.Value, in.Scope)
+	case "set_my_role":
+		var in struct {
+			Role         string `json:"role"`
+			Instructions string `json:"instructions"`
+		}
+		if err := json.Unmarshal([]byte(rawArgs), &in); err != nil {
+			return "", fmt.Errorf("invalid arguments: %w", err)
+		}
+		return HandleSetAgentRole(db, callerID, in.Role, in.Instructions)
 	}
 	return "", fmt.Errorf("unknown team tool %q", name)
 }
@@ -608,8 +635,10 @@ type LoopConfig struct {
 	AgentID   string
 	ThreadID  string
 	System    string
+	Opening   string
 	BaseHops  int
 	MaxRounds int
+	Tools     []ToolSpec
 
 	Turn ModelTurn
 	Exec ToolExecutor
@@ -623,6 +652,9 @@ func RunAgentLoop(ctx context.Context, db *sql.DB, cfg LoopConfig) (ModelRespons
 
 	guard := NewRunGuard(cfg.AgentID, cfg.ThreadID, cfg.BaseHops)
 	messages := make([]LoopMessage, 0, 16)
+	if opening := strings.TrimSpace(cfg.Opening); opening != "" {
+		messages = append(messages, LoopMessage{Role: "user", Content: opening})
+	}
 	var usageIn, usageOut, toolCalls int
 	var rounds int
 

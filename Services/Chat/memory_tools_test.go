@@ -52,12 +52,12 @@ func TestRememberRequiresEvidenceFromCurrentHumanMessage(t *testing.T) {
 	}
 
 	good := runRememberTool(s, context.Background(), "run-1", "default", "", Protocol.ToolCall{
-		Input: `{"key":"writing_style","value":"Keep answers concise.","scope":"always","evidence":"I prefer concise answers"}`,
+		Input: `{"key":"writing_style","value":"Keep answers concise.","scope":"always","visibility":"global","evidence":"I prefer concise answers"}`,
 	}, memoryToolResult, func(string, string) {})
 	if good.IsError {
 		t.Fatalf("exact evidence was rejected: %+v", good)
 	}
-	memory, found, err := db.GetMemory("default", "writing_style")
+	memory, found, err := db.GetMemory(Storage.GlobalMemoryAgentID, "writing_style")
 	if err != nil || !found {
 		t.Fatalf("memory not stored: found=%v err=%v", found, err)
 	}
@@ -77,7 +77,7 @@ func TestForgetRequiresEvidenceFromCurrentHumanMessage(t *testing.T) {
 	seedMemoryToolRun(t, db, "run-2", "user-2", "assistant-2", "Please forget my writing preference now.", "")
 
 	bad := runForgetTool(s, context.Background(), "run-2", "default", "", Protocol.ToolCall{
-		Input: `{"key":"writing_style","evidence":"forget my timezone"}`,
+		Input: `{"key":"writing_style","visibility":"agent","evidence":"forget my timezone"}`,
 	}, memoryToolResult, func(string, string) {})
 	if !bad.IsError {
 		t.Fatalf("unsupported forget was accepted: %+v", bad)
@@ -87,7 +87,7 @@ func TestForgetRequiresEvidenceFromCurrentHumanMessage(t *testing.T) {
 	}
 
 	good := runForgetTool(s, context.Background(), "run-2", "default", "", Protocol.ToolCall{
-		Input: `{"key":"writing_style","evidence":"forget my writing preference"}`,
+		Input: `{"key":"writing_style","visibility":"agent","evidence":"forget my writing preference"}`,
 	}, memoryToolResult, func(string, string) {})
 	if good.IsError {
 		t.Fatalf("exact forget evidence was rejected: %+v", good)

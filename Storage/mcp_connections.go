@@ -2,6 +2,8 @@ package Storage
 
 import (
 	"database/sql"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -50,6 +52,59 @@ func CreateMCPConnection(db *sql.DB, conn MCPConnection) error {
 	return err
 }
 
+func GetMCPConnection(db *sql.DB, connectionID string) (MCPConnection, bool, error) {
+	var c MCPConnection
+	err := db.QueryRow(`SELECT id, server_id, label, account_email, expected_email, scopes, status, created_at
+		FROM mcp_connections WHERE id = ?`, connectionID).Scan(
+		&c.ID, &c.ServerID, &c.Label, &c.AccountEmail, &c.ExpectedEmail,
+		&c.Scopes, &c.Status, &c.CreatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return MCPConnection{}, false, nil
+	}
+	return c, err == nil, err
+}
+
+func SetMCPConnectionStatus(db *sql.DB, connectionID, status string) error {
+	switch status {
+	case "connected", "needs_reauth", "revoked", "disconnecting":
+	default:
+		return fmt.Errorf("invalid connection status %q", status)
+	}
+	_, err := db.Exec(`UPDATE mcp_connections SET status = ? WHERE id = ?`, status, connectionID)
+	return err
+}
+
+func UpdateMCPConnection(db *sql.DB, conn MCPConnection) error {
+	_, err := db.Exec(`UPDATE mcp_connections
+		SET label = ?, account_email = ?, expected_email = ?, scopes = ?, status = ?
+		WHERE id = ?`, strings.TrimSpace(conn.Label), strings.TrimSpace(conn.AccountEmail),
+		strings.TrimSpace(conn.ExpectedEmail), conn.Scopes, conn.Status, conn.ID)
+	return err
+}
+
+func RenameMCPConnection(db *sql.DB, connectionID, label string) error {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return fmt.Errorf("connection label is required")
+	}
+	_, err := db.Exec(`UPDATE mcp_connections SET label = ? WHERE id = ?`, label, connectionID)
+	return err
+}
+
+func ConnectionLabelExists(db *sql.DB, serverID, label, excludeID string) (bool, error) {
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return false, nil
+	}
+	var exists bool
+	err := db.QueryRow(`SELECT EXISTS(
+		SELECT 1 FROM mcp_connections
+		WHERE server_id = ? AND lower(trim(label)) = lower(trim(?)) AND id != ?
+	)`, serverID, label, excludeID).Scan(&exists)
+	return exists, err
+}
+
 func ListMCPConnections(db *sql.DB) ([]MCPConnection, error) {
 	rows, err := db.Query(`
 		SELECT id, server_id, label, account_email, expected_email, scopes, status, created_at
@@ -84,6 +139,21 @@ func DeleteMCPConnection(db *sql.DB, connectionID string) error {
 func UpsertAgentConnection(db *sql.DB, agentID, connectionID, accessLevel string) error {
 	if accessLevel == "" {
 		accessLevel = "draft"
+	}
+	if accessLevel != "read" && accessLevel != "draft" && accessLevel != "full" {
+		return fmt.Errorf("invalid access level %q", accessLevel)
+	}
+	var agentExists, connectionExists bool
+	if err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM agent_profiles WHERE id = ? AND id != ?)`,
+		agentID, GlobalMemoryAgentID).Scan(&agentExists); err != nil {
+		return err
+	}
+	if err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM mcp_connections WHERE id = ?)`,
+		connectionID).Scan(&connectionExists); err != nil {
+		return err
+	}
+	if !agentExists || !connectionExists {
+		return fmt.Errorf("agent or connection not found")
 	}
 	_, err := db.Exec(`
 		INSERT INTO agent_connections (agent_id, connection_id, access_level, created_at)

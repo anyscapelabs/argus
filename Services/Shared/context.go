@@ -8,6 +8,13 @@ import "context"
 // and anything else that would need a human can check the same flag.
 type unattendedKey struct{}
 type scheduledFireKey struct{}
+type agentRunKey struct{}
+
+type AgentRunContext struct {
+	ThreadID  string
+	Hops      int
+	Delegated bool
+}
 
 func WithUnattended(ctx context.Context) context.Context {
 	return context.WithValue(ctx, unattendedKey{}, true)
@@ -34,4 +41,16 @@ func IsScheduledFire(ctx context.Context) bool {
 	}
 	v, _ := ctx.Value(scheduledFireKey{}).(bool)
 	return v
+}
+
+func WithAgentRun(ctx context.Context, run AgentRunContext) context.Context {
+	return context.WithValue(ctx, agentRunKey{}, run)
+}
+
+func AgentRun(ctx context.Context) AgentRunContext {
+	if ctx == nil {
+		return AgentRunContext{}
+	}
+	run, _ := ctx.Value(agentRunKey{}).(AgentRunContext)
+	return run
 }

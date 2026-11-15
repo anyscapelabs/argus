@@ -282,10 +282,10 @@ type liveToolMatch struct {
 }
 
 func (s *Service) searchLiveTools(session *liveToolSession, argsJSON string) Shared.LiveToolResult {
-	return s.searchAvailableTools(session.discovered, Shared.IsScheduledFire(session.ctx), false, argsJSON)
+	return s.searchAvailableTools(session.agentID, session.discovered, Shared.IsScheduledFire(session.ctx), false, argsJSON)
 }
 
-func (s *Service) searchAvailableTools(discovered map[string]bool, scheduledFire, allowMemoryMutation bool, argsJSON string) Shared.LiveToolResult {
+func (s *Service) searchAvailableTools(agentID string, discovered map[string]bool, scheduledFire, allowMemoryMutation bool, argsJSON string) Shared.LiveToolResult {
 	var input struct {
 		Query string `json:"query"`
 		Limit int    `json:"limit"`
@@ -305,7 +305,7 @@ func (s *Service) searchAvailableTools(discovered map[string]bool, scheduledFire
 	}
 
 	var matches []liveToolMatch
-	for _, def := range s.liveToolCatalog(scheduledFire, allowMemoryMutation) {
+	for _, def := range s.liveToolCatalog(agentID, scheduledFire, allowMemoryMutation) {
 		category := liveToolCategory(def.Name)
 		score := liveToolScore(query, def, category)
 		if score == 0 {
@@ -345,17 +345,21 @@ func (s *Service) searchAvailableTools(discovered map[string]bool, scheduledFire
 	return Shared.LiveToolResult{Output: string(raw)}
 }
 
-func (s *Service) connectedServerSet() map[string]bool {
+func (s *Service) connectedServerSet(agentID string) map[string]bool {
 	out := map[string]bool{}
-	if s.MCP != nil {
-		for _, id := range s.MCP.ListServerIDs() {
-			out[id] = true
+	if s.Core == nil || s.Core.DB == nil {
+		return out
+	}
+	connections, _ := Storage.ListAgentConnectionsForAgent(s.Core.DB.SQL(), agentID)
+	for _, conn := range connections {
+		if conn.Status == "connected" {
+			out[conn.ServerID] = true
 		}
 	}
 	return out
 }
 
-func (s *Service) liveToolCatalog(scheduledFire, allowMemoryMutation bool) []Protocol.ToolDef {
+func (s *Service) liveToolCatalog(agentID string, scheduledFire, allowMemoryMutation bool) []Protocol.ToolDef {
 	defs := make([]Protocol.ToolDef, 0, len(s.baseToolDefs()))
 	for _, def := range s.baseToolDefs() {
 		if def.Name == conversationReadToolDef.Name || def.Name == webSearchToolDef.Name {
@@ -370,11 +374,14 @@ func (s *Service) liveToolCatalog(scheduledFire, allowMemoryMutation bool) []Pro
 		}
 		defs = append(defs, def)
 	}
-	if s.MCP == nil {
+	if s.MCP == nil || s.Core == nil || s.Core.DB == nil || s.MCP.Manager() == nil {
 		return defs
 	}
-	for _, serverID := range s.MCP.ListServerIDs() {
-		defs = append(defs, s.mcpServerToolDefs(serverID)...)
+	specs, _ := BuildAgentMCPTools(context.Background(), s.Core.DB.SQL(), s.MCP.Manager(), agentID)
+	for _, spec := range specs {
+		defs = append(defs, Protocol.ToolDef{
+			Name: spec.Name, Description: spec.Description, Schema: spec.InputSchema,
+		})
 	}
 	return defs
 }
@@ -477,6 +484,10 @@ func liveToolCategory(name string) string {
 		return "artifacts"
 	case "connect_mcp":
 		return "integrations"
+	case "list_agents", "message_agent", "set_my_role":
+		return "teammates and roles"
+	case "save_agent_note":
+		return "agent memory"
 	case "ask_user":
 		return "interaction"
 	default:

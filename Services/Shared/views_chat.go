@@ -6,12 +6,14 @@ import (
 )
 
 type AgentProfile struct {
-	ID           string `json:"id"`
-	Avatar       string `json:"avatar"`
-	AgentName    string `json:"agent_name"`
-	ModelRef     string `json:"model_ref"`
-	SystemPrompt string `json:"system_prompt"`
-	UpdatedAt    string `json:"updated_at"`
+	ID               string `json:"id"`
+	Avatar           string `json:"avatar"`
+	AgentName        string `json:"agent_name"`
+	ModelRef         string `json:"model_ref"`
+	SystemPrompt     string `json:"system_prompt"`
+	Role             string `json:"role"`
+	RoleInstructions string `json:"role_instructions"`
+	UpdatedAt        string `json:"updated_at"`
 }
 
 type AgentProfileResult struct {

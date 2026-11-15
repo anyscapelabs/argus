@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+
+	"github.com/anyscapelabs/argus/Keyring"
 )
 
 // accountTables lists every local table whose rows belong to whichever
@@ -19,8 +21,15 @@ var accountTables = []string{
 	"model_requests",
 	"messages",
 	"memory_exposures",
+	"memory_avoid_rules",
 	"memory_items",
 	"user_memories",
+	"learned_tool_lessons",
+	"agent_skills",
+	"agent_messages",
+	"agent_run_metrics",
+	"agent_connections",
+	"mcp_connections",
 	"scheduled_runs",
 	"scheduled_tasks",
 	"permission_notices",
@@ -28,6 +37,7 @@ var accountTables = []string{
 	"provider_selected_models",
 	"model_slots",
 	"custom_models",
+	"seq_counters",
 	"agent_profiles",
 }
 
@@ -42,6 +52,20 @@ func (db *DB) PurgeAccountTables() error {
 			_ = os.Remove(p)
 		}
 	}
+	if rows, queryErr := db.conn.Query(`SELECT server_id, id FROM mcp_connections`); queryErr == nil {
+		servers := map[string]bool{}
+		for rows.Next() {
+			var serverID, connectionID string
+			if rows.Scan(&serverID, &connectionID) == nil {
+				servers[serverID] = true
+				_ = Keyring.DeleteSecret("mcp/" + serverID + "/" + connectionID + "/session")
+			}
+		}
+		_ = rows.Close()
+		for serverID := range servers {
+			_ = Keyring.DeleteSecret("mcp/" + serverID + "/session")
+		}
+	}
 	tx, err := db.conn.Begin()
 	if err != nil {
 		return fmt.Errorf("storage: account purge begin failed: %w", err)
@@ -51,6 +75,18 @@ func (db *DB) PurgeAccountTables() error {
 			// An older schema may not have the table yet; keep going.
 			continue
 		}
+	}
+	if _, err := tx.Exec(`INSERT INTO agent_profiles
+		(id, avatar, agent_name, model_ref, system_prompt, updated_at, handle, role, role_instructions)
+		VALUES ('default', '/logo.png', 'Argus', NULL, '', ?, 'argus', '', '')`, nowRFC3339()); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("storage: account purge default agent failed: %w", err)
+	}
+	if _, err := tx.Exec(`INSERT INTO agent_profiles
+		(id, avatar, agent_name, model_ref, system_prompt, updated_at, handle, role, role_instructions)
+		VALUES (?, '', '', NULL, '', ?, '', '', '')`, GlobalMemoryAgentID, nowRFC3339()); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("storage: account purge memory owner failed: %w", err)
 	}
 	if _, err := tx.Exec("DELETE FROM account_entitlements"); err != nil {
 		_ = tx.Rollback()

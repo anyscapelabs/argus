@@ -22,10 +22,11 @@ func runRememberTool(
 	activity activityFn,
 ) Protocol.Block {
 	var input struct {
-		Key      string `json:"key"`
-		Value    string `json:"value"`
-		Scope    string `json:"scope"`
-		Evidence string `json:"evidence"`
+		Key        string `json:"key"`
+		Value      string `json:"value"`
+		Scope      string `json:"scope"`
+		Visibility string `json:"visibility"`
+		Evidence   string `json:"evidence"`
 	}
 	if Shared.IsUnattended(ctx) {
 		return result("memory cannot be changed by an unattended or scheduled run", true)
@@ -42,12 +43,18 @@ func runRememberTool(
 		return result("invalid memory key: "+kerr.Error(), true)
 	}
 	activity("tool_started", k)
+	ownerID := agentID
+	if input.Visibility == "" || input.Visibility == "global" {
+		ownerID = Storage.GlobalMemoryAgentID
+	} else if input.Visibility != "agent" {
+		return result("invalid memory visibility: use global or agent", true)
+	}
 	confidence := 0.95
-	if _, exists, _ := s.Core.DB.GetMemory(agentID, k); exists {
+	if _, exists, _ := s.Core.DB.GetMemory(ownerID, k); exists {
 		confidence = 1
 	}
 	if _, err := Memory.SaveStructured(s.Core.DB, Storage.Memory{
-		AgentID: agentID, Key: input.Key, Value: input.Value, Scope: input.Scope,
+		AgentID: ownerID, Key: input.Key, Value: input.Value, Scope: input.Scope,
 		Confidence: confidence, SourceType: "verified_user_message",
 		SourceMessageID: source.MessageID, SourceRunID: runID,
 	}); err != nil {
@@ -55,7 +62,11 @@ func runRememberTool(
 		return result("could not save the memory: "+err.Error(), true)
 	}
 	activity("tool_finished", k)
-	return result("Saved under key \""+k+"\". It will appear in your context from now on.", false)
+	visibility := "agent"
+	if ownerID == Storage.GlobalMemoryAgentID {
+		visibility = "global"
+	}
+	return result("Saved under key \""+k+"\" with "+visibility+" visibility.", false)
 }
 
 func runForgetTool(
@@ -69,8 +80,9 @@ func runForgetTool(
 	activity activityFn,
 ) Protocol.Block {
 	var input struct {
-		Key      string `json:"key"`
-		Evidence string `json:"evidence"`
+		Key        string `json:"key"`
+		Visibility string `json:"visibility"`
+		Evidence   string `json:"evidence"`
 	}
 	if Shared.IsUnattended(ctx) {
 		return result("memory cannot be changed by an unattended or scheduled run", true)
@@ -87,7 +99,13 @@ func runForgetTool(
 		return result("invalid memory key: "+err.Error(), true)
 	}
 	activity("tool_started", k)
-	found, err := Memory.ForgetStructured(s.Core.DB, agentID, input.Key)
+	ownerID := agentID
+	if input.Visibility == "" || input.Visibility == "global" {
+		ownerID = Storage.GlobalMemoryAgentID
+	} else if input.Visibility != "agent" {
+		return result("invalid memory visibility: use global or agent", true)
+	}
+	found, err := Memory.ForgetStructured(s.Core.DB, ownerID, input.Key)
 	if err != nil {
 		activity("tool_finished", k)
 		return result("could not delete the memory: "+err.Error(), true)

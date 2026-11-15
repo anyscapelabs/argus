@@ -29,7 +29,7 @@ type toolRunner func(
 // through runMCPDynamicTool below.
 var toolRunners = map[string]toolRunner{
 	"get_time_and_location": runTimeLocationTool,
-	"ask_user":             runAskUserTool,
+	"ask_user":              runAskUserTool,
 	"read_file":             runFileToolDispatch,
 	"write_file":            runFileToolDispatch,
 	"edit_file":             runFileToolDispatch,
@@ -92,13 +92,16 @@ func (s *Service) runTool(ctx context.Context, runID, agentID, agentName string,
 	if !call.Valid {
 		return result(invalidCallMessage(call.Name), true)
 	}
+	if isTeamTool(call.Name) {
+		return runTeamTool(s, ctx, runID, agentID, agentName, call, result, activity)
+	}
 	if run, ok := toolRunners[call.Name]; ok {
 		return run(s, ctx, runID, agentID, agentName, call, result, activity)
 	}
 	// Connector tools keep their namespace out of the static registry: a
 	// server publishing hundreds of schemas must not be re-registered per
 	// session, and a collision with a static name loses to the static tool.
-	if found, blk := s.runMCPDynamicTool(call, result); found {
+	if found, blk := s.runMCPDynamicTool(ctx, agentID, call, result); found {
 		return blk
 	}
 	return result("unknown tool: "+call.Name, true)

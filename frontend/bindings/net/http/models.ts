@@ -6,12 +6,12 @@
  * It matches the URL of each incoming request against a list of registered
  * patterns and calls the handler for the pattern that
  * most closely matches the URL.
- *
+ * 
  * # Patterns
- *
+ * 
  * Patterns can match the method, host and path of a request.
  * Some examples:
- *
+ * 
  *   - "/index.html" matches the path "/index.html" for any host and method.
  *   - "GET /static/" matches a GET request whose path begins with "/static/".
  *   - "example.com/" matches any request to the host "example.com".
@@ -19,48 +19,48 @@
  *   - "/b/{bucket}/o/{objectname...}" matches paths whose first segment is "b"
  *     and whose third segment is "o". The name "bucket" denotes the second
  *     segment and "objectname" denotes the remainder of the path.
- *
+ * 
  * In general, a pattern looks like
- *
+ * 
  * 	[METHOD ][HOST]/[PATH]
- *
+ * 
  * All three parts are optional; "/" is a valid pattern.
  * If METHOD is present, it must be followed by at least one space or tab.
- *
+ * 
  * Literal (that is, non-wildcard) parts of a pattern match
  * the corresponding parts of a request case-sensitively.
- *
+ * 
  * A pattern with no method matches every method. A pattern
  * with the method GET matches both GET and HEAD requests.
  * Otherwise, the method must match exactly.
- *
+ * 
  * A pattern with no host matches every host.
  * A pattern with a host matches URLs on that host only.
- *
+ * 
  * A path can include wildcard segments of the form {NAME} or {NAME...}.
  * For example, "/b/{bucket}/o/{objectname...}".
  * The wildcard name must be a valid Go identifier.
  * Wildcards must be full path segments: they must be preceded by a slash and followed by
  * either a slash or the end of the string.
  * For example, "/b_{bucket}" is not a valid pattern.
- *
+ * 
  * Normally a wildcard matches only a single path segment,
  * ending at the next literal slash (not %2F) in the request URL.
  * But if the "..." is present, then the wildcard matches the remainder of the URL path, including slashes.
  * (Therefore it is invalid for a "..." wildcard to appear anywhere but at the end of a pattern.)
  * The match for a wildcard can be obtained by calling [Request.PathValue] with the wildcard's name.
  * A trailing slash in a path acts as an anonymous "..." wildcard.
- *
+ * 
  * The special wildcard {$} matches only the end of the URL.
  * For example, the pattern "/{$}" matches only the path "/",
  * whereas the pattern "/" matches every path.
- *
+ * 
  * For matching, both pattern paths and incoming request paths are unescaped segment by segment.
  * So, for example, the path "/a%2Fb/100%25" is treated as having two segments, "a/b" and "100%".
  * The pattern "/a%2fb/" matches it, but the pattern "/a/b/" does not.
- *
+ * 
  * # Precedence
- *
+ * 
  * If two or more patterns match a request, then the most specific pattern takes precedence.
  * A pattern P1 is more specific than P2 if P1 matches a strict subset of P2’s requests;
  * that is, if P2 matches all the requests of P1 and more.
@@ -70,20 +70,20 @@
  * then the pattern with the host takes precedence.
  * If a pattern passed to [ServeMux.Handle] or [ServeMux.HandleFunc] conflicts with
  * another pattern that is already registered, those functions panic.
- *
+ * 
  * As an example of the general rule, "/images/thumbnails/" is more specific than "/images/",
  * so both can be registered.
  * The former matches paths beginning with "/images/thumbnails/"
  * and the latter will match any other path in the "/images/" subtree.
- *
+ * 
  * As another example, consider the patterns "GET /" and "/index.html":
  * both match a GET request for "/index.html", but the former pattern
  * matches all other GET and HEAD requests, while the latter matches any
  * request for "/index.html" that uses a different method.
  * The patterns conflict.
- *
+ * 
  * # Trailing-slash redirection
- *
+ * 
  * Consider a [ServeMux] with a handler for a subtree, registered using a trailing slash or "..." wildcard.
  * If the ServeMux receives a request for the subtree root without a trailing slash,
  * it redirects the request by adding the trailing slash.
@@ -91,22 +91,22 @@
  * the trailing slash or "..." wildcard. For example, registering "/images/" causes ServeMux
  * to redirect a request for "/images" to "/images/", unless "/images" has
  * been registered separately.
- *
+ * 
  * # Request sanitizing
- *
+ * 
  * ServeMux also takes care of sanitizing the URL request path and the Host
  * header, stripping the port number and redirecting any request containing . or
  * .. segments or repeated slashes to an equivalent, cleaner URL.
  * Escaped path elements such as "%2e" for "." and "%2f" for "/" are preserved
  * and aren't considered separators for request routing.
- *
+ * 
  * # Compatibility
- *
+ * 
  * The pattern syntax and matching behavior of ServeMux changed significantly
  * in Go 1.22. To restore the old behavior, set the GODEBUG environment variable
  * to "httpmuxgo121=1". This setting is read once, at program startup; changes
  * during execution will be ignored.
- *
+ * 
  * The backwards-incompatible changes include:
  *   - Wildcards are just ordinary literal path segments in 1.21.
  *     For example, the pattern "/{x}" will match only that path in 1.21,

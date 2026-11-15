@@ -15,6 +15,8 @@ type RemoteTool struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description"`
 	InputSchema json.RawMessage `json:"input_schema"`
+	ReadOnly    bool            `json:"read_only"`
+	Destructive *bool           `json:"destructive,omitempty"`
 }
 
 // Client is one connection's view of a live server session. Tools and calls
@@ -49,6 +51,8 @@ func (c *Client) Tools() []RemoteTool {
 			Name:        t.Name,
 			Description: t.Description,
 			InputSchema: schema,
+			ReadOnly:    t.Annotations != nil && t.Annotations.ReadOnlyHint,
+			Destructive: destructiveHint(t.Annotations),
 		})
 	}
 	return out
@@ -86,8 +90,12 @@ func (c *Client) Healthy() bool {
 	}
 	c.m.mu.RLock()
 	defer c.m.mu.RUnlock()
-	_, alive := c.m.servers[c.serverID]
-	return alive
+	if c.conn.connectionID != "" {
+		alive := c.m.connections[c.conn.connectionID]
+		return alive == c.conn
+	}
+	alive := c.m.servers[c.serverID]
+	return alive == c.conn
 }
 
 // Close releases this connection's reference to the session. The session
@@ -99,29 +107,45 @@ func (c *Client) Close() error {
 	return c.conn.sess.Close()
 }
 
-// GetConnectionClient returns a healthy, connection-scoped client for the
-// server a given connection belongs to. In this build remote servers
-// authenticate through the SDK's OAuth flow, which is keyed by server id and
-// shared by every account that connects to it, so the live session for
-// serverID is what backs every connection. Per-connection tokens are still
-// persisted (see sessionKey) and are what the HTTP deployment dials with; a
-// connection whose server has no live session here reports unavailable, and
-// the caller skips it exactly as it would a failed dial.
+// GetConnectionClient returns the session authenticated with this connection's
+// own token. A sibling account on the same server is intentionally not a
+// fallback: doing so would make the UI's account label disagree with the data
+// the tool can access.
 func (m *Manager) GetConnectionClient(ctx context.Context, serverID, connectionID string) (*Client, error) {
 	if connectionID == "" {
 		return nil, fmt.Errorf("missing connection_id for server %s", serverID)
 	}
 
 	m.mu.RLock()
-	sc, ok := m.servers[serverID]
+	sc, ok := m.connections[connectionID]
 	m.mu.RUnlock()
-	if !ok || sc.sess == nil {
-		return nil, fmt.Errorf("server %s is not connected; connect it before use", serverID)
+	if !ok || sc.sess == nil || sc.serverID != serverID {
+		return nil, fmt.Errorf("account %s for %s is not connected; reconnect it before use", connectionID, serverID)
 	}
 	return &Client{m: m, serverID: serverID, conn: sc}, nil
 }
 
-// CloseConnection forgets a connection's cached client, if one was kept, so a
-// revoked account stops being served from caches even while the server
-// session for its sibling accounts lives on.
-func (m *Manager) CloseConnection(connectionID string) {}
+// CloseConnection cancels in-flight calls and closes only this account's MCP
+// session. Sibling accounts use independent sessions and remain available.
+func (m *Manager) CloseConnection(connectionID string) {
+	m.mu.Lock()
+	sc := m.connections[connectionID]
+	delete(m.connections, connectionID)
+	if sc != nil {
+		if sc.cancel != nil {
+			sc.cancel()
+		}
+		if sc.sess != nil {
+			_ = sc.sess.Close()
+		}
+	}
+	m.refreshToolsLocked()
+	m.mu.Unlock()
+}
+
+func destructiveHint(a *mcp.ToolAnnotations) *bool {
+	if a == nil {
+		return nil
+	}
+	return a.DestructiveHint
+}

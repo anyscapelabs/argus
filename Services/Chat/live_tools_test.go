@@ -13,7 +13,7 @@ import (
 func TestEveryAdvertisedBaseToolHasRunner(t *testing.T) {
 	s := &Service{}
 	for _, def := range s.baseToolDefs() {
-		if _, ok := toolRunners[def.Name]; !ok {
+		if _, ok := toolRunners[def.Name]; !ok && !isTeamTool(def.Name) {
 			t.Errorf("advertised tool %q has no runner", def.Name)
 		}
 	}

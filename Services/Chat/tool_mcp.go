@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Services/MCP"
+	"github.com/anyscapelabs/argus/Services/Shared"
+	"github.com/anyscapelabs/argus/Storage"
 	"strings"
 )
 
@@ -19,7 +21,11 @@ var mcpConnectToolDef = Protocol.ToolDef{
 			"server_id": {
 				"type": "string",
 				"description": "Integration id, for example gmail"
-			}
+			},
+			"label": {"type":"string","description":"Account label, required when adding another account, e.g. Support or Legal"},
+			"expected_email": {"type":"string","description":"Optional email to pin and verify during sign-in"},
+			"connection_id": {"type":"string","description":"Existing machine account to request access to; omit for a new sign-in"},
+			"access_level": {"type":"string","enum":["read","draft","full"],"description":"Requested access, defaults to draft"}
 		},
 		"required": ["server_id"]
 	}`),
@@ -43,14 +49,19 @@ func (s *Service) connectToolDef() Protocol.ToolDef {
 		return def
 	}
 	list := strings.Join(ids, ", ")
-	def.Description = "Request the user to connect an MCP integration. Use this when the user wants to connect one of: " + list + "."
+	def.Description = "Request user-approved access to an existing account or connect a new MCP account. " +
+		"For another account include a unique label and optional expected_email. Available integrations: " + list + "."
 	def.Schema = json.RawMessage(fmt.Sprintf(`{
 		"type": "object",
 		"properties": {
 			"server_id": {
 				"type": "string",
 				"description": "One of: %s"
-			}
+			},
+			"label": {"type":"string","description":"Unique account label, e.g. Support or Legal"},
+			"expected_email": {"type":"string","description":"Optional email to pin and verify during sign-in"},
+			"connection_id": {"type":"string","description":"Existing account id from Your connected accounts; omit for new OAuth"},
+			"access_level": {"type":"string","enum":["read","draft","full"],"description":"Requested access, defaults to draft"}
 		},
 		"required": ["server_id"]
 	}`, list))
@@ -220,33 +231,26 @@ func (s *Service) runMCPLoad(call Protocol.ToolCall, loaded map[string]bool) (st
 		"If the user wants it connected, call connect_mcp with this server_id.", true)
 }
 
-func (s *Service) runMCPDynamicTool(call Protocol.ToolCall, result resultFn) (bool, Protocol.Block) {
-	if s.MCP == nil {
+func (s *Service) runMCPDynamicTool(ctx context.Context, agentID string, call Protocol.ToolCall, result resultFn) (bool, Protocol.Block) {
+	if s.MCP == nil || !strings.Contains(call.Name, "__") {
 		return false, Protocol.Block{}
 	}
-	for _, t := range s.MCP.ListTools() {
-		if mcpToolName(t.ServerID, t.Name) == call.Name {
-			var args map[string]interface{}
-			if strings.TrimSpace(call.Input) != "" {
-				_ = json.Unmarshal([]byte(call.Input), &args)
-			}
-			argsJSON, _ := json.Marshal(args)
-			out, err := s.MCP.CallTool(t.ServerID, t.Name, string(argsJSON))
-			if err != nil {
-				return true, result("integration call failed: "+err.Error(), true)
-			}
-			if out == "" {
-				out = "{}"
-			}
-			return true, result(out, false)
+	out, err := ExecuteAgentMCPTool(ctx, s.Core.DB.SQL(), s.MCP.Manager(), agentID, call.Name, call.Input)
+	if err != nil {
+		if isMCPAuthError(err) {
+			s.Core.EmitEvent(Shared.EventIntegrationsChanged, nil)
 		}
+		return true, result("integration call failed: "+err.Error(), true)
 	}
-	return false, Protocol.Block{}
+	if out == "" {
+		out = "{}"
+	}
+	return true, result(out, false)
 }
 
 func runConnectMCPTool(
 	s *Service,
-	_ context.Context,
+	ctx context.Context,
 	_ string,
 	agentID, agentName string,
 	call Protocol.ToolCall,
@@ -254,18 +258,33 @@ func runConnectMCPTool(
 	_ activityFn,
 ) Protocol.Block {
 	var input struct {
-		ServerID string `json:"server_id"`
+		ServerID      string `json:"server_id"`
+		Label         string `json:"label"`
+		ExpectedEmail string `json:"expected_email"`
+		ConnectionID  string `json:"connection_id"`
+		AccessLevel   string `json:"access_level"`
 	}
 	if err := json.Unmarshal([]byte(call.Input), &input); err != nil {
 		return result("invalid tool input: could not parse the connect_mcp arguments", true)
 	}
-	switch s.MCPConnect.Register(agentID, agentName, strings.TrimSpace(input.ServerID)) {
+	if s.MCPConnect == nil {
+		return result("integration connection service is unavailable", true)
+	}
+	if Shared.IsUnattended(ctx) {
+		return result("This run cannot open an account-approval card because no user is present. Report that access is needed, including the integration, account label or email, and requested tier.", true)
+	}
+	switch s.MCPConnect.Register(
+		agentID, agentName, strings.TrimSpace(input.ServerID), strings.TrimSpace(input.Label),
+		strings.TrimSpace(input.ExpectedEmail), strings.TrimSpace(input.ConnectionID), strings.TrimSpace(input.AccessLevel),
+	) {
 	case "shown":
 		return result("A connection card is on screen. The user must press Connect and finish sign-in in their browser. Do not say it is connected; stop and wait — the app gives you a new turn when it settles.", false)
 	case "pending":
 		return result("A connection card is already waiting for the user. Do not request another.", false)
 	case "connected":
-		return result("That integration is already connected. Use its tools.", false)
+		return result("That account is already bound to this agent. Use its tools.", false)
+	case "duplicate":
+		return result("That integration already has an account with this label. Choose the existing connection_id or use a different label.", true)
 	default:
 		return result("Unknown integration id. Valid ids: "+strings.Join(s.integrationIDs(), ", ")+".", true)
 	}
@@ -285,9 +304,41 @@ func ExecuteAgentMCPTool(ctx context.Context, db *sql.DB, mgr *MCP.Manager, agen
 		return "", err
 	}
 
+	var remote *MCP.RemoteTool
+	for _, tool := range client.Tools() {
+		if projectedMCPToolName(connectionPrefixFor(db, agentID, target.ConnectionID), tool.Name) == projectedName {
+			copy := tool
+			remote = &copy
+			target.ToolName = tool.Name
+			break
+		}
+	}
+	if remote == nil {
+		return "", fmt.Errorf("integration tool %q is no longer published by this account", projectedName)
+	}
+	if err := checkAccessTier(target.AccessLevel, *remote); err != nil {
+		return "", err
+	}
 	res, err := client.CallTool(ctx, target.ToolName, rawArgs)
 	if err != nil {
+		if isMCPAuthError(err) {
+			_ = Storage.SetMCPConnectionStatus(db, target.ConnectionID, "needs_reauth")
+		}
 		return "", err
 	}
 	return res, nil
+}
+
+func connectionPrefixFor(db *sql.DB, agentID, connectionID string) string {
+	connections, _ := Storage.ListAgentConnectionsForAgent(db, agentID)
+	return connectionPrefixes(connections)[connectionID]
+}
+
+func isMCPAuthError(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "invalid_grant") || strings.Contains(text, "unauthorized") ||
+		strings.Contains(text, "401") || strings.Contains(text, "token expired")
 }

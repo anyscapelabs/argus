@@ -196,7 +196,7 @@ const donePage = `<!doctype html>
 // returns no refresh token, so the session cannot outlive the one-hour access
 // token; prompt=consent makes Google re-issue that refresh token on every
 // sign-in instead of only on the first one.
-func installedClientURL(u string) (string, error) {
+func installedClientURL(u, expectedEmail string) (string, error) {
 	parsed, err := url.Parse(u)
 	if err != nil {
 		return "", err
@@ -206,19 +206,22 @@ func installedClientURL(u string) (string, error) {
 	}
 	q := parsed.Query()
 	q.Set("access_type", "offline")
-	q.Set("prompt", "consent")
+	q.Set("prompt", "select_account consent")
+	if expectedEmail = strings.TrimSpace(expectedEmail); expectedEmail != "" {
+		q.Set("login_hint", expectedEmail)
+	}
 	parsed.RawQuery = q.Encode()
 	return parsed.String(), nil
 }
 
 // fetchCode opens the real authorization URL and waits for the redirect on cb.
 // interactive=false is used at app start: never pop a browser unprompted.
-func fetchCode(interactive bool, cb *callback) auth.AuthorizationCodeFetcher {
+func fetchCode(interactive bool, cb *callback, expectedEmail string) auth.AuthorizationCodeFetcher {
 	return func(ctx context.Context, args *auth.AuthorizationArgs) (*auth.AuthorizationResult, error) {
 		if !interactive {
 			return nil, ErrNeedsAuth
 		}
-		target, err := installedClientURL(args.URL)
+		target, err := installedClientURL(args.URL, expectedEmail)
 		if err != nil {
 			return nil, err
 		}

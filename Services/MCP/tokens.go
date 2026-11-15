@@ -1,13 +1,20 @@
 package MCP
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/anyscapelabs/argus/Keyring"
 	"github.com/anyscapelabs/argus/Storage"
+	"github.com/modelcontextprotocol/go-sdk/oauthex"
 	"golang.org/x/oauth2"
 )
 
@@ -54,10 +61,11 @@ func (s storedSession) usable() (*oauth2.Config, *oauth2.Token, bool) {
 }
 
 type tokenStore struct {
-	serverID string
+	serverID     string
+	connectionID string
 }
 
-func (t tokenStore) ref() string { return "mcp/" + t.serverID + "/session" }
+func (t tokenStore) ref() string { return sessionKey(t.serverID, t.connectionID) }
 
 func (t tokenStore) load() (*oauth2.Config, *oauth2.Token, bool) {
 	raw, err := Keyring.GetSecret(t.ref())
@@ -101,6 +109,22 @@ func (t tokenStore) clear() { _ = Keyring.DeleteSecret(t.ref()) }
 func (t tokenStore) hasSession() bool {
 	_, _, ok := t.load()
 	return ok
+}
+
+func (t tokenStore) clientCredentials() (*oauthex.ClientCredentials, bool) {
+	raw, err := Keyring.GetSecret(t.ref())
+	if err != nil {
+		return nil, false
+	}
+	var stored storedSession
+	if json.Unmarshal([]byte(raw), &stored) != nil || stored.ClientID == "" {
+		return nil, false
+	}
+	credentials := &oauthex.ClientCredentials{ClientID: stored.ClientID}
+	if stored.ClientSecret != "" {
+		credentials.ClientSecretAuth = &oauthex.ClientSecretAuth{ClientSecret: stored.ClientSecret}
+	}
+	return credentials, true
 }
 
 // savingSource persists the session whenever the access token changes.
@@ -152,25 +176,46 @@ func DeleteSessionToken(serverID, connectionID string) error {
 	return Keyring.DeleteSecret(sessionKey(serverID, connectionID))
 }
 
+// SaveOAuthSession normalizes a provider token response into the same durable
+// session format used by the desktop SDK flow. HTTP OAuth callbacks can then
+// restore and refresh per-connection MCP sessions through the common dialer.
+func SaveOAuthSession(serverID, connectionID, clientID, clientSecret, authURL, tokenURL string, scopes []string, raw string) error {
+	var payload struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		TokenType    string `json:"token_type"`
+		ExpiresIn    int64  `json:"expires_in"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		return err
+	}
+	if payload.AccessToken == "" && payload.RefreshToken == "" {
+		return fmt.Errorf("oauth response contained no usable token")
+	}
+	token := &oauth2.Token{
+		AccessToken: payload.AccessToken, RefreshToken: payload.RefreshToken,
+		TokenType: payload.TokenType,
+	}
+	if payload.ExpiresIn > 0 {
+		token.Expiry = time.Now().Add(time.Duration(payload.ExpiresIn) * time.Second)
+	}
+	config := &oauth2.Config{
+		ClientID: clientID, ClientSecret: clientSecret, Scopes: scopes,
+		Endpoint: oauth2.Endpoint{AuthURL: authURL, TokenURL: tokenURL},
+	}
+	return tokenStore{serverID: serverID, connectionID: connectionID}.save(config, token)
+}
+
 // MigrateLegacyTokens upgrades opaque, pre-connection tokens into
 // per-connection keyring entries plus a default connection row bound to every
 // agent, so an install that signed in before connections existed keeps its
 // session and gains per-agent access tiers in one step.
-//
-// Values that parse as a storedSession are left alone: those belong to the
-// SDK OAuth flow and are keyed by server, not by account; the flow renews
-// them itself and must not be adopted as a raw connection token.
 func MigrateLegacyTokens(db *sql.DB, knownServers []string, agentIDs []string) error {
 	for _, srvID := range knownServers {
 		raw, err := Keyring.GetSecret(sessionKey(srvID, ""))
 		if err != nil || raw == "" {
 			continue
 		}
-		var probe storedSession
-		if json.Unmarshal([]byte(raw), &probe) == nil && (probe.AccessToken != "" || probe.RefreshToken != "") {
-			continue
-		}
-
 		connID := "conn_" + srvID + "_default"
 		if err := SaveSessionToken(srvID, connID, raw); err != nil {
 			return err
@@ -193,6 +238,93 @@ func MigrateLegacyTokens(db *sql.DB, knownServers []string, agentIDs []string) e
 			_ = Storage.UpsertAgentConnection(db, agID, connID, tier)
 		}
 		_ = Keyring.DeleteSecret(sessionKey(srvID, ""))
+	}
+	return nil
+}
+
+// SessionAccountEmail reads the identity attached to a Google OAuth session.
+// The token is refreshed through the same saving source used by MCP calls, so
+// an email verification cannot leave a newer access token only in memory.
+func SessionAccountEmail(ctx context.Context, serverID, connectionID string) (string, error) {
+	raw, err := LoadSessionToken(serverID, connectionID)
+	if err != nil {
+		return "", err
+	}
+	var stored storedSession
+	if err := json.Unmarshal([]byte(raw), &stored); err != nil {
+		return "", err
+	}
+	cfg, tok, ok := stored.usable()
+	if !ok {
+		return "", fmt.Errorf("stored session is not usable")
+	}
+	store := tokenStore{serverID: serverID, connectionID: connectionID}
+	source := &savingSource{src: cfg.TokenSource(ctx, tok), cfg: cfg, save: store.save, last: tok.AccessToken}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://www.googleapis.com/oauth2/v2/userinfo", nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := oauth2.NewClient(ctx, source).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return "", fmt.Errorf("userinfo failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var info struct {
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(info.Email), nil
+}
+
+// RevokeGoogleSession is best effort at the service layer: callers still
+// remove the local grant when Google's revocation endpoint is unavailable.
+func RevokeGoogleSession(ctx context.Context, serverID, connectionID string) error {
+	raw, err := LoadSessionToken(serverID, connectionID)
+	if err != nil {
+		return err
+	}
+	var tokenValue string
+	var stored storedSession
+	if json.Unmarshal([]byte(raw), &stored) == nil {
+		tokenValue = stored.RefreshToken
+		if tokenValue == "" {
+			tokenValue = stored.AccessToken
+		}
+	}
+	if tokenValue == "" {
+		var generic struct {
+			RefreshToken string `json:"refresh_token"`
+			AccessToken  string `json:"access_token"`
+		}
+		if json.Unmarshal([]byte(raw), &generic) == nil {
+			tokenValue = generic.RefreshToken
+			if tokenValue == "" {
+				tokenValue = generic.AccessToken
+			}
+		}
+	}
+	if tokenValue == "" {
+		return nil
+	}
+	form := url.Values{"token": {tokenValue}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://oauth2.googleapis.com/revoke", strings.NewReader(form.Encode()))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("oauth revoke failed (%d)", resp.StatusCode)
 	}
 	return nil
 }

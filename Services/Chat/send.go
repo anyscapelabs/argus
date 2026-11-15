@@ -41,7 +41,7 @@ const wrapUpDirective = "This run has to stop here. Do not call any more tools. 
 	"and say they can reply \"continue\" to pick up from where you stopped."
 
 func (s *Service) Send(agentID, text string) Shared.SendResult {
-	return s.send(agentID, text, nil, false, "", nil)
+	return s.send(agentID, text, nil, false, "", nil, nil)
 }
 
 // SendWithAttachments starts a turn the way Send does, but with uploaded files
@@ -50,7 +50,7 @@ func (s *Service) Send(agentID, text string) Shared.SendResult {
 // missing or unknown id fails the send rather than being silently dropped, so
 // the frontend cannot think a file was attached when it was not.
 func (s *Service) SendWithAttachments(agentID, text string, attachmentIDs []string) Shared.SendResult {
-	return s.send(agentID, text, attachmentIDs, false, "", nil)
+	return s.send(agentID, text, attachmentIDs, false, "", nil, nil)
 }
 
 // SendScheduledWake starts the turn a scheduled task's fire produces. It is
@@ -60,7 +60,7 @@ func (s *Service) SendWithAttachments(agentID, text string, attachmentIDs []stri
 // no one watching still works. The wake text the scheduler passes is
 // phrased as the job description it is, not as something a person said.
 func (s *Service) SendScheduledWake(agentID, text string, prepared func(Shared.SendResult)) Shared.SendResult {
-	return s.send(agentID, text, nil, true, Storage.MessageKindScheduled, prepared)
+	return s.send(agentID, text, nil, true, Storage.MessageKindScheduled, prepared, nil)
 }
 
 // Steer starts a run on a row the person did not type. The connector uses it
@@ -73,14 +73,20 @@ func (s *Service) SendScheduledWake(agentID, text string, prepared func(Shared.S
 // It is deliberately not exposed to the frontend: nothing but the app's own
 // services should be able to speak as the user.
 func (s *Service) Steer(agentID, text string) Shared.SendResult {
-	return s.send(agentID, text, nil, false, Storage.MessageKindSteering, nil)
+	return s.send(agentID, text, nil, false, Storage.MessageKindSteering, nil, nil)
+}
+
+type runEnvelope struct {
+	ThreadID  string
+	BaseHops  int
+	Delegated *Storage.AgentMessage
 }
 
 // unattended drives the permission gate; kind drives the row's visibility.
 // Only "", Storage.MessageKindSteering and Storage.MessageKindScheduled are
 // written today. attachmentIDs are uploaded files to fold into the user
 // message; images become vision blocks, documents become extracted text.
-func (s *Service) send(agentID, text string, attachmentIDs []string, unattended bool, kind string, prepared func(Shared.SendResult)) Shared.SendResult {
+func (s *Service) send(agentID, text string, attachmentIDs []string, unattended bool, kind string, prepared func(Shared.SendResult), envelope *runEnvelope) Shared.SendResult {
 	log.Printf("Send called agent=%s unattended=%v kind=%s", agentID, unattended, kind)
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.SendResult{Error: aerr}
@@ -267,7 +273,11 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	if scheduledFire {
 		req.Tools = withoutScheduleCreationTools(req.Tools)
 	}
-	sysPrompt := systemPromptFor(profile, withTools)
+	delegated := envelope != nil && envelope.Delegated != nil
+	sysPrompt := BuildSystemPrompt(s.Core.DB.SQL(), agentID, systemPromptFor(profile, withTools), delegated)
+	if envelope != nil {
+		sysPrompt += Memory.ThreadPrompt(s.Core.DB, envelope.ThreadID)
+	}
 	if scheduledFire {
 		sysPrompt += "\n## Active background task\nThis turn was started internally by a reminder or routine that is due now. " +
 			"Execute its stored instruction once and return only the user-facing result. " +
@@ -277,7 +287,11 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 		sysPrompt += learned
 	}
 	if s.MCP != nil {
-		if lessons := Memory.ToolLessonsPrompt(s.Core.DB, agentID, s.MCP.ListServerIDs()); lessons != "" {
+		var serverIDs []string
+		for serverID := range s.connectedServerSet(agentID) {
+			serverIDs = append(serverIDs, serverID)
+		}
+		if lessons := Memory.ToolLessonsPrompt(s.Core.DB, agentID, serverIDs); lessons != "" {
 			sysPrompt += lessons
 		}
 	}
@@ -289,7 +303,7 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	// looked needs no one telling: the run before it, the model had only its own
 	// "stop and wait" tool result to go on.
 	if s.MCPConnect != nil {
-		if live := s.MCPConnect.PromptBlock(withTools); live != "" {
+		if live := s.MCPConnect.AgentPromptBlock(agentID, withTools); live != "" {
 			sysPrompt += live
 		}
 	}
@@ -345,6 +359,17 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	}
 	s.agentRun[agentID] = runID
 	ctx, cancel := context.WithCancel(context.Background())
+	threadID := runID
+	baseHops := 0
+	if envelope != nil {
+		if envelope.ThreadID != "" {
+			threadID = envelope.ThreadID
+		}
+		baseHops = envelope.BaseHops
+	}
+	ctx = Shared.WithAgentRun(ctx, Shared.AgentRunContext{
+		ThreadID: threadID, Hops: baseHops, Delegated: delegated,
+	})
 	if unattended {
 		ctx = Shared.WithUnattended(ctx)
 	}
@@ -359,12 +384,75 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 		prepared(started)
 	}
 	s.Core.EmitEvent(Shared.EventChatRunStarted, map[string]any{"agent_id": agentID, "run_id": runID})
-	go s.runTurn(runID, ctx, cancel, agentID, assistantID, profile.ModelRef, kind, req, &target, profile, mr)
+	go s.runTurn(runID, ctx, cancel, agentID, assistantID, profile.ModelRef, kind, req, &target, profile, mr, envelope)
 
 	s.Core.EmitEvent(Shared.EventChatMessage, map[string]any{"agent_id": agentID, "message_id": userID})
 	s.Core.EmitEvent(Shared.EventChatMessage, map[string]any{"agent_id": agentID, "message_id": assistantID})
 
 	return started
+}
+
+func (s *Service) IsBusy(agentID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, busy := s.agentRun[agentID]
+	return busy
+}
+
+// WakeAgent materializes one queued mailbox item through the normal send path.
+// It never grants inherited permissions: the target run discovers only the
+// target agent's own bound tools.
+func (s *Service) WakeAgent(agentID string) {
+	go s.wakeAgent(agentID)
+}
+
+func (s *Service) wakeAgent(agentID string) {
+	if s.Core == nil || s.Core.DB == nil || s.IsBusy(agentID) {
+		return
+	}
+	message, found, err := Storage.ClaimNextAgentMessage(s.Core.DB.SQL(), agentID)
+	if err != nil || !found {
+		return
+	}
+	text := message.Body
+	kind := Storage.MessageKindSteering
+	unattended := true
+	envelope := &runEnvelope{ThreadID: message.ThreadID, BaseHops: message.Hops}
+	sender := message.FromAgentID
+	if teammate, err := Storage.GetAgentByID(s.Core.DB.SQL(), message.FromAgentID); err == nil {
+		sender = "@" + teammate.Handle
+	}
+	switch message.Kind {
+	case "request":
+		kind = Storage.MessageKindDelegated
+		text = fmt.Sprintf("[Delegated task from %s] %s", sender, message.Body)
+		envelope.Delegated = &message
+	case "report":
+		text = fmt.Sprintf("[Report from %s] %s", sender, message.Body)
+	case "user":
+		kind = ""
+		unattended = false
+	}
+	started := s.send(agentID, text, nil, unattended, kind, nil, envelope)
+	if started.Error != nil {
+		status := "failed"
+		if started.Error.Code == string(Shared.CodeBusy) {
+			status = "queued"
+		}
+		if message.Kind == "request" && status == "failed" {
+			report := "Delegated run could not start: " + started.Error.Message
+			_ = FinalizeDelegatedRun(s.Core.DB.SQL(), message, report, status)
+			if message.ReportBack {
+				s.WakeAgent(message.FromAgentID)
+			}
+		} else {
+			_ = Storage.MarkAgentMessageStatus(s.Core.DB.SQL(), message.ID, status)
+		}
+		return
+	}
+	if message.Kind != "request" {
+		_ = Storage.MarkAgentMessageStatus(s.Core.DB.SQL(), message.ID, "completed")
+	}
 }
 
 func withoutScheduleCreationTools(tools []Protocol.ToolDef) []Protocol.ToolDef {

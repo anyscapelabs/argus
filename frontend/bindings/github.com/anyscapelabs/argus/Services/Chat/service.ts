@@ -31,6 +31,10 @@ export function GetChat(agentID: string, beforeSeq: number, limit: number): $Can
     return $Call.ByID(1523637396, agentID, beforeSeq, limit);
 }
 
+export function IsBusy(agentID: string): $CancellablePromise<boolean> {
+    return $Call.ByID(131024487, agentID);
+}
+
 export function ListRequests(agentID: string, limit: number): $CancellablePromise<Shared$0.ListRequestsResult> {
     return $Call.ByID(709374876, agentID, limit);
 }
@@ -176,4 +180,13 @@ export function Stream(req: Shared$0.StreamRequest): $CancellablePromise<Shared$
 
 export function Usage(agentID: string): $CancellablePromise<Shared$0.UsageResult> {
     return $Call.ByID(2186025785, agentID);
+}
+
+/**
+ * WakeAgent materializes one queued mailbox item through the normal send path.
+ * It never grants inherited permissions: the target run discovers only the
+ * target agent's own bound tools.
+ */
+export function WakeAgent(agentID: string): $CancellablePromise<void> {
+    return $Call.ByID(1440171915, agentID);
 }

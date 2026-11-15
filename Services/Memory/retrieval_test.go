@@ -130,3 +130,47 @@ func TestAvoidMemoryExcludedFromSelectionButInjectedByBehavior(t *testing.T) {
 		t.Fatalf("avoid memory not injected as hard constraint: %q", block)
 	}
 }
+
+func TestGlobalMemoryIsSharedAndAgentMemoryOverridesIt(t *testing.T) {
+	db := memoryDB(t)
+	if err := db.SaveAgentProfile(Storage.AgentProfile{ID: "legal", AgentName: "Legal"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SaveStructured(db, Storage.Memory{
+		AgentID: Storage.GlobalMemoryAgentID, Key: "writing_style", Value: "Keep answers concise.",
+		Scope: "always", Confidence: 1, SourceType: "verified_user_message",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	selection, err := Select(db, "legal", "write a reply", 500, 8, false)
+	if err != nil || !strings.Contains(selection.Rendered, "Keep answers concise") {
+		t.Fatalf("global memory was not shared: selection=%+v err=%v", selection, err)
+	}
+	if _, err := SaveStructured(db, Storage.Memory{
+		AgentID: "legal", Key: "writing_style", Value: "Use full legal analysis.",
+		Scope: "always", Confidence: 1, SourceType: "agent_note",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	selection, err = Select(db, "legal", "write a reply", 500, 8, false)
+	if err != nil || !strings.Contains(selection.Rendered, "Use full legal analysis") || strings.Contains(selection.Rendered, "Keep answers concise") {
+		t.Fatalf("agent override did not shadow global memory: selection=%+v err=%v", selection, err)
+	}
+}
+
+func TestThreadScratchIsExcludedFromOrdinarySelection(t *testing.T) {
+	db := memoryDB(t)
+	if err := Storage.UpsertThreadScratch(db.SQL(), "thread-1", "case_number", "ACME-42"); err != nil {
+		t.Fatal(err)
+	}
+	selection, err := Select(db, "default", "ACME-42", 500, 8, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(selection.Rendered, "ACME-42") {
+		t.Fatalf("thread scratch leaked into ordinary memory: %s", selection.Rendered)
+	}
+	if prompt := ThreadPrompt(db, "thread-1"); !strings.Contains(prompt, "case_number: ACME-42") {
+		t.Fatalf("thread scratch missing from its thread: %q", prompt)
+	}
+}

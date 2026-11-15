@@ -19,6 +19,7 @@ export interface ConnectionView {
     "connection_id": string;
     "label": string;
     "account_email": string;
+    "scopes": string;
     "status": string;
     "bindings": AgentBindingView[] | null;
 }
@@ -32,4 +33,8 @@ export interface ConnectorCatalogView {
     "display_name": string;
     "multi_account": boolean;
     "connections": ConnectionView[] | null;
+}
+
+export interface DisconnectImpactView {
+    "connection": ConnectionView;
 }

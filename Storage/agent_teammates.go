@@ -65,7 +65,7 @@ func slugifyHandle(name, fallbackID string) string {
 // display name and disambiguated with a numeric suffix, so no profile is left
 // unaddressable and no two profiles share a handle.
 func backfillAgentHandles(db *sql.DB) error {
-	rows, err := db.Query(`SELECT id, agent_name FROM agent_profiles WHERE handle = ''`)
+	rows, err := db.Query(`SELECT id, agent_name FROM agent_profiles WHERE handle = '' AND id != ?`, GlobalMemoryAgentID)
 	if err != nil {
 		return err
 	}
@@ -126,8 +126,8 @@ func GetAgentByID(db *sql.DB, id string) (AgentTeammate, error) {
 // delegation prompt block and list_agents tool present them.
 func ListAgentTeammates(db *sql.DB, excludeAgentID string) ([]AgentTeammate, error) {
 	rows, err := db.Query(
-		`SELECT id, agent_name, handle, role FROM agent_profiles WHERE id != ? ORDER BY agent_name ASC`,
-		excludeAgentID,
+		`SELECT id, agent_name, handle, role FROM agent_profiles WHERE id != ? AND id != ? ORDER BY agent_name ASC`,
+		excludeAgentID, GlobalMemoryAgentID,
 	)
 	if err != nil {
 		return nil, err
@@ -148,7 +148,7 @@ func ListAgentTeammates(db *sql.DB, excludeAgentID string) ([]AgentTeammate, err
 // ListAllAgentIDs lists every agent id, used by one-time migrations that must
 // touch each profile (legacy connection seeding, for example).
 func ListAllAgentIDs(db *sql.DB) ([]string, error) {
-	rows, err := db.Query(`SELECT id FROM agent_profiles ORDER BY agent_name ASC`)
+	rows, err := db.Query(`SELECT id FROM agent_profiles WHERE id != ? ORDER BY agent_name ASC`, GlobalMemoryAgentID)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +224,8 @@ func ListAgentSummaries(db *sql.DB) ([]AgentSummary, error) {
 			           AND TRIM(COALESCE(latest.text, '')) = ''
 			           AND TRIM(COALESCE(latest.error_message, '')) = '')
 		)
-		ORDER BY CASE WHEN p.id = 'default' THEN 0 ELSE 1 END, p.agent_name ASC`)
+		WHERE p.id != ?
+		ORDER BY CASE WHEN p.id = 'default' THEN 0 ELSE 1 END, p.agent_name ASC`, GlobalMemoryAgentID)
 	if err != nil {
 		return nil, err
 	}

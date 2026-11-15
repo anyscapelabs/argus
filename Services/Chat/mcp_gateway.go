@@ -3,11 +3,12 @@ package Chat
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
+	"unicode"
 
+	"github.com/anyscapelabs/argus/Services/MCP"
 	"github.com/anyscapelabs/argus/Storage"
 )
 
@@ -35,10 +36,11 @@ func ResolveAgentMCPTool(db *sql.DB, agentID, projectedName string) (*ResolvedMC
 		return nil, err
 	}
 
+	prefixes := connectionPrefixes(conns)
 	for _, c := range conns {
-		if c.ServerID == prefix || slugPrefix(c.ServerID, c.Label) == prefix {
-			if err := checkAccessTier(c.AccessLevel, tool); err != nil {
-				return nil, err
+		if prefixes[c.ConnectionID] == prefix {
+			if c.Status != "connected" {
+				return nil, fmt.Errorf("account %s requires reconnection before use", c.Label)
 			}
 			return &ResolvedMCPTarget{
 				ConnectionID: c.ConnectionID,
@@ -51,35 +53,55 @@ func ResolveAgentMCPTool(db *sql.DB, agentID, projectedName string) (*ResolvedMC
 	return nil, fmt.Errorf("agent is not connected to integration %q", prefix)
 }
 
-// checkAccessTier encodes the tier rules. Tier words in tool names are enough
-// of a signal for a first gate: anything that smells like a send or a delete
-// is beyond draft, and anything that mutates at all is beyond read. The
-// errors carry a structured hint so the model can course-correct on the next
-// round instead of retrying a call that will always be refused.
-func checkAccessTier(tier, tool string) error {
-	t := strings.ToLower(tool)
-	isSend := strings.Contains(t, "send") || strings.Contains(t, "delete")
-	isWrite := isSend || strings.Contains(t, "create") || strings.Contains(t, "update") || strings.Contains(t, "draft")
+// checkAccessTier trusts annotations only to narrow access. Missing hints fail
+// closed for read and draft; full access is the explicit escape hatch.
+func checkAccessTier(tier string, tool MCP.RemoteTool) error {
+	if tier == "full" {
+		return nil
+	}
+	restricted := restrictedDraftAction(tool.Name)
+	if tier == "read" && tool.ReadOnly && !restricted {
+		return nil
+	}
+	if tier == "draft" && !restricted && (tool.ReadOnly || (tool.Destructive != nil && !*tool.Destructive)) {
+		return nil
+	}
+	code := "ACCESS_TIER_READ_ONLY"
+	next := "Use a read-only tool or report what access is required."
+	if tier == "draft" {
+		code = "ACCESS_TIER_DRAFT_ONLY"
+		next = "Create a non-destructive draft when the server explicitly marks that operation safe, or ask for full access."
+	}
+	return fmt.Errorf(`{"code":%q,"retryable":false,"reason":%q,"next_step":%q}`,
+		code, fmt.Sprintf("Tool %s is not allowed with %s access.", tool.Name, tier), next)
+}
 
-	if tier == "read" && isWrite {
-		payload, _ := json.Marshal(map[string]any{
-			"code":      "ACCESS_TIER_READ_ONLY",
-			"retryable": false,
-			"reason":    fmt.Sprintf("Tool %s requires draft or full access; this agent has read-only access.", tool),
-			"next_step": "Report the findings instead of mutating external state.",
-		})
-		return fmt.Errorf("%s", string(payload))
+func restrictedDraftAction(name string) bool {
+	var words strings.Builder
+	var previousLower bool
+	for _, r := range name {
+		if unicode.IsUpper(r) && previousLower {
+			words.WriteByte(' ')
+		}
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			words.WriteRune(unicode.ToLower(r))
+			previousLower = unicode.IsLower(r)
+		} else {
+			words.WriteByte(' ')
+			previousLower = false
+		}
 	}
-	if tier == "draft" && isSend {
-		payload, _ := json.Marshal(map[string]any{
-			"code":      "APPROVAL_REQUIRED_FOR_SEND",
-			"retryable": false,
-			"reason":    fmt.Sprintf("Direct send via %s is restricted under draft-tier access.", tool),
-			"next_step": "Create a draft instead and note the pending item in your report.",
-		})
-		return fmt.Errorf("%s", string(payload))
+	blocked := map[string]bool{
+		"send": true, "reply": true, "publish": true, "post": true, "submit": true,
+		"delete": true, "remove": true, "trash": true, "destroy": true, "archive": true,
+		"purge": true, "revoke": true, "cancel": true, "move": true, "spam": true,
 	}
-	return nil
+	for _, word := range strings.Fields(words.String()) {
+		if blocked[word] {
+			return true
+		}
+	}
+	return false
 }
 
 // slugPrefix builds a disambiguated tool prefix for a second account on one
@@ -89,7 +111,7 @@ func checkAccessTier(tier, tool string) error {
 func slugPrefix(serverID, label string) string {
 	s := strings.ToLower(strings.TrimSpace(label))
 	if s == "" || s == "default" {
-		return serverID
+		return normalizeMCPPrefix(serverID)
 	}
 	var b strings.Builder
 	for _, r := range s {
@@ -98,9 +120,9 @@ func slugPrefix(serverID, label string) string {
 		}
 	}
 	if b.Len() == 0 {
-		return serverID
+		return normalizeMCPPrefix(serverID)
 	}
-	return serverID + "_" + b.String()
+	return normalizeMCPPrefix(serverID) + "_" + b.String()
 }
 
 // ExecuteReadOnlyBatch runs concurrency-safe read tools in parallel while
