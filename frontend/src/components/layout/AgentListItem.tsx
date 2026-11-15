@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 import AgentGem, { isAvatarColor } from '../AgentGem'
 
 export type AgentListItemProps = {
@@ -9,6 +9,7 @@ export type AgentListItemProps = {
   time?: string
   active?: boolean
   onClick?: () => void
+  onContextMenu?: (e: MouseEvent<HTMLButtonElement>) => void
   trailing?: ReactNode
 }
 
@@ -20,11 +21,13 @@ export default function AgentListItem({
   time,
   active = false,
   onClick,
+  onContextMenu,
 }: AgentListItemProps) {
   return (
     <button
       type="button"
       onClick={onClick}
+      onContextMenu={onContextMenu}
       className={`flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left transition-colors ${
         active ? 'bg-hover-primary' : 'hover:bg-hover-primary'
       }`}

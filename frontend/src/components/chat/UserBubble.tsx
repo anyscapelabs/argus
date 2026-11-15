@@ -45,7 +45,7 @@ function UserBubble({
   const text = markerAt === -1 ? raw : raw.slice(0, markerAt).trim()
   return (
     <div
-      className={`${align === 'left' ? 'mr-auto' : 'ml-auto'} flex w-fit max-w-xl select-text flex-col gap-2 break-words rounded-xl border border-primary bg-secondary px-2 py-1 text-sm font-medium text-primary ${className}`}
+      className={`${align === 'left' ? 'mr-auto' : 'ml-auto'} flex w-fit max-w-xl select-text flex-col gap-2 break-words rounded-xl border border-accent bg-accent px-2 py-1 text-sm font-medium text-primary ${className}`}
     >
       {images.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-1">
@@ -64,9 +64,9 @@ function UserBubble({
           {files.map((name, i) => (
             <div
               key={i}
-              className="flex items-center gap-2 rounded-lg border border-secondary bg-primary px-2 py-1 text-xs text-primary"
+              className="flex items-center gap-2 rounded-lg border border-secondary bg-secondary px-2 py-1 text-xs text-primary"
             >
-              <span className="rounded bg-accent px-1 py-0.5 text-[10px] font-semibold uppercase text-black">
+              <span className="rounded bg-primary px-1 py-0.5 text-[10px] font-semibold uppercase text-primary">
                 {name.split('.').pop() || 'file'}
               </span>
               <span className="max-w-32 truncate">{name}</span>
