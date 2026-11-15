@@ -7,6 +7,7 @@ import Toolbar from './components/layout/Toolbar'
 import Sidebar from './components/layout/Sidebar'
 import { NewAgentCard } from './components/NewAgentCard'
 import SettingsSidebar from './components/settings/SettingsSidebar'
+import type { SettingsTab } from './components/settings/SettingsSidebar'
 import Spinner from './components/Spinner'
 import { getChat } from './domains/chat/api'
 import { usePairing, useAccount } from './domains/account/hooks'
@@ -15,10 +16,12 @@ const Onboarding = lazy(() => import('./pages/Onboarding'))
 const SignIn = lazy(() => import('./pages/SignIn'))
 const Home = lazy(() => import('./pages/Home'))
 const Chat = lazy(() => import('./pages/Chat'))
+const Usage = lazy(() => import('./pages/Usage'))
 const Integrations = lazy(() => import('./pages/Integrations'))
+const IntegrationDetail = lazy(() => import('./pages/IntegrationDetail'))
 const ArtifactViewer = lazy(() => import('./pages/ArtifactViewer'))
 
-type Page = 'signin' | 'onboarding' | 'home' | 'chat' | 'settings' | 'integrations'
+type Page = 'signin' | 'onboarding' | 'home' | 'chat' | 'settings' | 'integrations' | 'integration'
 
 export default function App() {
   const canvasRef = useRef<HTMLDivElement | null>(null)
@@ -31,8 +34,10 @@ export default function App() {
   const [newAgentOpen, setNewAgentOpen] = useState(false)
   const [sidebarMode, setSidebarMode] = useState<'main' | 'settings'>('main')
   const [activeAgent, setActiveAgent] = useState('default')
-  const [settingsReturn, setSettingsReturn] = useState<'home' | 'chat'>('home')
+  const [settingsReturn, setSettingsReturn] = useState<'home' | 'chat' | 'integrations'>('home')
   const [integrationsReturn, setIntegrationsReturn] = useState<'home' | 'chat'>('chat')
+  const [activeIntegration, setActiveIntegration] = useState<string | null>(null)
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('usage')
   const [pendingSend, setPendingSend] = useState<{
     id: number
     text: string
@@ -63,7 +68,7 @@ export default function App() {
 
   useEffect(() => {
     if (!booted || pairing.status === 'valid') return
-    if (page === 'home' || page === 'chat' || page === 'settings' || page === 'integrations') {
+    if (page === 'home' || page === 'chat' || page === 'settings' || page === 'integrations' || page === 'integration') {
       setPage(pairing.status === 'invalid' ? 'onboarding' : 'signin')
     }
   }, [booted, pairing.status, page])
@@ -134,7 +139,7 @@ export default function App() {
   }
 
   return (
-    <div ref={canvasRef} className="flex min-h-dvh w-full flex-col bg-primary text-grey-100">
+    <div ref={canvasRef} className="flex h-dvh w-full flex-col bg-primary text-grey-100">
       {account?.offline && (
         <div
           role="status"
@@ -231,11 +236,52 @@ export default function App() {
                 void leave.mutateAsync()
               }}
             />
-            <Integrations />
+            <Integrations
+              onManage={(id) => {
+                setActiveIntegration(id)
+                setPage('integration')
+              }}
+            />
+          </div>
+        ) : page === 'integration' ? (
+          <div className="flex min-h-0 flex-1">
+            <Sidebar
+              mode={sidebarMode}
+              onToggleSettings={() => {
+                if (sidebarMode === 'settings') {
+                  setSidebarMode('main')
+                  return
+                }
+                setSidebarMode('settings')
+                setSettingsReturn(integrationsReturn)
+                setPage('settings')
+              }}
+              onOpenIntegrations={() => {
+                setPage('integrations')
+                setSidebarMode('main')
+              }}
+              onOpenChat={() => setPage('chat')}
+              agentActive={false}
+              activeAgent={activeAgent}
+              onSelectAgent={openAgent}
+              onOpenNewAgent={() => setNewAgentOpen(true)}
+              onSignOut={() => {
+                void leave.mutateAsync()
+              }}
+            />
+            <IntegrationDetail
+              integrationId={activeIntegration ?? ''}
+              onBack={() => {
+                setPage('integrations')
+                setSidebarMode('main')
+              }}
+            />
           </div>
         ) : page === 'settings' ? (
           <div className="flex min-h-0 flex-1">
             <SettingsSidebar
+              activeTab={settingsTab}
+              onSelectTab={setSettingsTab}
               onBack={() => {
                 setSidebarMode('main')
                 setPage(settingsReturn)
@@ -243,6 +289,7 @@ export default function App() {
             />
             <div className="flex min-h-0 flex-1 flex-col">
               <Toolbar />
+              {settingsTab === 'usage' && <Usage />}
             </div>
           </div>
         ) : (

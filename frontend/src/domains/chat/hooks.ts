@@ -105,6 +105,7 @@ export function useSendMessage(agentID: string) {
       }
       qc.invalidateQueries({ queryKey: messagesKey })
       qc.invalidateQueries({ queryKey: usageKey })
+      qc.invalidateQueries({ queryKey: ['usage'] })
       qc.invalidateQueries({ queryKey: ['models', 'agents'] })
     },
   })
