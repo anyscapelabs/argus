@@ -75,6 +75,8 @@ export default function RightPanel({ agentID = 'default', onClose, onOpenArtifac
                 agent_name: agentName,
                 model_ref: profile?.model_ref ?? '',
                 system_prompt: profile?.system_prompt ?? '',
+                role: profile?.role ?? '',
+                role_instructions: profile?.role_instructions ?? '',
                 updated_at: profile?.updated_at ?? '',
               })
             }}
@@ -112,6 +114,13 @@ export default function RightPanel({ agentID = 'default', onClose, onOpenArtifac
               <span className="text-sm text-secondary">Status</span>
               <span className="text-sm font-medium text-primary">
                 {status?.busy ? 'Working' : 'Online'}
+              </span>
+            </div>
+            <div className="mx-3 border-t border-secondary" />
+            <div className="flex items-start justify-between gap-3 px-3 py-2">
+              <span className="text-sm text-secondary">Role</span>
+              <span className="max-w-40 text-right text-sm font-medium text-primary">
+                {profile?.role || 'Not set yet'}
               </span>
             </div>
             <div className="mx-3 border-t border-secondary" />
