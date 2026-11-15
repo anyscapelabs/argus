@@ -1,7 +1,18 @@
 import { FaArrowLeft } from 'react-icons/fa'
 import { IoSearch } from 'react-icons/io5'
+import { LuCircleGauge } from 'react-icons/lu'
 
-export default function SettingsSidebar({ onBack }: { onBack?: () => void }) {
+export type SettingsTab = 'usage'
+
+export default function SettingsSidebar({
+  onBack,
+  activeTab,
+  onSelectTab,
+}: {
+  onBack?: () => void
+  activeTab?: SettingsTab
+  onSelectTab?: (tab: SettingsTab) => void
+}) {
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-primary bg-sidebar self-stretch">
       <div className="flex items-center gap-2 p-1">
@@ -23,6 +34,19 @@ export default function SettingsSidebar({ onBack }: { onBack?: () => void }) {
             className="w-full bg-transparent text-sm text-primary placeholder:text-secondary focus:outline-none"
           />
         </div>
+      </div>
+      <div className="flex flex-col gap-1 px-2 pt-4">
+        <span className="px-2 text-xs font-medium uppercase tracking-wide text-secondary">Account</span>
+        <button
+          type="button"
+          onClick={() => onSelectTab?.('usage')}
+          className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-primary transition-colors hover:bg-hover-primary ${
+            activeTab === 'usage' ? 'bg-hover-primary' : ''
+          }`}
+        >
+          <LuCircleGauge size={14} />
+          Usage
+        </button>
       </div>
     </aside>
   )

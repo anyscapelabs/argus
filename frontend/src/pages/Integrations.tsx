@@ -4,7 +4,7 @@ import MCPConnectCard from '../components/mcp/MCPConnectCard'
 import { useIntegrationConnect, useIntegrations } from '../domains/mcp/hooks'
 import type { MCPConnectRequestView } from '../domains/mcp/api'
 
-export default function Integrations() {
+export default function Integrations({ onManage }: { onManage?: (serverId: string) => void }) {
   const [search, setSearch] = useState('')
   const [tab, setTab] = useState<'discover' | 'yours'>('discover')
   const { data: integrations = [], isLoading } = useIntegrations()
@@ -83,7 +83,7 @@ export default function Integrations() {
           ) : filtered.length === 0 ? (
             <div className="text-sm text-secondary">No integrations found.</div>
           ) : (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
               {filtered.map((it) => {
                 const local = states[it.id]
                 const state = local?.state ?? (it.connected ? 'connected' : 'requested')
@@ -106,7 +106,7 @@ export default function Integrations() {
                     onConnect={() => void connect(it.id)}
                     onDeny={state === 'failed' ? () => clear(it.id) : undefined}
                     onCancel={() => clear(it.id)}
-                    onRemove={state === 'connected' ? () => void disconnect(it.id) : undefined}
+                    onManage={state === 'connected' ? () => (onManage ? onManage(it.id) : void disconnect(it.id)) : undefined}
                     denyLabel="Dismiss"
                     className="max-w-none"
                   />

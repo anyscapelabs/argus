@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Events } from '@wailsio/runtime'
 import { useQueryClient } from '@tanstack/react-query'
-import { respondMCPConnect, pendingMCPConnects, listIntegrations, registerMCPConnect, disconnectIntegration, type MCPConnectRequestView, type MCPConnectState } from './api'
+import { respondMCPConnect, pendingMCPConnects, listIntegrations, registerMCPConnect, disconnectIntegration, listIntegrationCatalog, type MCPConnectRequestView, type MCPConnectState } from './api'
 import { useQuery } from '@tanstack/react-query'
 
 // The connector flow: the pending sign-in card(s) the backend holds, their
@@ -35,6 +35,10 @@ export function useMCPConnectFlow(agentID = 'default') {
             server_name: payload.server_name,
             description: payload.description,
             icon: payload.icon,
+            connection_id: payload.connection_id,
+            label: payload.label,
+            expected_email: payload.expected_email,
+            access_level: payload.access_level,
             created_at: payload.created_at || 0,
           })
         }
@@ -53,6 +57,10 @@ export function useMCPConnectFlow(agentID = 'default') {
                   server_name: payload.server_name,
                   description: payload.description,
                   icon: payload.icon,
+                  connection_id: payload.connection_id,
+                  label: payload.label,
+                  expected_email: payload.expected_email,
+                  access_level: payload.access_level,
                   created_at: payload.created_at || 0,
                 }
           ))
@@ -88,6 +96,28 @@ export function useMCPConnectFlow(agentID = 'default') {
 }
 
 
+export function useIntegrationCatalog() {
+  const query = useQuery({
+    queryKey: ['mcp', 'catalog'],
+    queryFn: listIntegrationCatalog,
+  })
+  const qc = useQueryClient()
+  useEffect(() => {
+    const refresh = () => {
+      void qc.invalidateQueries({ queryKey: ['mcp', 'catalog'] })
+    }
+    const unsubs = [
+      Events.On('integrations:changed', refresh),
+      Events.On('mcp:connect:status', (event: any) => {
+        const state = (event?.data ?? event)?.state
+        if (state === 'connected' || state === 'failed' || state === 'denied') refresh()
+      }),
+    ]
+    return () => unsubs.forEach((unsubscribe) => unsubscribe?.())
+  }, [qc])
+  return query
+}
+
 export function useIntegrations() {
   return useQuery({
     queryKey: ['mcp', 'integrations'],
@@ -100,22 +130,28 @@ export function useIntegrationConnect() {
   const [states, setStates] = useState<Record<string, { state: MCPConnectState; error?: string; requestId?: string }>>({})
 
   useEffect(() => {
-    const unsub = Events.On('mcp:connect:status', (event: any) => {
-      const payload = (event?.data ?? event) as any
-      if (!payload?.server_id || !payload?.request_id) return
-      setStates((cur) => {
-        const prev = cur[payload.server_id]
-        if (prev?.requestId && prev.requestId !== payload.request_id) return cur
-        return {
-          ...cur,
-          [payload.server_id]: { state: payload.state, error: payload.error, requestId: payload.request_id },
+    const refresh = () => {
+      void qc.invalidateQueries({ queryKey: ['mcp', 'integrations'] })
+    }
+    const unsubs = [
+      Events.On('integrations:changed', refresh),
+      Events.On('mcp:connect:status', (event: any) => {
+        const payload = (event?.data ?? event) as any
+        if (!payload?.server_id || !payload?.request_id) return
+        setStates((cur) => {
+          const prev = cur[payload.server_id]
+          if (prev?.requestId && prev.requestId !== payload.request_id) return cur
+          return {
+            ...cur,
+            [payload.server_id]: { state: payload.state, error: payload.error, requestId: payload.request_id },
+          }
+        })
+        if (payload.state === 'connected' || payload.state === 'denied' || payload.state === 'expired') {
+          refresh()
         }
-      })
-      if (payload.state === 'connected' || payload.state === 'denied' || payload.state === 'expired') {
-        qc.invalidateQueries({ queryKey: ['mcp', 'integrations'] })
-      }
-    })
-    return () => unsub && unsub()
+      }),
+    ]
+    return () => unsubs.forEach((unsubscribe) => unsubscribe?.())
   }, [qc])
 
   const connect = async (serverId: string) => {
@@ -124,42 +160,34 @@ export function useIntegrationConnect() {
       const result = await registerMCPConnect('default', 'Argus', serverId)
       if (result === 'connected') {
         setStates((cur) => ({ ...cur, [serverId]: { state: 'connected' } }))
-        qc.invalidateQueries({ queryKey: ['mcp', 'integrations'] })
+        await qc.invalidateQueries({ queryKey: ['mcp', 'integrations'] })
         return
       }
-      if (result === 'unknown') {
-        throw new Error('Unknown integration')
-      }
+      if (result === 'unknown') throw new Error('Unknown integration')
 
-      let req = (await pendingMCPConnects('default')).find(
-        (r) => r.server_id === serverId && r.state !== 'connected',
+      let request = (await pendingMCPConnects('default')).find(
+        (item) => item.server_id === serverId && item.state !== 'connected',
       )
-      if (!req && result === 'shown') {
-        await new Promise((r) => setTimeout(r, 150))
-        req = (await pendingMCPConnects('default')).find(
-          (r) => r.server_id === serverId && r.state !== 'connected',
+      if (!request && result === 'shown') {
+        await new Promise((resolve) => setTimeout(resolve, 150))
+        request = (await pendingMCPConnects('default')).find(
+          (item) => item.server_id === serverId && item.state !== 'connected',
         )
       }
-      if (!req) {
-        if (result === 'shown') {
-          setStates((cur) => ({ ...cur, [serverId]: { state: 'requested' } }))
-          return
-        }
-        throw new Error('Could not start connection')
-      }
-
+      if (!request) throw new Error('Could not start connection')
+      setStates((cur) => ({
+        ...cur,
+        [serverId]: { state: 'authorizing', requestId: request.request_id },
+      }))
+      if (request.state !== 'authorizing') await respondMCPConnect(request.request_id, 'connect')
+    } catch (error) {
       setStates((cur) => ({
         ...cur,
         [serverId]: {
-          state: req?.state === 'authorizing' ? 'authorizing' : 'authorizing',
-          requestId: req.request_id,
+          state: 'failed',
+          error: error instanceof Error ? error.message : 'Could not connect',
         },
       }))
-      if (req.state !== 'authorizing') {
-        await respondMCPConnect(req.request_id, 'connect')
-      }
-    } catch (err: any) {
-      setStates((cur) => ({ ...cur, [serverId]: { state: 'failed', error: err?.message || 'Could not connect' } }))
     }
   }
 
@@ -174,10 +202,13 @@ export function useIntegrationConnect() {
       await disconnectIntegration(serverId)
       clear(serverId)
       await qc.invalidateQueries({ queryKey: ['mcp', 'integrations'] })
-    } catch (err: any) {
+    } catch (error) {
       setStates((cur) => ({
         ...cur,
-        [serverId]: { state: 'failed', error: err?.message || 'Could not remove connector' },
+        [serverId]: {
+          state: 'failed',
+          error: error instanceof Error ? error.message : 'Could not remove connector',
+        },
       }))
     }
   }

@@ -1,5 +1,5 @@
-import { memo, useState } from 'react'
-import Markdown from 'react-markdown'
+import { memo, useMemo, useState } from 'react'
+import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { PiArrowBendUpRightFill } from 'react-icons/pi'
 import { HiDotsHorizontal } from 'react-icons/hi'
@@ -7,6 +7,9 @@ import WebsiteCard, { isHttpUrl } from './WebsiteCard'
 import CodeBlock from './CodeBlock'
 import MarkdownTable, { hasMarkdownTable } from './MarkdownTable'
 import { linkify, linkLabel } from '../../lib/linkify'
+import { mentionHandle, mentionify, MENTION_SCHEME } from '../../lib/mentions'
+import { useAgents } from '../../domains/models/hooks'
+import MentionChip from './MentionChip'
 import { ReactionBadge, ReactionPicker } from './ReactionPicker'
 
 type AgentBubbleProps = {
@@ -37,6 +40,12 @@ function AgentBubble({
   const text = content ?? children ?? ''
   const failed = status === 'error'
   const [reactionOpen, setReactionOpen] = useState(false)
+  const { data: agents } = useAgents()
+  const agentsByHandle = useMemo(
+    () => new Map((agents ?? []).filter((a) => a.handle).map((a) => [a.handle.toLowerCase(), a])),
+    [agents],
+  )
+  const handles = useMemo(() => new Set(agentsByHandle.keys()), [agentsByHandle])
 
   const actions = (onReply || onReact || onMore) ? (
     <div className={`flex shrink-0 items-center gap-1 transition-opacity ${reactionOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
@@ -95,15 +104,26 @@ function AgentBubble({
       </div>
     )
   }
+  // A bubble holding a table gets a fixed measure (full width up to 3xl) instead
+  // of shrink-to-fit. Otherwise the table's own width drives the bubble's, and
+  // the whole bubble resizes as streamed rows add wider cells.
+  const wide = hasMarkdownTable(text)
   return (
-    <div className={`group flex w-fit max-w-full items-center gap-2 ${className}`}>
-      <div className={`markdown relative ${hasMarkdownTable(text) ? 'max-w-3xl' : 'max-w-xl'} select-text break-words rounded-xl border border-primary bg-secondary px-3 py-2 text-sm`}>
+    <div className={`group flex ${wide ? 'w-full max-w-3xl' : 'w-fit max-w-full'} items-center gap-2 ${className}`}>
+      <div className={`markdown relative ${wide ? 'min-w-0 flex-1' : 'max-w-xl'} select-text break-words rounded-xl border border-primary bg-secondary px-3 py-2 text-sm`}>
         <Markdown
           remarkPlugins={[remarkGfm]}
+          urlTransform={(url) => (url.startsWith(MENTION_SCHEME) ? url : defaultUrlTransform(url))}
           components={{
             pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
             table: ({ children }) => <MarkdownTable>{children}</MarkdownTable>,
             a: ({ href, children }) => {
+              const mention = mentionHandle(href)
+              if (mention) {
+                const agent = agentsByHandle.get(mention)
+                if (agent) return <MentionChip agent={agent} />
+                return <>{children}</>
+              }
               if (!href || !isHttpUrl(href)) {
                 return (
                   <a href={href} target="_blank" rel="noreferrer">
@@ -123,7 +143,7 @@ function AgentBubble({
             },
           }}
         >
-          {linkify(text)}
+          {mentionify(linkify(text), handles)}
         </Markdown>
         {failed && error && (
           <div className="mt-1 border-t border-red-400/40 pt-1 text-xs text-red-400">

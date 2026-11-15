@@ -8,7 +8,7 @@ type MCPConnectionCardProps = {
 export default function MCPConnectionCard({
   icon = '/gmail.png',
   name = 'Gmail',
-  description = 'Let Argus send, read, and manage emails',
+  description = 'Send, read, and manage emails',
   onConnect,
 }: MCPConnectionCardProps) {
   return (

@@ -1,22 +1,24 @@
 import type { ReactNode } from 'react'
 
-// A GFM table that keeps its natural column widths. It used to be `w-full`
-// inside a shrink-to-fit bubble with `overflow-hidden`, so the browser squeezed
-// every column to its narrowest word (breaking words mid-letter) and clipped
-// whatever still did not fit. Now the table sizes to its content, never below
-// the bubble, and scrolls sideways inside its own frame when it is wider.
+// Frame for a GFM table. The grid itself is styled once, in index.css under
+// "GFM tables". The frame is a fixed-width, bordered, rounded box that clips the
+// corners and scrolls sideways when the table is wider than the bubble, so the
+// bubble never has to resize to fit its data.
 export default function MarkdownTable({ children }: { children?: ReactNode }) {
   return (
-    <div className="my-2 max-w-full overflow-x-auto rounded-2xl">
-      <table className="w-max min-w-full border-separate border-spacing-0 text-left text-xs">{children}</table>
+    <div className="my-2 max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-tertiary bg-primary [scrollbar-width:thin]">
+      <table className="text-left text-xs">{children}</table>
     </div>
   )
 }
 
-// True when the markdown holds a GFM table (a delimiter row like |---|:--:|),
-// so the bubble can allow itself more room than a plain paragraph needs.
+// A GFM delimiter row (|---|:--:|) or, while the reply is still streaming and
+// the delimiter has not arrived yet, a pipe-delimited header row. Either one
+// tells the bubble to take its table measure now, so it does not jump wider
+// the moment the delimiter row lands.
 const TABLE_DELIMITER = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/m
+const TABLE_ROW = /^\s*\|[^|\n]*\|[^|\n]*\|\s*$/m
 
 export function hasMarkdownTable(text: string): boolean {
-  return TABLE_DELIMITER.test(text)
+  return TABLE_DELIMITER.test(text) || TABLE_ROW.test(text)
 }

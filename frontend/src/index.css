@@ -286,38 +286,6 @@
   white-space: pre;
 }
 
-.markdown table {
-  background-color: var(--color-secondary);
-}
-
-.markdown thead tr th {
-  background-color: var(--color-hover-primary);
-}
-
-.markdown thead tr:first-child th:first-child {
-  border-top-left-radius: 1rem;
-}
-
-.markdown thead tr:first-child th:last-child {
-  border-top-right-radius: 1rem;
-}
-
-.markdown th {
-  font-weight: 600;
-  padding: 0.4rem 0.5rem;
-  background-color: var(--color-tertiary);
-  white-space: nowrap;
-}
-
-.markdown td {
-  padding: 0.4rem 0.5rem;
-  border-top: 1px solid var(--color-grey-700);
-  /* Floor so a column is never squeezed to a few letters; the table scrolls
-     sideways instead (see MarkdownTable). The cap keeps one long text cell
-     from stretching the whole table. */
-  min-width: 5rem;
-  max-width: 24rem;
-}
 .markdown ul {
     list-style-type: disc;
     padding-left: 1.25rem;
@@ -344,18 +312,48 @@
     font-family: 'Geist Mono Variable', monospace;
     font-size: 0.85em;
 }
+
+/* ----- GFM tables ------------------------------------------------------------
+   The single source of truth for table styling. MarkdownTable.tsx owns the
+   frame (border, radius, horizontal scroll); these rules only style the grid
+   inside it. Cell borders are right/bottom only, so adjacent cells never stack
+   into a 2px line, and the frame's radius clips the corners. */
+.markdown table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
 .markdown th,
 .markdown td {
-    border-color: #333;
-    border-width: 1px;
-    border-style: solid;
-    padding: 0.25rem 0.5rem;
-    vertical-align: top;
+  padding: 0.4rem 0.75rem;
+  vertical-align: top;
+  border-right: 1px solid var(--color-tertiary);
+  border-bottom: 1px solid var(--color-tertiary);
+  /* `.markdown` sets overflow-wrap:anywhere for long URLs, which also shrinks a
+     cell's min-content to one letter, so columns collapse and words break
+     mid-letter. Cells wrap at word boundaries and only break a word that is
+     longer than the column. */
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.markdown th:last-child,
+.markdown td:last-child {
+  border-right: 0;
+}
+.markdown tbody tr:last-child td {
+  border-bottom: 0;
 }
 .markdown th {
-    font-weight: 600;
-    background-color: #141414;
+  font-weight: 600;
+  white-space: nowrap;
+  background-color: var(--color-hover-primary);
 }
-.markdown tr:last-child td {
-    border-color: #333;
+.markdown td {
+  min-width: 6rem;
+  max-width: 24rem;
+}
+.markdown tbody tr:nth-child(even) td {
+  background-color: rgb(255 255 255 / 0.025);
 }
