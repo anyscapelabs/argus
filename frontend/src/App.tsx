@@ -21,7 +21,9 @@ const Usage = lazy(() => import('./pages/Usage'))
 const Profile = lazy(() => import('./pages/Profile'))
 const Appearance = lazy(() => import('./pages/Appearance'))
 const Notifications = lazy(() => import('./pages/Notifications'))
-const Updates = lazy(() => import('./pages/Updates'))
+const BrowserSettings = lazy(() => import('./pages/BrowserSettings'))
+const Permissions = lazy(() => import('./pages/Permissions'))
+const Billing = lazy(() => import('./pages/Billing'))
 const Integrations = lazy(() => import('./pages/Integrations'))
 const IntegrationDetail = lazy(() => import('./pages/IntegrationDetail'))
 const ArtifactViewer = lazy(() => import('./pages/ArtifactViewer'))
@@ -38,6 +40,7 @@ export default function App() {
   const [openArtifact, setOpenArtifact] = useState<string | null>(null)
   const [newAgentOpen, setNewAgentOpen] = useState(false)
   const [sidebarMode, setSidebarMode] = useState<'main' | 'settings'>('main')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [activeAgent, setActiveAgent] = useState('default')
   const [settingsReturn, setSettingsReturn] = useState<'home' | 'chat' | 'integrations'>('home')
   const [integrationsReturn, setIntegrationsReturn] = useState<'home' | 'chat'>('chat')
@@ -185,6 +188,8 @@ export default function App() {
           <div className="flex min-h-0 flex-1">
             <Sidebar
               mode={sidebarMode}
+              collapsed={sidebarCollapsed}
+              onCollapsedChange={setSidebarCollapsed}
               onToggleSettings={() => {
                 if (sidebarMode === 'settings') {
                   setSidebarMode('main')
@@ -221,6 +226,8 @@ export default function App() {
           <div className="flex min-h-0 flex-1">
             <Sidebar
               mode={sidebarMode}
+              collapsed={sidebarCollapsed}
+              onCollapsedChange={setSidebarCollapsed}
               onToggleSettings={() => {
                 if (sidebarMode === 'settings') {
                   setSidebarMode('main')
@@ -255,6 +262,8 @@ export default function App() {
           <div className="flex min-h-0 flex-1">
             <Sidebar
               mode={sidebarMode}
+              collapsed={sidebarCollapsed}
+              onCollapsedChange={setSidebarCollapsed}
               onToggleSettings={() => {
                 if (sidebarMode === 'settings') {
                   setSidebarMode('main')
@@ -301,13 +310,17 @@ export default function App() {
               {settingsTab === 'profile' && <Profile onManageBilling={() => setSettingsTab('billing')} />}
               {settingsTab === 'appearance' && <Appearance />}
               {settingsTab === 'notifications' && <Notifications />}
-              {settingsTab === 'updates' && <Updates />}
+              {settingsTab === 'browser' && <BrowserSettings />}
+              {settingsTab === 'permissions' && <Permissions />}
+              {settingsTab === 'billing' && <Billing />}
             </div>
           </div>
         ) : (
           <div className="relative flex min-h-0 flex-1">
             <Sidebar
               mode={sidebarMode}
+              collapsed={sidebarCollapsed}
+              onCollapsedChange={setSidebarCollapsed}
               onToggleSettings={() => {
                 if (sidebarMode === 'settings') {
                   setSidebarMode('main')

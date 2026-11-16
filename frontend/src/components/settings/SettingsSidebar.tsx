@@ -1,9 +1,8 @@
 import { FaArrowLeft, FaBell } from 'react-icons/fa'
-import { IoCardOutline, IoPersonCircleOutline, IoSearch, IoSunnyOutline } from 'react-icons/io5'
+import { IoCardOutline, IoGlobeOutline, IoPersonCircleOutline, IoSearch, IoShieldCheckmarkOutline, IoSunnyOutline } from 'react-icons/io5'
 import { LuCircleGauge } from 'react-icons/lu'
-import { GoDesktopDownload } from 'react-icons/go'
 
-export type SettingsTab = 'usage' | 'billing' | 'appearance' | 'updates' | 'profile' | 'notifications'
+export type SettingsTab = 'usage' | 'billing' | 'appearance' | 'profile' | 'notifications' | 'browser' | 'permissions'
 
 export default function SettingsSidebar({
   onBack,
@@ -70,6 +69,29 @@ export default function SettingsSidebar({
         </button>
       </div>
       <div className="flex flex-col gap-1 px-2 pt-4">
+        <span className="px-2 text-xs font-medium uppercase tracking-wide text-secondary">Agents</span>
+        <button
+          type="button"
+          onClick={() => onSelectTab?.('browser')}
+          className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-primary transition-colors hover:bg-hover-primary ${
+            activeTab === 'browser' ? 'bg-hover-primary' : ''
+          }`}
+        >
+          <IoGlobeOutline size={14} />
+          Browser
+        </button>
+        <button
+          type="button"
+          onClick={() => onSelectTab?.('permissions')}
+          className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-primary transition-colors hover:bg-hover-primary ${
+            activeTab === 'permissions' ? 'bg-hover-primary' : ''
+          }`}
+        >
+          <IoShieldCheckmarkOutline size={14} />
+          Permissions
+        </button>
+      </div>
+      <div className="flex flex-col gap-1 px-2 pt-4">
         <span className="px-2 text-xs font-medium uppercase tracking-wide text-secondary">Account</span>
         <button
           type="button"
@@ -92,18 +114,10 @@ export default function SettingsSidebar({
           Billing
         </button>
       </div>
-      <div className="flex flex-col gap-1 px-2 pt-4">
-        <span className="px-2 text-xs font-medium uppercase tracking-wide text-secondary">System</span>
-        <button
-          type="button"
-          onClick={() => onSelectTab?.('updates')}
-          className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-primary transition-colors hover:bg-hover-primary ${
-            activeTab === 'updates' ? 'bg-hover-primary' : ''
-          }`}
-        >
-          <GoDesktopDownload size={14} />
-          Updates
-        </button>
+      <div className="mt-auto p-3">
+        <span className="inline-flex rounded-full border border-primary px-2 py-0.5 text-xs text-secondary">
+          v0.1.0
+        </span>
       </div>
     </aside>
   )
