@@ -125,7 +125,7 @@ Tool execution is routed through chat dispatch with activity events, result hand
 
 ## Models, providers, and catalog
 
-**Primary areas:** `Services/Provider`, `Services/Models`, `Services/Catalog`, `Catalog/*`, `Provider/*`, `Router/*`, `Protocol/*`, `docs/architecture/gateway/*`
+**Primary areas:** `Services/Provider`, `Services/Models`, `Services/Catalog`, `Catalog/*`, `Provider/*`, `Router/*`, `Protocol/*`, `docs/concepts/gateway/*`
 
 - Embedded provider overlay for the routed gateway provider.
 - Catalog refresh/storage and model discovery/selection.

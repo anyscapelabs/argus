@@ -1,6 +1,6 @@
 # Argus architecture
 
-This document explains how the Argus desktop app is built, how data moves through it, and where that data lives. It is meant to be the starting point for anyone working on the codebase. For deeper dives on specific areas, see [docs/architecture/chat-pipeline.md](architecture/chat-pipeline.md) and [docs/architecture/gateway/README.md](architecture/gateway/README.md).
+This document explains how the Argus desktop app is built, how data moves through it, and where that data lives. It is meant to be the starting point for anyone working on the codebase. For deeper dives on specific areas, see [the chat pipeline](chat-pipeline.md) and [the gateway architecture](gateway/README.md).
 
 ## What Argus is
 
@@ -46,141 +46,20 @@ Generated bindings live in `frontend/bindings/`. If a Go service method signatur
 
 ## Data storage
 
-Argus stores different kinds of data in different places on purpose: structured app state in SQLite, secrets in the OS keyring, large or user-facing files on disk, and transient runtime state in memory.
+Argus stores different kinds of data in different places on purpose:
 
-### SQLite database
+- **SQLite** (`os.UserConfigDir()/argus/argus.db`) holds structured app state: messages, model request telemetry, memories, permissions, schedules, artifacts, MCP connections, and cached entitlements. The database opens in WAL mode with a single writer connection (`SetMaxOpenConns(1)`), and schema changes are versioned with `PRAGMA user_version` migrations.
+- **OS keyring** holds secrets: the paired account key and MCP OAuth/session tokens. The database and the frontend never see secret values.
+- **Disk** holds uploaded files, generated deck exports, the browser automation profile, and the catalog cache.
+- **Memory** holds runtime-only state: active runs, live MCP sessions, open browser tabs, and pending interaction cards.
 
-**Location:** `os.UserConfigDir()/argus/argus.db` (`Storage/storage.go`, `DefaultPath`).
+The full table-by-table schema, keyring refs, disk paths, and cleanup flows are in the [storage reference](../reference/storage.md).
 
-**Connection and durability settings:** `Storage.Open` creates the directory, opens the database, sets `SetMaxOpenConns(1)` so there is a single in-process writer connection, and enables:
+### Account pairing, entitlements, and data isolation
 
-- `PRAGMA journal_mode=WAL`
-- `PRAGMA busy_timeout=5000`
-- `PRAGMA foreign_keys=ON`
+The account service (`Services/Account/service.go`) manages the desktop agent key. Keys are saved to and read from the OS keyring. When a key is saved or verified, Argus calls the gateway entitlements endpoint (`/api/v1/account/entitlements`), caches a successful snapshot in SQLite, and applies the provider base URL override for routed model traffic. Cached entitlements can be served offline within a grace period (7 days); auth failures clear the cache instead of reusing it.
 
-Schema changes are managed with `PRAGMA user_version` migrations in `Storage/migrations.go` (currently migrations 1 through 21). The app runs migrations on open.
-
-### What the database stores
-
-The schema grew over time, but the main groups are stable.
-
-#### Provider, models, and agent configuration
-
-- `provider_configs`: provider metadata such as `provider_id`, `secret_ref`, `key_last4`, `validated_at`, and `base_url_override`. Secret values are not stored here.
-- `model_slots`: named slot assignments (`slot`, `model_ref`).
-- `custom_models`: user-defined model entries and capabilities/pricing metadata.
-- `provider_selected_models`: which models are selected/enabled per provider.
-- `agent_profiles`: agent identity and settings (`id`, `avatar`, `agent_name`, `model_ref`, `updated_at`, later `handle`, `role`, `role_instructions`). Special profiles include the default agent and a hidden `__global_memory__` owner used by the memory system.
-
-#### Chat history and model execution telemetry
-
-- `messages`: the conversation log. Important fields include `id`, `agent_id`, `seq`, `role` (`user` or `assistant`), `blocks_json`, `text`, `status` (`complete`, `streaming`, `error`, `cancelled`, `interrupted`), `stop_reason`, `model_ref`, timestamps, `error_message`, `error_code`, and `kind`.
-- `seq_counters`: per-agent sequence allocation (`agent_id`, `next_seq`) so message ordering stays consistent.
-- `model_requests`: one row per model call/request attempt with provider/model/adapter info, context sizing, status, HTTP/provider identifiers, stop/error details, token usage, cost, and timing fields.
-
-Message kinds used by the app include `steering`, `scheduled`, `delegated`, `tool_round`, and `file_write` (`Storage/messages.go`). Visible chat history, search, and pagination are built on top of these rows.
-
-On startup/recovery, storage can mark stranded in-flight work as interrupted (`messages` stuck in `streaming`, `model_requests` stuck in `started`) without deleting user data.
-
-#### Permissions and notices
-
-- `permission_grants`: durable per-agent tool decisions (`agent_id`, `tool`, `mode` allow/deny).
-- `permission_notices`: an audit/notice log for permission decisions and other notable events (for example MCP sign-in results), with fields like `agent_id`, `tool`, `command`, `decision`, `kind`, and `notice_text`.
-
-#### Memory and feedback
-
-- `user_memories`: legacy key/value memory table kept for migration/history.
-- `memory_items`: structured memory records (`agent_id`, `key`, `value`, `scope`, `confidence`, `source_type`, revision/source metadata, timestamps). This is the main durable memory store.
-- `memory_exposures`: which memories were shown to which model request, with position/score/token estimates.
-- `message_reactions`: user reactions on messages (`emoji`, `signal`, timestamps).
-- `memory_avoid_rules`: rules about things the agent should avoid.
-- `learned_tool_lessons`: lessons learned from tool/MCP usage per agent/server/tool.
-
-Earlier temporary agent memory storage was folded into `memory_items` as agent notes during migrations.
-
-#### Scheduler
-
-- `scheduled_tasks`: routines and reminders (`agent_id`, `kind`, `title`, `prompt`, schedule JSON, `next_run_at`, last run/status, paused flags, timestamps).
-- `scheduled_runs`: execution history for tasks (`task_id`, `agent_id`, `message_id`, status started/success/error, error text, timing).
-
-#### Artifacts
-
-- `artifacts`: saved documents/decks (`agent_id`, `title`, `format`, `body`, `words`, `bytes`, `version`, timestamps, `meta`, `kind`, `file_path`).
-- `artifact_versions`: previous versions of artifact bodies/titles for history.
-
-Document content is stored in SQLite. For deck artifacts, a rendered `.pptx` file can also be written to disk and referenced by `file_path`.
-
-#### Uploads
-
-- `attachments`: metadata for uploaded files (`agent_id`, `filename`, `mime_type`, `size_bytes`, `data_path`, `extracted_text`, `created_at`). The raw bytes live on disk; the database keeps the path and extracted text.
-
-#### MCP and multi-agent coordination
-
-- `mcp_connections`: connected MCP accounts/servers (`server_id`, label, account/expected email, scopes, status, timestamps).
-- `agent_connections`: which agent can use which MCP connection and at what access level (`read`, `draft`, `full`).
-- `agent_messages`: queued/delivered/completed messages between agents/threads (delegation/inbox mechanics).
-- `agent_run_metrics`: per-run metrics (rounds, tokens, tool calls, duration, status).
-- `agent_skills`: per-agent enabled/disabled skills.
-
-#### Account and app settings
-
-- `account_entitlements`: cached entitlements snapshot (`payload`, `fetched_at`) used for offline access within a grace period.
-- `app_settings`: lightweight key/value settings (for example tenant tracking and UI/app preferences).
-
-### OS keyring
-
-Secrets stay in the OS keyring, not in the SQLite database or frontend state.
-
-- **Paired account key:** stored under the `argus` keyring service as `account/key` (`Keyring/keyring.go`, `Services/Account/service.go`). The frontend only sees pairing/account status and errors.
-- **MCP OAuth/session secrets:** stored per server/connection (for example `mcp/<serverID>/session` or connection-specific refs) with serialized session/token material such as refresh/access tokens, expiry, scopes, and client/session metadata (`Services/MCP/tokens.go`).
-
-When account-scoped data is purged, MCP session secrets for known connections are removed from the keyring as part of cleanup.
-
-### Files on disk
-
-Besides the SQLite database, Argus writes a few kinds of files under user config/cache directories:
-
-- **Uploads:** `os.UserConfigDir()/argus/uploads/<attachment-id><ext>` (written with restrictive permissions). Uploads are validated for size/type, text is extracted for supported document types, and the file is deleted if the database insert fails.
-- **Deck exports:** `os.UserConfigDir()/argus/decks/<id>.pptx` for generated slide decks.
-- **Browser profile:** `os.UserConfigDir()/argus/browser` by default (overridable with `ARGUS_BROWSER_PROFILE_DIR`). This is an Argus-owned Chrome profile used for automation so logins/cookies/cache are isolated from the user’s normal browser.
-- **Catalog cache:** `os.UserCacheDir()/argus`, used by the catalog store/background refresh.
-- **Credential/config inputs:** MCP credential resolution can read files such as `config/<name>.json`, `.config/argus/<name>.json`, or `$HOME/.config/argus/<name>.json` depending on the connector/setup. The repo also includes `config/google.json` for development/configuration scenarios.
-
-### In-memory state
-
-Some state is intentionally ephemeral:
-
-- `Core` holds runtime handles and listeners (overlay, DB handle, catalog store, notifier, interaction/session maps).
-- Chat tracks active runs, cancellations, live tool sessions, and interactive request state.
-- MCP keeps live connections/sessions and pending connection cards in memory, while durable tokens/connections live in keyring/SQLite.
-- Browser keeps a long-lived Chrome/CDP session, open tabs/pages, takeover state, and idle timers in memory.
-- The catalog and entitlements layers combine in-memory/runtime objects with on-disk or SQLite caches.
-
-### Configuration and environment variables
-
-- `frontend/.env` (build-time): `VITE_ANYSCAPE_GATEWAY_URL` sets the gateway origin the desktop app is built against. `VITE_ARGUS_API_URL` is a deprecated alias. In practice, model traffic follows the gateway the key paired against (persisted as a provider base URL override).
-- `ARGUS_LOAD_DOTENV=1`: opt-in for development. When set, MCP credential loading may read `.env`-style files to pick up OAuth client IDs/secrets. This is off by default in packaged builds.
-- `ARGUS_BROWSER_PROFILE_DIR`: overrides the base directory for the Argus browser profile.
-
-## Account pairing, entitlements, and data isolation
-
-### Pairing and verification
-
-The account service (`Services/Account/service.go`) manages the desktop agent key. Keys are saved to and read from the OS keyring. When a key is saved or verified, Argus calls the gateway entitlements endpoint (`/api/v1/account/entitlements`) with the key, caches a successful entitlements snapshot in SQLite, and applies the provider base URL override for routed model traffic.
-
-### Offline behavior
-
-Entitlements responses are cached in `account_entitlements`. If the gateway cannot be reached, Argus can serve the cached snapshot within an offline grace period (7 days) and mark the account view as offline. Auth failures (invalid/revoked key, etc.) clear the cached entitlements instead of reusing them.
-
-### Sign-out and account switching
-
-Sign-out removes the key from the keyring, deletes the cached entitlements snapshot, and removes the router provider override.
-
-When a different account is paired, Argus isolates tenant data. `Services/Account/tenant.go` tracks the current tenant in `app_settings` (`account/tenant_user_id`). If the new user differs from the previous one, `Storage.PurgeAccountTables()` wipes account-scoped local data, removes the router provider override, and records the new tenant.
-
-The purge removes account-scoped rows across chat, memories, reactions, artifacts, attachments metadata, requests, scheduler data, permissions/notices, model/profile selections, MCP connections/bindings, skills/lessons, and agent profiles/counters. Before database deletion it best-effort deletes known attachment files from disk and removes MCP session secrets from the keyring. After the wipe it reseeds required profiles: the default agent and `__global_memory__`.
-
-Some things are not treated as tenant chat content in that purge (for example the browser profile directory and general cache directories may remain), but account-scoped secrets and conversation data are cleared so one account does not inherit another account’s local workspace.
+Sign-out removes the key, the cached snapshot, and the router override. When a different account is paired, `Services/Account/tenant.go` triggers tenant isolation: `Storage.PurgeAccountTables()` wipes account-scoped local data (chats, memories, artifacts, attachments, schedules, permissions, MCP bindings, skills, profiles), best-effort deletes known attachment files and MCP keyring secrets, and reseeds the required default profiles. This prevents one account's workspace from leaking into another on the same machine. Details are in [security](security.md) and the [storage reference](../reference/storage.md).
 
 ## Backend services and responsibilities
 
@@ -188,7 +67,7 @@ The backend is organized by domain under `Services/`. The most important ones ar
 
 - **Shared (`Services/Shared`)**: core bootstrap, event names, shared DTO/view types, typed errors, run/interaction context helpers.
 - **Account (`Services/Account`)**: key storage/verification, entitlements fetch/cache/offline handling, tenant isolation.
-- **Provider, Models, Catalog**: provider overlay/configuration, model selection/slots/profiles, catalog refresh and lookup. Details are in `docs/architecture/gateway/`.
+- **Provider, Models, Catalog**: provider overlay/configuration, model selection/slots/profiles, catalog refresh and lookup. Details are in the [gateway architecture](gateway/README.md).
 - **Chat (`Services/Chat`)**: message send/read APIs, prompt building, history replay/repair, agent loop, tool execution, streaming, reactions, ask-user, voice/live flows, takeover steering, delegation helpers.
 - **Permission (`Services/Permission`)**: policy storage and runtime approval gates for sensitive tools (terminal, file access, browser actions, skill install, browser use), including unattended-run refusal behavior.
 - **MCP (`Services/MCP`) and MCPConnect (`Services/MCPConnect`)**: MCP server/session management, OAuth flows, token persistence, per-agent connection bindings/access tiers, connect/reauth UI cards, and tool exposure.
@@ -201,7 +80,7 @@ The backend is organized by domain under `Services/`. The most important ones ar
 
 ## Chat and agent execution
 
-Chat is the central workflow in Argus. `docs/architecture/chat-pipeline.md` describes the message pipeline in detail; the short version is below.
+Chat is the central workflow in Argus. [the chat pipeline document](chat-pipeline.md) describes the message pipeline in detail; the short version is below.
 
 ### Sending a message
 
@@ -292,8 +171,9 @@ cd frontend && npm test
 
 ## Related documentation
 
-- [Chat pipeline](architecture/chat-pipeline.md): stage-by-stage behavior for chat turns, tool rounds, persistence, and presentation.
-- [Gateway overview](architecture/gateway/README.md): provider, models, and catalog service architecture.
-- [Gateway providers](architecture/gateway/providers.md), [models](architecture/gateway/models.md), [catalog](architecture/gateway/catalog.md): detailed gateway subsystem docs.
+- [Chat pipeline](chat-pipeline.md): stage-by-stage behavior for chat turns, tool rounds, persistence, and presentation.
+- [Gateway overview](gateway/README.md): provider, models, and catalog service architecture.
+- [Security](security.md): trust boundaries, secrets, and isolation behavior.
+- [Tools reference](../reference/tools.md), [events reference](../reference/events.md), [configuration reference](../reference/configuration.md), [storage reference](../reference/storage.md).
 
 If you change storage schema, service contracts, or event payloads, update the relevant docs alongside the code so this overview stays trustworthy.

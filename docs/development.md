@@ -147,7 +147,7 @@ Secrets (account key, MCP tokens/sessions) are stored in the OS keyring, not in 
 
 ## Documentation
 
-Project docs live in `docs/`. When you change architecture, storage, security behavior, or major features, update the relevant docs (and `docs/README.md` index if you add new documents).
+Project docs live in `docs/` and are indexed by [docs/README.md](README.md), organized into concepts, guides, and reference pages. When you change architecture, storage schema, events, tools, configuration, security behavior, or major features, update the relevant docs in the same change — the reference pages (`docs/reference/`) are the single source of truth for tools, events, configuration, and storage facts.
 
 ## Commits
 

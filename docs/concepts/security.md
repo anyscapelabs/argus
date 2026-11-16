@@ -35,7 +35,7 @@ The frontend receives status and data needed for the UI, but not secret material
 ### Development-only credential loading
 
 - `ARGUS_LOAD_DOTENV=1` enables opt-in loading of `.env` files for local OAuth client IDs/secrets during development (`Services/MCP/service.go`).
-- This is off by default in packaged builds. Treat `.env` and local credential files as sensitive development inputs.
+- This is off by default in packaged builds. Treat `.env` and local credential files as sensitive development inputs. See the [configuration reference](../reference/configuration.md) for the full environment variable list.
 
 ## Pairing, entitlements, and offline access
 
@@ -69,6 +69,9 @@ This prevents one account’s chats, memories, artifacts, and permissions from l
 
 ### Tool families
 
+The built-in tools and their permission families are cataloged in the
+[tools reference](../reference/tools.md). The families are:
+
 - `execute_command` (terminal commands)
 - `file_access` (read/write/edit outside the conversation context as defined by the tool path)
 - `browser_action` (sensitive browser actions such as submit/send/purchase/post/delete; can be host-scoped)
@@ -100,13 +103,14 @@ This prevents one account’s chats, memories, artifacts, and permissions from l
 
 ## Data at rest and local files
 
-- **SQLite database:** `os.UserConfigDir()/argus/argus.db` (WAL, foreign keys enabled). Contains app state, history, metadata, and cached entitlements, but not keyring secrets.
-- **Uploads:** stored under `os.UserConfigDir()/argus/uploads/` with restrictive file permissions; metadata and extracted text are stored in `attachments`.
-- **Generated deck files:** stored under `os.UserConfigDir()/argus/decks/` and referenced from artifacts when applicable.
-- **Catalog cache:** stored under `os.UserCacheDir()/argus`.
-- **Browser profile:** stored under the Argus browser profile directory.
+Argus keeps structured state in SQLite, secrets in the OS keyring, user-facing
+files on disk, and runtime state in memory. The full table-by-table schema,
+keyring refs, disk paths, and cleanup flows are in the
+[storage reference](../reference/storage.md); the security-relevant points are:
 
-Temporary files may be used during exports, uploads, or browser operations, but durable user data is kept in the locations above.
+- The database contains app state, history, metadata, and cached entitlements — never keyring secrets.
+- Uploads are written with restrictive file permissions.
+- Temporary files may be used during exports, uploads, or browser operations, but durable user data stays in the documented locations.
 
 ## Network and model traffic
 
@@ -116,7 +120,7 @@ Temporary files may be used during exports, uploads, or browser operations, but 
 
 ## Logging and diagnostics
 
-- The app emits runtime events for UI/state coordination (chat, permissions, MCP connect, schedule, etc.).
+- The app emits runtime events for UI/state coordination (chat, permissions, MCP connect, schedule, etc.; see the [events reference](../reference/events.md)).
 - Notices and request records (for example permission notices and model request telemetry) are stored to support auditing and debugging. Avoid logging or persisting raw secrets; key material belongs in the keyring.
 
 ## Security-relevant practices for contributors

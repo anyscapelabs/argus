@@ -57,7 +57,5 @@ Failure paths are handled where they start, not by the filter:
   one tool at a time, starting with the ones that already have their own file.
 - `Chat.tsx` builds the transcript in a 130-line `useMemo`. Extract it to a pure
   `buildTranscript()` in `domains/chat/` with unit tests.
-- `StripLeadingTitle` runs in three places (live filter, history, display); fold
-  it into `Present` behind the same entry point.
 - Rows stored before this change can still contain a pasted document; a one-off
   backfill using the same filter can clean them.

@@ -6,16 +6,16 @@ Argus is a desktop AI agent app with durable chat history, artifacts, voice, MCP
 
 Start with the docs index: [docs/README.md](docs/README.md)
 
-- [Architecture overview](docs/architecture.md)
-- [Security](docs/security.md)
-- [Data and storage](docs/data-storage.md)
-- [Services and features](docs/services-and-features.md)
+- [Architecture overview](docs/concepts/architecture.md)
+- [Security](docs/concepts/security.md)
+- [Data and storage](docs/reference/storage.md)
+- [Services and features](docs/reference/features.md)
 - [Development guide](docs/development.md)
-- [Chat pipeline](docs/architecture/chat-pipeline.md)
-- [Gateway architecture](docs/architecture/gateway/README.md)
-  - [Providers](docs/architecture/gateway/providers.md)
-  - [Models](docs/architecture/gateway/models.md)
-  - [Catalog](docs/architecture/gateway/catalog.md)
+- [Chat pipeline](docs/concepts/chat-pipeline.md)
+- [Gateway architecture](docs/concepts/gateway/README.md)
+  - [Providers](docs/concepts/gateway/providers.md)
+  - [Models](docs/concepts/gateway/models.md)
+  - [Catalog](docs/concepts/gateway/catalog.md)
 
 ## Quick start
 
@@ -71,4 +71,4 @@ Key configuration points:
 - Sensitive tool actions go through permission checks; unattended runs refuse interactive approvals.
 - Signing out clears pairing/entitlement state. Pairing a different account wipes account-scoped local data to prevent cross-tenant leakage.
 
-For details, see [docs/security.md](docs/security.md) and [docs/data-storage.md](docs/data-storage.md).
+For details, see [docs/concepts/security.md](docs/concepts/security.md) and [docs/reference/storage.md](docs/reference/storage.md).
