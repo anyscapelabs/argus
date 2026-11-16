@@ -1,63 +1,74 @@
-# Argus Agent (desktop)
+# Argus
 
-AI agent desktop app: chat with durable history, artifacts, voice, MCP tools
-and browser automation. Wails v3 (Go) backend + React 18 frontend.
+Argus is a desktop AI agent app with durable chat history, artifacts, voice, MCP integrations, browser automation, and scheduled work. It uses a Wails v3 (Go) backend and a React 18 frontend.
 
-## Develop
+## Documentation
 
-Requirements: Go 1.25+, Node 24+, [`wails3`](https://v3.wails.io/).
+Start with the docs index: [docs/README.md](docs/README.md)
+
+- [Architecture overview](docs/architecture.md)
+- [Security](docs/security.md)
+- [Data and storage](docs/data-storage.md)
+- [Services and features](docs/services-and-features.md)
+- [Development guide](docs/development.md)
+- [Chat pipeline](docs/architecture/chat-pipeline.md)
+- [Gateway architecture](docs/architecture/gateway/README.md)
+  - [Providers](docs/architecture/gateway/providers.md)
+  - [Models](docs/architecture/gateway/models.md)
+  - [Catalog](docs/architecture/gateway/catalog.md)
+
+## Quick start
+
+Requirements: Go (see `go.mod`), Node.js/npm, and the [Wails v3 CLI](https://v3.wails.io/).
 
 ```sh
-# frontend
+# install frontend dependencies
 cd frontend && npm install
 
 # run the app with hot reload
+cd ..
 wails3 dev -config ./build/config.yml -port 9245
 ```
 
-## Build / test
+## Build and test
 
 ```sh
-wails3 build                     # production binary for the host OS
+# production build
+wails3 build
+
+# tests
 go test $(go list ./... | grep -v build/ios)
-cd frontend && npm test          # vitest suite (also: task test:frontend)
+cd frontend && npm test
 ```
 
-## Architecture
+You can also use Task targets from `Taskfile.yml` (for example `task dev`, `task build`, `task test`).
 
-- `frontend/` — React UI. Pairs with the backend over generated Wails
-  bindings (`frontend/bindings`, regenerated after Go signature changes with
-  `wails3 generate bindings`).
-- `Storage/` — SQLite store (WAL; one writer). Message history, artifacts,
-  memories, scheduled tasks, seq counters, etc.
-- `Services/` — domain services: chat (history builder, streaming), models,
-  account (pairing/entitlements), MCP, integrations, uploads, scheduler.
-- `Provider/` — the single embedded provider overlay (`argus-router`,
-  OpenAI-compatible) targeted at the Anyscape Gateway.
+## Project layout
 
-## Pairing the agent
+- `frontend/` — React UI, domain hooks/API wrappers, and generated Wails bindings (`frontend/bindings/`)
+- `Services/` — backend domains (chat, account, permissions, MCP, browser, scheduler, artifacts, uploads, skills, etc.)
+- `Storage/` — SQLite database, migrations, and persistence helpers
+- `Provider/`, `Catalog/`, `Router/`, `Protocol/` — provider overlay, catalog, routing, and model protocol adapters
+- `Keyring/` — OS keyring integration for secrets
+- `docs/` — architecture, security, storage, and development documentation
 
-1. Create a service-account key in the Anyscape Gateway console
-   (Settings → Service Accounts).
-2. Paste it into the app's sign-in screen. The key is verified against the
-   gateway and stored in the OS keyring — never on disk in plaintext.
-3. The app works offline for up to 7 days on the last synced entitlement.
+## Pairing and configuration
 
-## Configuration
+1. Create a service-account key in the Anyscape Gateway console (Settings → Service Accounts).
+2. Paste it into the app’s sign-in screen. The key is verified against the gateway and stored in the OS keyring.
+3. Entitlements are cached locally so the app can work offline within the supported grace period.
 
-- `frontend/.env`: `VITE_ANYSCAPE_GATEWAY_URL` — gateway origin the desktop
-  pairs with (default `http://localhost:8080`). `VITE_ARGUS_API_URL` is a
-  deprecated alias. **Build-time** — model traffic follows the gateway the
-  key paired against (persisted as the provider-config base-URL override at
-  pair time), not this file alone.
-- `ARGUS_LOAD_DOTENV=1` — opt-in: also loads `.env` files for local OAuth
-  client ids during development. Off in packaged builds.
+Key configuration points:
 
-## Security model
+- `frontend/.env`: `VITE_ANYSCAPE_GATEWAY_URL` (build-time gateway origin; `VITE_ARGUS_API_URL` is a deprecated alias)
+- `ARGUS_LOAD_DOTENV=1`: opt-in dev loading of `.env` files for local MCP OAuth client credentials
+- `ARGUS_BROWSER_PROFILE_DIR`: optional override for the Argus browser profile location
 
-- Keys never leave the OS keyring; the frontend only sees presence/status.
-- The gateway is the only model origin; per-plan allowlists are enforced
-  server-side (and fail closed).
-- Sign-out clears entitlements + provider override; pairing a *different*
-  account wipes account-scoped local data (chats, memories, artifacts) —
-  the previous tenant never leaks into the next.
+## Security at a glance
+
+- Secrets (account key, MCP tokens) stay in the OS keyring; the frontend does not receive raw secret values.
+- Model traffic is routed through the paired gateway; allowlists and authorization are enforced server-side.
+- Sensitive tool actions go through permission checks; unattended runs refuse interactive approvals.
+- Signing out clears pairing/entitlement state. Pairing a different account wipes account-scoped local data to prevent cross-tenant leakage.
+
+For details, see [docs/security.md](docs/security.md) and [docs/data-storage.md](docs/data-storage.md).
