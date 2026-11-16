@@ -1,0 +1,382 @@
+package MCP
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+// ServerConfig describes how to connect to an MCP server.
+type ServerConfig struct {
+	ID      string            `json:"id"`
+	Name    string            `json:"name"`
+	Enabled bool              `json:"enabled"`
+	Type    string            `json:"type"` // "stdio"
+	Command string            `json:"command"`
+	Args    []string          `json:"args"`
+	Env     map[string]string `json:"env"`
+}
+
+// Tool represents a discovered MCP tool.
+type Tool struct {
+	ServerID    string                 `json:"server_id"`
+	ServerName  string                 `json:"server_name"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description"`
+	InputSchema map[string]interface{} `json:"input_schema"`
+}
+
+// Manager manages MCP server connections and discovered tools.
+type Manager struct {
+	mu          sync.RWMutex
+	servers     map[string]*serverConn
+	connections map[string]*serverConn
+	configs     map[string]ServerConfig
+	tools       []Tool
+}
+
+type serverConn struct {
+	cfg          ServerConfig
+	serverID     string
+	connectionID string
+	client       *mcp.Client
+	sess         *mcp.ClientSession
+	cancel       context.CancelFunc
+}
+
+// New creates a new MCP manager.
+func New() *Manager {
+	return &Manager{
+		servers:     make(map[string]*serverConn),
+		connections: make(map[string]*serverConn),
+		configs:     make(map[string]ServerConfig),
+	}
+}
+
+// LoadConfigs loads server configurations.
+func (m *Manager) LoadConfigs(cfgs []ServerConfig) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.configs = make(map[string]ServerConfig)
+	for _, c := range cfgs {
+		m.configs[c.ID] = c
+	}
+}
+
+// ListConfigs returns all server configurations.
+func (m *Manager) ListConfigs() []ServerConfig {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]ServerConfig, 0, len(m.configs))
+	for _, c := range m.configs {
+		out = append(out, c)
+	}
+	return out
+}
+
+// allowedLaunchers are the conventional stdio MCP host binaries. Anything
+// else must be an absolute path to a binary, so a config can't ride PATH
+// lookups into a binary the user never chose. (No callers reach AddConfig
+// from the agent; user-initiated catalog installs go through MCPConnect
+// with its permission card. This is defense in depth for the config path.)
+var allowedLaunchers = map[string]bool{
+	"npx": true, "uvx": true, "node": true, "bunx": true,
+	"python3": true, "python": true, "deno": true,
+	"npx.cmd": true, "bunx.cmd": true, "uvx.exe": true,
+}
+
+func validateCommand(command string) error {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return errors.New("mcp command required")
+	}
+	if strings.ContainsAny(command, "\x00\n\r") || strings.Contains(command, " ") {
+		return fmt.Errorf("mcp command must be a single binary name or absolute path")
+	}
+	if allowedLaunchers[command] {
+		return nil
+	}
+	if strings.HasPrefix(command, "/") || isWindowsAbs(command) {
+		return nil
+	}
+	return fmt.Errorf("mcp command %q is not an allowed launcher; use an absolute path", command)
+}
+
+func isWindowsAbs(command string) bool {
+	// "C:\\..." (any drive letter) or a UNC path "\\\\share\\...".
+	return (len(command) > 2 && command[1] == ':') || strings.HasPrefix(command, `\\`)
+}
+
+// AddConfig adds or updates a server configuration.
+func (m *Manager) AddConfig(cfg ServerConfig) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if cfg.ID == "" {
+		cfg.ID = strings.ReplaceAll(strings.ToLower(cfg.Name), " ", "-")
+	}
+	m.configs[cfg.ID] = cfg
+}
+
+// RemoveConfig removes a server configuration and disconnects if connected.
+func (m *Manager) RemoveConfig(id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if sc, ok := m.servers[id]; ok {
+		if sc.cancel != nil {
+			sc.cancel()
+		}
+		if sc.sess != nil {
+			sc.sess.Close()
+		}
+		delete(m.servers, id)
+	}
+	delete(m.configs, id)
+	m.refreshToolsLocked()
+	return nil
+}
+
+// Connect connects to enabled servers.
+func (m *Manager) Connect(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var firstErr error
+	for id, cfg := range m.configs {
+		if !cfg.Enabled {
+			if sc, ok := m.servers[id]; ok {
+				if sc.cancel != nil {
+					sc.cancel()
+				}
+				if sc.sess != nil {
+					sc.sess.Close()
+				}
+				delete(m.servers, id)
+			}
+			continue
+		}
+		if _, ok := m.servers[id]; ok {
+			continue
+		}
+		if err := m.connectLocked(ctx, cfg); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+	}
+	m.refreshToolsLocked()
+	return firstErr
+}
+
+// connectLocked connects to a single server (caller must hold lock).
+func (m *Manager) connectLocked(ctx context.Context, cfg ServerConfig) error {
+	if cfg.Type == "" {
+		cfg.Type = "stdio"
+	}
+	if cfg.Type != "stdio" {
+		return fmt.Errorf("unsupported mcp transport: %s", cfg.Type)
+	}
+	if strings.TrimSpace(cfg.Command) == "" {
+		return errors.New("mcp command required")
+	}
+	if err := validateCommand(cfg.Command); err != nil {
+		return err
+	}
+
+	c := mcp.NewClient(&mcp.Implementation{Name: "argus", Version: "0.1.0"}, nil)
+
+	var env []string
+	for k, v := range cfg.Env {
+		env = append(env, fmt.Sprintf("%s=%s", k, v))
+	}
+
+	transport := &mcp.CommandTransport{
+		Command: execCmd(cfg.Command, cfg.Args, env),
+	}
+
+	sessCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	sess, err := c.Connect(sessCtx, transport, nil)
+	if err != nil {
+		return err
+	}
+
+	connCtx, connCancel := context.WithCancel(context.Background())
+	sc := &serverConn{
+		cfg:      cfg,
+		serverID: cfg.ID,
+		client:   c,
+		sess:     sess,
+		cancel:   connCancel,
+	}
+	m.servers[cfg.ID] = sc
+
+	_ = connCtx
+	return nil
+}
+
+// ListTools returns all discovered tools from connected servers.
+func (m *Manager) ListTools() []Tool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]Tool, len(m.tools))
+	copy(out, m.tools)
+	return out
+}
+
+// ListServerIDs lists the configured servers holding a live session. Tool
+// schemas are attached lazily, so the asker needs the ids without the
+// schemas themselves.
+func (m *Manager) ListServerIDs() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]string, 0, len(m.servers))
+	for id, sc := range m.servers {
+		if sc.sess != nil {
+			out = append(out, id)
+		}
+	}
+	for _, sc := range m.connections {
+		if sc.sess != nil {
+			out = append(out, sc.serverID)
+		}
+	}
+	sort.Strings(out)
+	return compactStrings(out)
+}
+
+// refreshToolsLocked refreshes tool list (caller must hold lock).
+func (m *Manager) refreshToolsLocked() {
+	var tools []Tool
+	seen := map[string]bool{}
+	collect := func(id string, sc *serverConn) {
+		if sc.sess == nil {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		res, err := sc.sess.ListTools(ctx, &mcp.ListToolsParams{})
+		cancel()
+		if err != nil {
+			log.Printf("mcp: list tools failed for %s: %v", id, err)
+			return
+		}
+		for _, t := range res.Tools {
+			key := sc.serverID + "\x00" + t.Name
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			var schema map[string]interface{}
+			if t.InputSchema != nil {
+				b, _ := json.Marshal(t.InputSchema)
+				_ = json.Unmarshal(b, &schema)
+			}
+			tools = append(tools, Tool{
+				ServerID:    sc.serverID,
+				ServerName:  sc.cfg.Name,
+				Name:        t.Name,
+				Description: t.Description,
+				InputSchema: schema,
+			})
+		}
+		if len(res.Tools) == 0 {
+			log.Printf("mcp: %s connected but returned 0 tools", id)
+		}
+	}
+	for id, sc := range m.servers {
+		collect(id, sc)
+	}
+	for id, sc := range m.connections {
+		collect(id, sc)
+	}
+	m.tools = tools
+}
+
+// CallTool calls a tool on the appropriate MCP server.
+func (m *Manager) CallTool(ctx context.Context, serverID, toolName string, args map[string]interface{}) (*mcp.CallToolResult, error) {
+	m.mu.RLock()
+	sc, ok := m.servers[serverID]
+	if !ok {
+		for _, candidate := range m.connections {
+			if candidate.serverID == serverID {
+				sc, ok = candidate, true
+				break
+			}
+		}
+	}
+	m.mu.RUnlock()
+	if !ok {
+		return nil, errors.New("mcp server not connected")
+	}
+	callCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
+	defer cancel()
+	return sc.sess.CallTool(callCtx, &mcp.CallToolParams{
+		Name:      toolName,
+		Arguments: args,
+	})
+}
+
+// Disconnect disconnects all servers.
+func (m *Manager) Disconnect() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, sc := range m.servers {
+		if sc.cancel != nil {
+			sc.cancel()
+		}
+		if sc.sess != nil {
+			sc.sess.Close()
+		}
+	}
+	for _, sc := range m.connections {
+		if sc.cancel != nil {
+			sc.cancel()
+		}
+		if sc.sess != nil {
+			_ = sc.sess.Close()
+		}
+	}
+	m.servers = make(map[string]*serverConn)
+	m.connections = make(map[string]*serverConn)
+	m.tools = nil
+}
+
+func (m *Manager) RefreshTools() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.refreshToolsLocked()
+}
+
+func (m *Manager) ToolCount(serverID string) int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	n := 0
+	for _, t := range m.tools {
+		if t.ServerID == serverID {
+			n++
+		}
+	}
+	return n
+}
+
+func compactStrings(values []string) []string {
+	if len(values) < 2 {
+		return values
+	}
+	out := values[:0]
+	for _, value := range values {
+		if len(out) == 0 || out[len(out)-1] != value {
+			out = append(out, value)
+		}
+	}
+	return out
+}

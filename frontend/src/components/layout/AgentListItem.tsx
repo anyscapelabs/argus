@@ -1,0 +1,54 @@
+import type { MouseEvent, ReactNode } from 'react'
+import AgentGem, { isAvatarColor } from '../AgentGem'
+
+export type AgentListItemProps = {
+  avatar?: string
+  name: string
+  lastMessage?: string
+  lastMessageIcon?: ReactNode
+  time?: string
+  active?: boolean
+  onClick?: () => void
+  onContextMenu?: (e: MouseEvent<HTMLButtonElement>) => void
+  trailing?: ReactNode
+}
+
+export default function AgentListItem({
+  avatar,
+  name,
+  lastMessage,
+  lastMessageIcon,
+  time,
+  active = false,
+  onClick,
+  onContextMenu,
+}: AgentListItemProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      className={`flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left transition-colors ${
+        active ? 'bg-hover-primary' : 'hover:bg-hover-primary'
+      }`}
+    >
+      {avatar && (
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${active ? 'border-accent-secondary bg-accent-secondary/10' : 'border-primary bg-secondary'}`}>
+          {isAvatarColor(avatar) ? (
+            <AgentGem color={avatar} className="h-8 w-8" />
+          ) : (
+            <img src={avatar} alt="" className="h-8 w-8 rounded-full" />
+          )}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className={`truncate text-sm font-medium ${active ? 'text-primary' : 'text-primary'}`}>{name}</div>
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-secondary">
+          {lastMessageIcon}
+          <span className="truncate">{lastMessage || 'No messages yet'}</span>
+        </div>
+      </div>
+      <span className="shrink-0 text-xs text-secondary">{time}</span>
+    </button>
+  )
+}

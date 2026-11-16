@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- A page behind a human check, built the way the real ones are: the widget
+     itself is a cross-origin iframe whose contents this document cannot read, and
+     everything left visible is the scaffolding — the vendor's script, the
+     placeholder's class and data-sitekey, the iframe's own address. The last two
+     paragraphs are the decoys: the word "challenge" in prose, and a link to a
+     captcha-free help page, which is exactly what an agent should not be told is
+     a wall. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Sign in to continue</title>
+  <script src="https://www.google.com/recaptcha/api.js?render=explicit"></script>
+</head>
+<body>
+  <h1>Sign in to continue</h1>
+  <form>
+    <label for="pw">Password</label>
+    <input id="pw" type="password">
+    <div class="cf-turnstile" data-sitekey="1x00000000000000000000BB"></div>
+    <iframe title="Widget" width="300" height="65" scrolling="no"
+      src="https://challenges.cloudflare.com/cdn-cgi/challenge-platform/h/b/turnstile/f/ov2/av0/f/a"></iframe>
+    <button type="submit">Sign in</button>
+  </form>
+  <p>Take today's challenge and keep your account safe.</p>
+  <a href="help.html">Our sign-in flow is CAPTCHA-free</a>
+</body>
+</html>

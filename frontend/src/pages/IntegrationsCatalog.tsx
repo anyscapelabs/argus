@@ -1,0 +1,328 @@
+import React, { useState } from 'react';
+
+export type AccessLevel = 'read' | 'draft' | 'full';
+
+export interface AgentBinding {
+  agent_id: string;
+  handle: string;
+  agent_name: string;
+  access_level: AccessLevel;
+}
+
+export interface IntegrationConnection {
+  connection_id: string;
+  label: string;
+  account_email: string;
+  status: 'connected' | 'expired' | 'error';
+  bindings: AgentBinding[];
+}
+
+export interface ConnectorCatalogItem {
+  server_id: string;
+  display_name: string;
+  multi_account: boolean;
+  connections: IntegrationConnection[];
+}
+
+export interface AgentSummary {
+  id: string;
+  handle: string;
+  name: string;
+}
+
+interface Props {
+  items: ConnectorCatalogItem[];
+  agents: AgentSummary[];
+  onConnectAccount: (serverId: string, label: string, expectedEmail: string) => Promise<void>;
+  onUpsertBinding: (connectionId: string, agentId: string, level: AccessLevel) => Promise<void>;
+  onRemoveBinding: (connectionId: string, agentId: string) => Promise<void>;
+  onDisconnectAccount: (serverId: string, connectionId: string) => Promise<void>;
+}
+
+export function IntegrationsPage({
+  items,
+  agents,
+  onConnectAccount,
+  onUpsertBinding,
+  onRemoveBinding,
+  onDisconnectAccount,
+}: Props) {
+  const [managedServerId, setManagedServerId] = useState<string | null>(null);
+  const [connectModalServer, setConnectModalServer] = useState<ConnectorCatalogItem | null>(null);
+  const [labelInput, setLabelInput] = useState('');
+  const [emailInput, setEmailInput] = useState('');
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+
+  const managedConnector = items.find((c) => c.server_id === managedServerId) ?? null;
+
+  const handleStartConnect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!connectModalServer) return;
+    setBusyKey('oauth');
+    try {
+      await onConnectAccount(connectModalServer.server_id, labelInput.trim(), emailInput.trim());
+      setConnectModalServer(null);
+      setLabelInput('');
+      setEmailInput('');
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {items.map((item) => {
+          const hasConnections = item.connections.length > 0;
+          const uniqueHandles = Array.from(
+            new Set(item.connections.flatMap((c) => c.bindings.map((b) => `@${b.handle}`)))
+          );
+
+          return (
+            <div
+              key={item.server_id}
+              className="rounded-xl border border-primary bg-hover-primary backdrop-blur-md p-4 flex flex-col justify-between gap-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-primary">{item.display_name}</h3>
+                  <p className="text-xs text-secondary mt-0.5">
+                    {hasConnections
+                      ? `${item.connections.length} account${item.connections.length > 1 ? 's' : ''} connected`
+                      : 'Not connected'}
+                  </p>
+                </div>
+
+                {hasConnections ? (
+                  <button
+                    onClick={() => setManagedServerId(item.server_id)}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-secondary bg-hover-secondary text-primary hover:bg-hover-secondary transition"
+                  >
+                    Manage
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setConnectModalServer(item)}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-accent-foreground hover:bg-hover-accent transition"
+                  >
+                    Connect
+                  </button>
+                )}
+              </div>
+
+              {hasConnections && (
+                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-primary">
+                  {uniqueHandles.length > 0 ? (
+                    uniqueHandles.map((handle) => (
+                      <span
+                        key={handle}
+                        className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-hover-primary text-grey-100 border border-primary"
+                      >
+                        {handle}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[11px] text-grey-500">No bots assigned</span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {managedConnector && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="w-full max-w-xl rounded-2xl border border-secondary bg-grey-950 p-5 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-semibold text-primary">
+                  Manage {managedConnector.display_name}
+                </h2>
+                <p className="text-xs text-secondary">
+                  Assign accounts to specific bots or remove bot access without disconnecting.
+                </p>
+              </div>
+              <button
+                onClick={() => setManagedServerId(null)}
+                className="text-xs text-secondary hover:text-primary px-2 py-1"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+              {managedConnector.connections.map((conn) => {
+                const boundIds = new Set(conn.bindings.map((b) => b.agent_id));
+                const unboundAgents = agents.filter((a) => !boundIds.has(a.id));
+
+                return (
+                  <div
+                    key={conn.connection_id}
+                    className="rounded-xl border border-primary bg-hover-primary p-4 space-y-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-medium text-primary">
+                          {conn.label || conn.account_email || 'Connected Account'}
+                        </div>
+                        {conn.account_email && (
+                          <div className="text-xs font-mono text-secondary">{conn.account_email}</div>
+                        )}
+                      </div>
+                      <button
+                        disabled={busyKey === conn.connection_id}
+                        onClick={async () => {
+                          setBusyKey(conn.connection_id);
+                          try {
+                            await onDisconnectAccount(managedConnector.server_id, conn.connection_id);
+                          } finally {
+                            setBusyKey(null);
+                          }
+                        }}
+                        className="px-2.5 py-1 text-[11px] rounded-md border border-danger/30 text-danger hover:bg-danger/15"
+                      >
+                        Revoke Account
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {conn.bindings.length === 0 && (
+                        <p className="text-xs text-grey-500">Unassigned — attach a bot below.</p>
+                      )}
+                      {conn.bindings.map((bind) => (
+                        <div
+                          key={bind.agent_id}
+                          className="flex items-center justify-between gap-2 rounded-lg bg-grey-950 border border-primary px-3 py-2"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-primary">@{bind.handle}</span>
+                            <span className="text-xs text-secondary">{bind.agent_name}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={bind.access_level}
+                              onChange={(e) =>
+                                onUpsertBinding(
+                                  conn.connection_id,
+                                  bind.agent_id,
+                                  e.target.value as AccessLevel
+                                )
+                              }
+                              className="rounded-md bg-grey-900 border border-primary px-2 py-1 text-xs text-grey-100"
+                            >
+                              <option value="read">Read</option>
+                              <option value="draft">Draft</option>
+                              <option value="full">Full</option>
+                            </select>
+                            <button
+                              onClick={() => onRemoveBinding(conn.connection_id, bind.agent_id)}
+                              className="px-2 py-1 text-xs rounded-md bg-hover-primary text-secondary hover:bg-danger/20 hover:text-danger"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {unboundAgents.length > 0 && (
+                      <div className="pt-1 flex items-center gap-2">
+                        <select
+                          defaultValue=""
+                          onChange={(e) => {
+                            if (!e.target.value) return;
+                            void onUpsertBinding(conn.connection_id, e.target.value, 'draft');
+                            e.target.value = '';
+                          }}
+                          className="w-full rounded-lg bg-grey-900 border border-primary px-3 py-1.5 text-xs text-secondary"
+                        >
+                          <option value="" disabled>
+                            + Add bot to this account...
+                          </option>
+                          {unboundAgents.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              @{a.handle} ({a.name})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {managedConnector.multi_account && (
+              <div className="pt-3 border-t border-primary flex justify-end">
+                <button
+                  onClick={() => {
+                    const target = managedConnector;
+                    setManagedServerId(null);
+                    setConnectModalServer(target);
+                  }}
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-accent-foreground hover:bg-hover-accent"
+                >
+                  + Connect Another Account
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {connectModalServer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <form
+            onSubmit={handleStartConnect}
+            className="w-full max-w-md rounded-2xl border border-secondary bg-grey-950 p-5 space-y-4"
+          >
+            <h2 className="text-base font-semibold text-primary">
+              Connect {connectModalServer.display_name}
+            </h2>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-secondary mb-1">Account Label</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Support Inbox or Legal"
+                  value={labelInput}
+                  onChange={(e) => setLabelInput(e.target.value)}
+                  className="w-full rounded-lg bg-grey-900 border border-primary px-3 py-2 text-xs text-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-secondary mb-1">
+                  Expected Email (pins Google account selector)
+                </label>
+                <input
+                  type="email"
+                  placeholder="support@anyscapelabs.com"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  className="w-full rounded-lg bg-grey-900 border border-primary px-3 py-2 text-xs text-primary"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setConnectModalServer(null)}
+                className="px-3 py-1.5 text-xs text-secondary hover:text-primary"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={busyKey === 'oauth'}
+                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-accent-foreground"
+              >
+                Continue to OAuth
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}

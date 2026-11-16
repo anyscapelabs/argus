@@ -1,0 +1,22 @@
+.task
+bin
+frontend/dist
+frontend/node_modules
+.commandcode
+*.log
+.env
+.env.*
+build/linux/appimage/build
+build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
+# Mobile generated (per-machine; overlays hold absolute paths)
+build/ios/xcode/overlay.json
+build/ios/xcode/gen/
+build/android/overlay.json
+build/android/gen/tools/gmail/creds/
+tools/calendar/creds/
+.env
+config/google.json
+google.json
+
+# Node tooling caches at the repo root
+node_modules/

@@ -1,0 +1,30 @@
+{
+  "default_live_exclude_patterns": [
+    "*embed*",
+    "*speech*",
+    "*transcription*",
+    "*whisper*",
+    "*tts*",
+    "*image*",
+    "*moderation*",
+    "*rerank*",
+    "*realtime*",
+    "*audio*",
+    "*guard*",
+    "*stable-video*",
+    "*flux*"
+  ],
+  "providers": [
+    {
+      "id": "argus-router",
+      "display_name": "Anyscape Gateway",
+      "adapter": "openai_compat",
+      "base_url": "https://api.anyscapelabs.com/v1",
+      "models_path": "/models",
+      "key_hint": "argus_pk_",
+      "key_help_url": "http://localhost:8080/console/settings/service-accounts",
+      "doc_url": "http://localhost:8080",
+      "order": 1
+    }
+  ]
+}

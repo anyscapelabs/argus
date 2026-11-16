@@ -1,0 +1,11 @@
+{
+  "serverId": "gmail",
+  "name": "Gmail",
+  "type": "stdio",
+  "command": "npx",
+  "args": ["-y", "@gongrzhe/server-gmail-autoauth-mcp"],
+  "env": {
+    "GMAIL_CREDENTIALS_PATH": "./tools/gmail/creds/credentials.json"
+  },
+  "enabled": false
+}

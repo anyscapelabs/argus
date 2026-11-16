@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Shadow DOM fixture</title>
+  <style>
+    body { font-family: system-ui; margin: 24px; }
+    .hidden-nav { display: none; }
+    details { margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <h1>Accessibility fixture</h1>
+  <p>A page built the way modern components are: a custom element with an open
+     shadow root, a controlled input that only reacts to real events, and a
+     same-origin iframe.</p>
+
+  <nav class="hidden-nav"><a href="#invisible">Never rendered</a></nav>
+
+  <ui-dialog id="dialog"></ui-dialog>
+
+  <label for="search">Search the docs</label>
+  <input id="search" type="search" placeholder="e.g. fonts">
+  <p id="echo">no input yet</p>
+
+  <select id="region" aria-label="Region">
+    <option value="eu">Europe</option>
+    <option value="us">United States</option>
+  </select>
+
+  <details>
+    <summary>More options</summary>
+    <button type="button">Revealed by the summary</button>
+  </details>
+
+  <div role="button" tabindex="0" aria-label="Dismiss this alert" id="fake-button">×</div>
+
+  <a href="/checkout/step-two">Continue to payment</a>
+
+  <iframe id="frame" title="Embedded frame"></iframe>
+
+  <script>
+    // A custom element whose button is invisible to document.querySelectorAll.
+    class UIDialog extends HTMLElement {
+      connectedCallback() {
+        const root = this.attachShadow({ mode: 'open' });
+        root.innerHTML = `
+          <style>.box { padding: 8px; border: 1px solid #ccc; }</style>
+          <div class="box" role="group" aria-label="Confirm">
+            <span part="title">Save your changes?</span>
+            <button type="button" aria-label="Keep editing">Keep editing</button>
+            <button type="button" id="save">Save changes</button>
+          </div>`;
+        root.getElementById('save').addEventListener('click', () => {
+          window.__shadowClicked = (window.__shadowClicked || 0) + 1;
+          root.getElementById('save').textContent = 'Saved';
+        });
+      }
+    }
+    customElements.define('ui-dialog', UIDialog);
+
+    // A framework-style controlled input: the visible value is overwritten from
+    // state on every 'input' event, so a naive value assignment never sticks.
+    const input = document.getElementById('search');
+    const echo = document.getElementById('echo');
+    let state = '';
+    const tracker = { value: '', getValue() { return this.value; }, setValue(v) { this.value = v; } };
+    Object.defineProperty(input, '_valueTracker', { value: tracker, configurable: true });
+    const nativeDesc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    Object.defineProperty(input, 'value', {
+      configurable: true,
+      get() { return state; },
+      set(raw) {
+        // The tracker swallows a write the framework has already seen, which is
+        // exactly what a plain `el.value = x` hits.
+        if (tracker.getValue() === String(raw)) return;
+        tracker.setValue(String(raw));
+        nativeDesc.set.call(input, String(raw));
+      }
+    });
+    input.addEventListener('input', () => {
+      state = nativeDesc.get.call(input);
+      echo.textContent = 'echo: ' + state;
+    });
+
+    // Same-origin frame with a control of its own.
+    const frameDoc = document.getElementById('frame').contentDocument;
+    frameDoc.open();
+    frameDoc.write('<!doctype html><body><button id="in-frame" aria-label="Inside the frame">Frame button</button></body>');
+    frameDoc.close();
+    frameDoc.getElementById('in-frame').addEventListener('click', () => {
+      window.parent.__frameClicked = true;
+    });
+
+    document.getElementById('fake-button').addEventListener('click', () => {
+      window.__fakeClicked = true;
+    });
+  </script>
+</body>
+</html>
