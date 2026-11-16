@@ -35,7 +35,7 @@ export default function VoiceNotifier({ status, time, paused = false, onTogglePa
         className="flex items-center gap-3 rounded-full border border-primary bg-secondary py-2 pl-3 pr-2.5 text-base text-primary shadow-md"
       >
         <span
-          className={`flex h-9 w-9 items-center justify-center rounded-full text-black transition-colors ${
+          className={`flex h-9 w-9 items-center justify-center rounded-full text-accent-foreground transition-colors ${
             running && !paused ? 'bg-accent' : 'bg-grey-400'
           }`}
         >

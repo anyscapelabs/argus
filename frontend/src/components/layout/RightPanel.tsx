@@ -22,7 +22,7 @@ const TABS = ['Details', 'Routines', 'Artifacts']
 export default function RightPanel({ agentID = 'default', onClose, onOpenArtifact }: RightPanelProps) {
   const { data: profile } = useAgentProfile(agentID)
   const saveProfile = useSaveAgentProfile()
-  const { data: routines, isLoading: routinesLoading, error: routinesError } = useScheduledTasks()
+  const { data: routines, isLoading: routinesLoading, error: routinesError } = useScheduledTasks(agentID)
   const { data: artifacts, isLoading: artifactsLoading } = useArtifacts(agentID)
   const { status, now } = useAgentStatus(agentID)
   const setTaskPaused = useSetTaskPaused()
@@ -185,7 +185,7 @@ export default function RightPanel({ agentID = 'default', onClose, onOpenArtifac
                         }`}
                       >
                         <span
-                          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${
+                          className={`absolute top-0.5 h-4 w-4 rounded-full bg-accent-foreground transition-all ${
                             r.paused ? 'left-0.5' : 'left-4'
                           }`}
                         />

@@ -13,6 +13,8 @@ import { useArtifacts } from '../domains/artifacts/hooks'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiArrowDown, FiChevronRight, FiGlobe, FiLink, FiTerminal } from 'react-icons/fi'
 import Toolbar from '../components/layout/Toolbar'
+import AgentAvatar from '../components/AgentAvatar'
+import { AVATAR_COLORS } from '../components/AgentGem'
 import ChatInput from '../components/chat/ChatInput'
 import AgentBubble from '../components/chat/AgentBubble'
 import UserBubble from '../components/chat/UserBubble'
@@ -250,7 +252,6 @@ export default function Chat({
   const scrollRef = useRef<HTMLDivElement>(null)
   const pinnedRef = useRef(true)
   const [pinned, setPinned] = useState(true)
-  const [scrolled, setScrolled] = useState(false)
   // Where the viewport sat when an older page was requested. Prepending
   // history pushes every pixel down; without this anchor the reader of an old
   // message is thrown to the bottom of the new stack.
@@ -261,7 +262,6 @@ export default function Chat({
     const nextPinned = el.scrollHeight - el.scrollTop - el.clientHeight < 40
     pinnedRef.current = nextPinned
     setPinned(nextPinned)
-    setScrolled(el.scrollTop > 0)
     if (el.scrollTop < 160 && hasNextPage && !isFetchingNextPage) {
       prependAnchor.current = { height: el.scrollHeight, top: el.scrollTop }
       fetchNextPage()
@@ -316,8 +316,10 @@ export default function Chat({
 
   return (
     <div className="relative flex h-dvh flex-1 min-h-0 overflow-hidden">
-      <div className="flex flex-1 flex-col min-h-0">
-        <Toolbar scrolled={scrolled} />
+      <div className="relative flex flex-1 flex-col min-h-0">
+        {/* The bar overlays the transcript: window controls float above the
+            chat with no background of their own. */}
+        <Toolbar className="absolute inset-x-0 top-0" />
         <div className="relative flex flex-1 min-h-0 flex-col">
           <div className="absolute left-1/2 -top-10 z-30 flex -translate-x-1/2 flex-col items-center gap-2">
             <motion.button
@@ -326,7 +328,7 @@ export default function Chat({
               transition={{ type: 'spring', stiffness: 300, damping: 20 }}
               className="group flex cursor-pointer items-center gap-2 rounded-full bg-secondary px-3 py-1 transition-colors hover:bg-hover-secondary"
             >
-              <img src="/argus-logo.svg" alt="Argus" className="h-10 w-10 rounded-full" />
+              <AgentAvatar avatar={agentProfile?.avatar || AVATAR_COLORS[0]} name={agentProfile?.agent_name || 'Argus'} size={28} />
               <span className="text-sm font-medium text-primary">{agentProfile?.agent_name || 'Argus'}</span>
               <FiChevronRight size={14} className="w-0 overflow-hidden opacity-0 transition-all duration-300 ease-out group-hover:w-4 group-hover:translate-x-1 group-hover:opacity-100" />
             </motion.button>
@@ -343,7 +345,7 @@ export default function Chat({
           <div
             ref={scrollRef}
             onScroll={onScroll}
-            className={`flex-1 min-h-0 overflow-y-auto px-6 pb-24 [scrollbar-gutter:stable] transition-[padding] duration-200 ${voiceActive ? 'pt-24' : 'pt-6'}`}
+            className={`flex-1 min-h-0 overflow-y-auto px-6 pb-24 [scrollbar-gutter:stable] transition-[padding] duration-200 ${voiceActive ? 'pt-24' : 'pt-14'}`}
           >
             <div className="mx-auto flex max-w-3xl flex-col gap-3">
               {!isLoading && messagesError && <ErrorNotifier text={String(messagesError)} />}
@@ -405,6 +407,7 @@ export default function Chat({
                       onConnect={() => decideMCP('connect')}
                       onDeny={() => decideMCP('deny')}
                       onCancel={() => decideMCP('cancel')}
+                      variant="chat"
                     />
                   )
                 ) : item.kind === 'takeoverCard' ? (
@@ -461,7 +464,7 @@ export default function Chat({
                   onDeny={() => decide('deny')}
                 />
               )}
-              {!isLoading && errorNotice && <ErrorNotifier text={errorNotice} icon={<FiTerminal size={18} className="shrink-0 text-red-400" />} />}
+              {!isLoading && errorNotice && <ErrorNotifier text={errorNotice} icon={<FiTerminal size={18} className="shrink-0 text-danger" />} />}
               {/* Shown for the whole run. Gating it on a status string made it
                   vanish whenever the status line was between two labels. */}
               {!isLoading && runActive && (

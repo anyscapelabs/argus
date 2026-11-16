@@ -130,8 +130,8 @@ export default function ArtifactViewer({ onBack, artifactID }: ArtifactViewerPro
               onClick={(e) => { e.stopPropagation(); void runDeckExport(); }}
               className="flex items-center gap-1 rounded-lg bg-accent px-2 py-1 text-sm font-medium transition-opacity hover:opacity-90 cursor-pointer disabled:cursor-default disabled:opacity-40"
             >
-              <TfiDownload size={12} className="text-foreground" />
-              <span className="text-foreground">{exportDeck.isPending ? 'Saving…' : 'Save .pptx'}</span>
+              <TfiDownload size={12} className="text-accent-foreground" />
+              <span className="text-accent-foreground">{exportDeck.isPending ? 'Saving…' : 'Save .pptx'}</span>
             </button>
           ) : (
             <button
@@ -140,8 +140,8 @@ export default function ArtifactViewer({ onBack, artifactID }: ArtifactViewerPro
               onClick={(e) => { e.stopPropagation(); setExportOpen((v) => !v); }}
               className="flex items-center gap-1 rounded-lg bg-accent px-2 py-1 text-sm font-medium transition-opacity hover:opacity-90 cursor-pointer disabled:cursor-default disabled:opacity-40"
             >
-              <TfiDownload size={12} className="text-foreground" />
-              <span className="text-foreground">Export</span>
+              <TfiDownload size={12} className="text-accent-foreground" />
+              <span className="text-accent-foreground">Export</span>
             </button>
           )}
           {exportOpen && (
@@ -183,7 +183,7 @@ export default function ArtifactViewer({ onBack, artifactID }: ArtifactViewerPro
               className={`mb-3 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${
                 notice.tone === 'ok'
                   ? 'border-secondary bg-secondary text-primary'
-                  : 'border-red-400/40 bg-secondary text-red-400'
+                  : 'border-danger/40 bg-secondary text-danger'
               }`}
             >
               <span className="min-w-0 truncate">{notice.text}</span>
@@ -198,7 +198,7 @@ export default function ArtifactViewer({ onBack, artifactID }: ArtifactViewerPro
           )}
           {isLoading && <div className="text-sm text-secondary">Opening…</div>}
           {!isLoading && error && (
-            <div className="text-sm text-red-400">{String((error as Error).message ?? error)}</div>
+            <div className="text-sm text-danger">{String((error as Error).message ?? error)}</div>
           )}
           {!isLoading && !error && isDeck && artifact && (
             <div className="flex h-[60vh] flex-col">

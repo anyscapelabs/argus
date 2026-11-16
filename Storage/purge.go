@@ -78,7 +78,7 @@ func (db *DB) PurgeAccountTables() error {
 	}
 	if _, err := tx.Exec(`INSERT INTO agent_profiles
 		(id, avatar, agent_name, model_ref, system_prompt, updated_at, handle, role, role_instructions)
-		VALUES ('default', '/logo.png', 'Argus', NULL, '', ?, 'argus', '', '')`, nowRFC3339()); err != nil {
+		VALUES ('default', ?, 'Argus', NULL, '', ?, 'argus', '', '')`, DefaultAgentAvatar, nowRFC3339()); err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("storage: account purge default agent failed: %w", err)
 	}

@@ -21,11 +21,11 @@ type Core struct {
 	Store   *Catalog.Store
 
 	emit       func(string, any)
+	listeners  []func(string, any)
 	PickerHook func(providerID string, options PickerOptions) PickerResult
-
-	liveMu sync.Mutex
-	live   map[string]*liveEntry
-	lockCS sync.Map
+	liveMu     sync.Mutex
+	live       map[string]*liveEntry
+	lockCS     sync.Map
 }
 
 func NewCore() *Core {
@@ -36,9 +36,20 @@ func (c *Core) Notifier(fn func(string, any)) {
 	c.emit = fn
 }
 
+// OnEvent registers an in-process listener for every event the core emits.
+// Services use it to react to each other's signals (the scheduler wakes on
+// schedule changes) without an import cycle, since the emitter cannot import
+// the listener back.
+func (c *Core) OnEvent(fn func(string, any)) {
+	c.listeners = append(c.listeners, fn)
+}
+
 func (c *Core) EmitEvent(name string, data any) {
 	if c.emit != nil {
 		c.emit(name, data)
+	}
+	for _, fn := range c.listeners {
+		fn(name, data)
 	}
 }
 

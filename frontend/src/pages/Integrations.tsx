@@ -60,7 +60,7 @@ export default function Integrations({ onManage }: { onManage?: (serverId: strin
             </div>
             <button
               type="button"
-              className="flex shrink-0 cursor-pointer items-center gap-2 rounded-full bg-accent px-2 py-1 text-sm font-medium text-black transition-colors hover:bg-hover-accent"
+              className="flex shrink-0 cursor-pointer items-center gap-2 rounded-full bg-accent px-2 py-1 text-sm font-medium text-accent-foreground transition-colors hover:bg-hover-accent"
             >
               <span className="flex items-center gap-1">
                 <IoAdd size={16} />

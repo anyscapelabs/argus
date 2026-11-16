@@ -125,7 +125,7 @@ export default function Onboarding({ onBack, onAuthenticated }: OnboardingProps)
           </div>
 
           {errorMessage && (
-            <p role="alert" className="text-xs leading-relaxed text-red-400">
+            <p role="alert" className="text-xs leading-relaxed text-danger">
               {errorMessage}
             </p>
           )}
@@ -133,7 +133,7 @@ export default function Onboarding({ onBack, onAuthenticated }: OnboardingProps)
           <button
             type="submit"
             disabled={busy || !key.trim()}
-            className="mt-1 flex h-10 w-full cursor-pointer items-center justify-center rounded-full bg-accent px-4 text-sm font-medium text-foreground transition-colors hover:bg-hover-accent disabled:cursor-not-allowed disabled:opacity-40"
+            className="mt-1 flex h-10 w-full cursor-pointer items-center justify-center rounded-full bg-accent px-4 text-sm font-medium text-accent-foreground transition-colors hover:bg-hover-accent disabled:cursor-not-allowed disabled:opacity-40"
           >
             {busy ? 'Connecting...' : 'Connect'}
           </button>

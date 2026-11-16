@@ -79,7 +79,7 @@ export function NewAgentCard({ onClose, onCreated }: NewAgentCardProps) {
           />
         </div>
         {error && (
-          <p role="alert" className="pt-2 text-center text-xs text-red-400">{error}</p>
+          <p role="alert" className="pt-2 text-center text-xs text-danger">{error}</p>
         )}
         <div className="flex justify-center pt-6 pb-4">
           <div className="grid grid-cols-5 gap-3">
@@ -93,7 +93,7 @@ export function NewAgentCard({ onClose, onCreated }: NewAgentCardProps) {
                   aria-pressed={selected}
                   onClick={() => setSelectedColor(color)}
                   className={`h-8 w-8 rounded-full transition-transform ${
-                    selected ? 'ring-2 ring-white ring-offset-2 ring-offset-[#262626]' : 'hover:scale-110'
+                    selected ? 'ring-2 ring-accent ring-offset-2 ring-offset-secondary' : 'hover:scale-110'
                   }`}
                   style={{ backgroundColor: color }}
                 />
@@ -112,7 +112,7 @@ export function NewAgentCard({ onClose, onCreated }: NewAgentCardProps) {
           <button
             type="submit"
             disabled={!canSubmit}
-            className="cursor-pointer rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-hover-accent disabled:cursor-not-allowed disabled:opacity-50"
+            className="cursor-pointer rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground transition-colors hover:bg-hover-accent disabled:cursor-not-allowed disabled:opacity-50"
           >
             {createAgent.isPending ? 'Creating…' : 'Create'}
           </button>

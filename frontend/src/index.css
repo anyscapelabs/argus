@@ -81,17 +81,34 @@
 
     --color-hover-accent: #e6e6e8;
 
+    /* Text/icon colour that stays legible on top of `--color-accent`. It is
+       switched together with the accent (black on white, white on colour). */
+    --color-accent-foreground: #000000;
+
     --color-foreground: #000000;
 
     --color-accent-secondary: #7B61FF;
 
     --color-hover-accent-secondary: #6554C0;
+
+    /* Semantic status colours shared by every error/success/warning surface. */
+    --color-danger: #f87171;
+    --color-danger-foreground: #ffffff;
+    --color-success: #4ade80;
+    --color-warning: #fbbf24;
+    --color-info: #38bdf8;
+
+    /* The gem/robot "ink" cuts. */
+    --color-ink: #121214;
+
+    /* App canvas surface. */
+    --color-surface: #141414;
 }
 
 /* `primary` is split by role: a dark surface for backgrounds and white for
    text, so it cannot live in a single `--color-primary` token. */
 @utility bg-primary {
-    background-color: #141414;
+    background-color: var(--color-surface);
 }
 
 @utility text-primary {
@@ -123,7 +140,7 @@
    behaviours rather than demo styling: */
 @layer base {
     html {
-        background-color: #141414;
+        background-color: var(--color-surface);
         color-scheme: dark;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
@@ -135,7 +152,7 @@
         margin: 0;
         /* Painted with the primary surface at the document level so the canvas
            is already the right colour before React mounts — no flash. */
-        background-color: #141414;
+        background-color: var(--color-surface);
     }
 
     body {
@@ -179,6 +196,31 @@
     --wails-draggable: no-drag;
 }
 
+/* Title bar: a translucent gradient of the app surface that fades out, so
+   content under the overlaying bar shows through a soft fade instead of a
+   hard colour edge. */
+@utility bar-fade {
+    background: linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--color-surface) 92%, transparent) 0%,
+        color-mix(in srgb, var(--color-surface) 70%, transparent) 55%,
+        transparent 100%
+    );
+}
+
+/* ----- Appearance preferences ------------------------------------------------
+   The Appearance page persists these and applies them on the root: a font
+   size, an interface font, and a reduced-motion switch. */
+@layer base {
+    html.reduce-motion *,
+    html.reduce-motion *::before,
+    html.reduce-motion *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
 @keyframes shimmer {
   0% {
     background-position: -200% 0;
@@ -189,7 +231,7 @@
 }
 
 @utility shimmer-text {
-  background: linear-gradient(90deg, #6e7076 0%, #e6e6e8 50%, #6e7076 100%);
+  background: linear-gradient(90deg, var(--color-grey-500) 0%, var(--color-grey-100) 50%, var(--color-grey-500) 100%);
   background-size: 200% 100%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -265,14 +307,14 @@
 }
 .markdown hr {
   border: 0;
-  border-top: 1px solid #363636;
+  border-top: 1px solid var(--color-tertiary);
   margin: 0.9rem 0;
 }
 .markdown blockquote {
-  border-left: 3px solid #444;
+  border-left: 3px solid var(--color-tertiary);
   padding-left: 0.75rem;
   margin: 0.6rem 0;
-  color: #b0b1b6;
+  color: var(--color-grey-300);
 }
 .markdown a {
   text-decoration: underline;
@@ -306,7 +348,7 @@
     font-weight: 600;
 }
 .markdown code {
-    background-color: #141414;
+    background-color: var(--color-surface);
     padding: 0.125rem 0.25rem;
     border-radius: 0.25rem;
     font-family: 'Geist Mono Variable', monospace;
@@ -315,13 +357,12 @@
 
 /* ----- GFM tables ------------------------------------------------------------
    The single source of truth for table styling. MarkdownTable.tsx owns the
-   frame (border, radius, horizontal scroll); these rules only style the grid
-   inside it. Cell borders are right/bottom only, so adjacent cells never stack
-   into a 2px line, and the frame's radius clips the corners. */
+   frame (horizontal scroll); these rules only style the grid inside it.
+   Tables use bottom borders only. */
 .markdown table {
   width: max-content;
   min-width: 100%;
-  border-collapse: separate;
+  border-collapse: collapse;
   border-spacing: 0;
   font-variant-numeric: tabular-nums;
 }
@@ -329,7 +370,6 @@
 .markdown td {
   padding: 0.4rem 0.75rem;
   vertical-align: top;
-  border-right: 1px solid var(--color-tertiary);
   border-bottom: 1px solid var(--color-tertiary);
   /* `.markdown` sets overflow-wrap:anywhere for long URLs, which also shrinks a
      cell's min-content to one letter, so columns collapse and words break
@@ -338,22 +378,14 @@
   overflow-wrap: break-word;
   word-break: normal;
 }
-.markdown th:last-child,
-.markdown td:last-child {
-  border-right: 0;
-}
 .markdown tbody tr:last-child td {
   border-bottom: 0;
 }
 .markdown th {
   font-weight: 600;
   white-space: nowrap;
-  background-color: var(--color-hover-primary);
 }
 .markdown td {
   min-width: 6rem;
   max-width: 24rem;
-}
-.markdown tbody tr:nth-child(even) td {
-  background-color: rgb(255 255 255 / 0.025);
 }

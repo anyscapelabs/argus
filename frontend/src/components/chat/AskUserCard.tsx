@@ -53,12 +53,12 @@ export default function AskUserCard({
               type="submit"
               disabled={submitting || !custom.trim()}
               aria-label="Send answer"
-              className="flex h-7 w-7 items-center justify-center rounded-md bg-accent text-black disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-7 w-7 items-center justify-center rounded-md bg-accent text-accent-foreground disabled:cursor-not-allowed disabled:opacity-40"
             >
               <FiArrowUp size={14} />
             </button>
           </form>
-          {error && <div aria-live="polite" className="mt-2 text-xs text-red-400">{error}</div>}
+          {error && <div aria-live="polite" className="mt-2 text-xs text-danger">{error}</div>}
         </div>
       </div>
     </div>

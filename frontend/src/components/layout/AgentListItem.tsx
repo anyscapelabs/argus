@@ -14,7 +14,7 @@ export type AgentListItemProps = {
 }
 
 export default function AgentListItem({
-  avatar = '/argus-logo.svg',
+  avatar,
   name,
   lastMessage,
   lastMessageIcon,
@@ -32,13 +32,15 @@ export default function AgentListItem({
         active ? 'bg-hover-primary' : 'hover:bg-hover-primary'
       }`}
     >
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${active ? 'border-accent-secondary bg-accent-secondary/10' : 'border-primary bg-secondary'}`}>
-        {isAvatarColor(avatar) ? (
-          <AgentGem color={avatar} className="h-8 w-8" />
-        ) : (
-          <img src={avatar} alt="" className="h-8 w-8 rounded-full" />
-        )}
-      </div>
+      {avatar && (
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${active ? 'border-accent-secondary bg-accent-secondary/10' : 'border-primary bg-secondary'}`}>
+          {isAvatarColor(avatar) ? (
+            <AgentGem color={avatar} className="h-8 w-8" />
+          ) : (
+            <img src={avatar} alt="" className="h-8 w-8 rounded-full" />
+          )}
+        </div>
+      )}
       <div className="min-w-0 flex-1">
         <div className={`truncate text-sm font-medium ${active ? 'text-primary' : 'text-primary'}`}>{name}</div>
         <div className="flex min-w-0 items-center gap-1.5 text-xs text-secondary">

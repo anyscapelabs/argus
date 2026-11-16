@@ -81,12 +81,12 @@ export function IntegrationsPage({
           return (
             <div
               key={item.server_id}
-              className="rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur-md p-4 flex flex-col justify-between gap-4"
+              className="rounded-xl border border-primary bg-hover-primary backdrop-blur-md p-4 flex flex-col justify-between gap-4"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-white">{item.display_name}</h3>
-                  <p className="text-xs text-zinc-400 mt-0.5">
+                  <h3 className="text-sm font-semibold text-primary">{item.display_name}</h3>
+                  <p className="text-xs text-secondary mt-0.5">
                     {hasConnections
                       ? `${item.connections.length} account${item.connections.length > 1 ? 's' : ''} connected`
                       : 'Not connected'}
@@ -96,14 +96,14 @@ export function IntegrationsPage({
                 {hasConnections ? (
                   <button
                     onClick={() => setManagedServerId(item.server_id)}
-                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-white/15 bg-white/10 text-white hover:bg-white/15 transition"
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-secondary bg-hover-secondary text-primary hover:bg-hover-secondary transition"
                   >
                     Manage
                   </button>
                 ) : (
                   <button
                     onClick={() => setConnectModalServer(item)}
-                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white text-black hover:bg-zinc-200 transition"
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-accent-foreground hover:bg-hover-accent transition"
                   >
                     Connect
                   </button>
@@ -111,18 +111,18 @@ export function IntegrationsPage({
               </div>
 
               {hasConnections && (
-                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-white/5">
+                <div className="flex flex-wrap gap-1.5 pt-2 border-t border-primary">
                   {uniqueHandles.length > 0 ? (
                     uniqueHandles.map((handle) => (
                       <span
                         key={handle}
-                        className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-white/[0.06] text-zinc-200 border border-white/10"
+                        className="px-2 py-0.5 text-[11px] font-mono rounded-md bg-hover-primary text-grey-100 border border-primary"
                       >
                         {handle}
                       </span>
                     ))
                   ) : (
-                    <span className="text-[11px] text-zinc-500">No bots assigned</span>
+                    <span className="text-[11px] text-grey-500">No bots assigned</span>
                   )}
                 </div>
               )}
@@ -133,19 +133,19 @@ export function IntegrationsPage({
 
       {managedConnector && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="w-full max-w-xl rounded-2xl border border-white/15 bg-[#090d16] p-5 shadow-2xl space-y-5">
+          <div className="w-full max-w-xl rounded-2xl border border-secondary bg-grey-950 p-5 shadow-2xl space-y-5">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-base font-semibold text-white">
+                <h2 className="text-base font-semibold text-primary">
                   Manage {managedConnector.display_name}
                 </h2>
-                <p className="text-xs text-zinc-400">
+                <p className="text-xs text-secondary">
                   Assign accounts to specific bots or remove bot access without disconnecting.
                 </p>
               </div>
               <button
                 onClick={() => setManagedServerId(null)}
-                className="text-xs text-zinc-400 hover:text-white px-2 py-1"
+                className="text-xs text-secondary hover:text-primary px-2 py-1"
               >
                 Close
               </button>
@@ -159,15 +159,15 @@ export function IntegrationsPage({
                 return (
                   <div
                     key={conn.connection_id}
-                    className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-3"
+                    className="rounded-xl border border-primary bg-hover-primary p-4 space-y-3"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div>
-                        <div className="text-sm font-medium text-white">
+                        <div className="text-sm font-medium text-primary">
                           {conn.label || conn.account_email || 'Connected Account'}
                         </div>
                         {conn.account_email && (
-                          <div className="text-xs font-mono text-zinc-400">{conn.account_email}</div>
+                          <div className="text-xs font-mono text-secondary">{conn.account_email}</div>
                         )}
                       </div>
                       <button
@@ -180,7 +180,7 @@ export function IntegrationsPage({
                             setBusyKey(null);
                           }
                         }}
-                        className="px-2.5 py-1 text-[11px] rounded-md border border-red-500/30 text-red-300 hover:bg-red-500/15"
+                        className="px-2.5 py-1 text-[11px] rounded-md border border-danger/30 text-danger hover:bg-danger/15"
                       >
                         Revoke Account
                       </button>
@@ -188,16 +188,16 @@ export function IntegrationsPage({
 
                     <div className="space-y-2">
                       {conn.bindings.length === 0 && (
-                        <p className="text-xs text-zinc-500">Unassigned — attach a bot below.</p>
+                        <p className="text-xs text-grey-500">Unassigned — attach a bot below.</p>
                       )}
                       {conn.bindings.map((bind) => (
                         <div
                           key={bind.agent_id}
-                          className="flex items-center justify-between gap-2 rounded-lg bg-black/40 border border-white/5 px-3 py-2"
+                          className="flex items-center justify-between gap-2 rounded-lg bg-grey-950 border border-primary px-3 py-2"
                         >
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono text-white">@{bind.handle}</span>
-                            <span className="text-xs text-zinc-400">{bind.agent_name}</span>
+                            <span className="text-xs font-mono text-primary">@{bind.handle}</span>
+                            <span className="text-xs text-secondary">{bind.agent_name}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <select
@@ -209,7 +209,7 @@ export function IntegrationsPage({
                                   e.target.value as AccessLevel
                                 )
                               }
-                              className="rounded-md bg-zinc-900 border border-white/10 px-2 py-1 text-xs text-zinc-200"
+                              className="rounded-md bg-grey-900 border border-primary px-2 py-1 text-xs text-grey-100"
                             >
                               <option value="read">Read</option>
                               <option value="draft">Draft</option>
@@ -217,7 +217,7 @@ export function IntegrationsPage({
                             </select>
                             <button
                               onClick={() => onRemoveBinding(conn.connection_id, bind.agent_id)}
-                              className="px-2 py-1 text-xs rounded-md bg-white/5 text-zinc-300 hover:bg-red-500/20 hover:text-red-200"
+                              className="px-2 py-1 text-xs rounded-md bg-hover-primary text-secondary hover:bg-danger/20 hover:text-danger"
                             >
                               Remove
                             </button>
@@ -235,7 +235,7 @@ export function IntegrationsPage({
                             void onUpsertBinding(conn.connection_id, e.target.value, 'draft');
                             e.target.value = '';
                           }}
-                          className="w-full rounded-lg bg-zinc-900 border border-white/10 px-3 py-1.5 text-xs text-zinc-300"
+                          className="w-full rounded-lg bg-grey-900 border border-primary px-3 py-1.5 text-xs text-secondary"
                         >
                           <option value="" disabled>
                             + Add bot to this account...
@@ -254,14 +254,14 @@ export function IntegrationsPage({
             </div>
 
             {managedConnector.multi_account && (
-              <div className="pt-3 border-t border-white/10 flex justify-end">
+              <div className="pt-3 border-t border-primary flex justify-end">
                 <button
                   onClick={() => {
                     const target = managedConnector;
                     setManagedServerId(null);
                     setConnectModalServer(target);
                   }}
-                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white text-black hover:bg-zinc-200"
+                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-accent-foreground hover:bg-hover-accent"
                 >
                   + Connect Another Account
                 </button>
@@ -275,24 +275,24 @@ export function IntegrationsPage({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
           <form
             onSubmit={handleStartConnect}
-            className="w-full max-w-md rounded-2xl border border-white/15 bg-[#090d16] p-5 space-y-4"
+            className="w-full max-w-md rounded-2xl border border-secondary bg-grey-950 p-5 space-y-4"
           >
-            <h2 className="text-base font-semibold text-white">
+            <h2 className="text-base font-semibold text-primary">
               Connect {connectModalServer.display_name}
             </h2>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Account Label</label>
+                <label className="block text-xs text-secondary mb-1">Account Label</label>
                 <input
                   type="text"
                   placeholder="e.g. Support Inbox or Legal"
                   value={labelInput}
                   onChange={(e) => setLabelInput(e.target.value)}
-                  className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-2 text-xs text-white"
+                  className="w-full rounded-lg bg-grey-900 border border-primary px-3 py-2 text-xs text-primary"
                 />
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">
+                <label className="block text-xs text-secondary mb-1">
                   Expected Email (pins Google account selector)
                 </label>
                 <input
@@ -300,7 +300,7 @@ export function IntegrationsPage({
                   placeholder="support@anyscapelabs.com"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
-                  className="w-full rounded-lg bg-black/50 border border-white/10 px-3 py-2 text-xs text-white"
+                  className="w-full rounded-lg bg-grey-900 border border-primary px-3 py-2 text-xs text-primary"
                 />
               </div>
             </div>
@@ -308,14 +308,14 @@ export function IntegrationsPage({
               <button
                 type="button"
                 onClick={() => setConnectModalServer(null)}
-                className="px-3 py-1.5 text-xs text-zinc-400 hover:text-white"
+                className="px-3 py-1.5 text-xs text-secondary hover:text-primary"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={busyKey === 'oauth'}
-                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white text-black"
+                className="px-3 py-1.5 text-xs font-medium rounded-lg bg-accent text-accent-foreground"
               >
                 Continue to OAuth
               </button>

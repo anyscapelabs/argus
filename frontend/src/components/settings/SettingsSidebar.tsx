@@ -1,8 +1,9 @@
-import { FaArrowLeft } from 'react-icons/fa'
-import { IoSearch } from 'react-icons/io5'
+import { FaArrowLeft, FaBell } from 'react-icons/fa'
+import { IoCardOutline, IoPersonCircleOutline, IoSearch, IoSunnyOutline } from 'react-icons/io5'
 import { LuCircleGauge } from 'react-icons/lu'
+import { GoDesktopDownload } from 'react-icons/go'
 
-export type SettingsTab = 'usage'
+export type SettingsTab = 'usage' | 'billing' | 'appearance' | 'updates' | 'profile' | 'notifications'
 
 export default function SettingsSidebar({
   onBack,
@@ -36,6 +37,39 @@ export default function SettingsSidebar({
         </div>
       </div>
       <div className="flex flex-col gap-1 px-2 pt-4">
+        <span className="px-2 text-xs font-medium uppercase tracking-wide text-secondary">General</span>
+        <button
+          type="button"
+          onClick={() => onSelectTab?.('profile')}
+          className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-primary transition-colors hover:bg-hover-primary ${
+            activeTab === 'profile' ? 'bg-hover-primary' : ''
+          }`}
+        >
+          <IoPersonCircleOutline size={14} />
+          Profile
+        </button>
+        <button
+          type="button"
+          onClick={() => onSelectTab?.('appearance')}
+          className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-primary transition-colors hover:bg-hover-primary ${
+            activeTab === 'appearance' ? 'bg-hover-primary' : ''
+          }`}
+        >
+          <IoSunnyOutline size={14} />
+          Appearance
+        </button>
+        <button
+          type="button"
+          onClick={() => onSelectTab?.('notifications')}
+          className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-primary transition-colors hover:bg-hover-primary ${
+            activeTab === 'notifications' ? 'bg-hover-primary' : ''
+          }`}
+        >
+          <FaBell size={14} />
+          Notifications
+        </button>
+      </div>
+      <div className="flex flex-col gap-1 px-2 pt-4">
         <span className="px-2 text-xs font-medium uppercase tracking-wide text-secondary">Account</span>
         <button
           type="button"
@@ -46,6 +80,29 @@ export default function SettingsSidebar({
         >
           <LuCircleGauge size={14} />
           Usage
+        </button>
+        <button
+          type="button"
+          onClick={() => onSelectTab?.('billing')}
+          className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-primary transition-colors hover:bg-hover-primary ${
+            activeTab === 'billing' ? 'bg-hover-primary' : ''
+          }`}
+        >
+          <IoCardOutline size={14} />
+          Billing
+        </button>
+      </div>
+      <div className="flex flex-col gap-1 px-2 pt-4">
+        <span className="px-2 text-xs font-medium uppercase tracking-wide text-secondary">System</span>
+        <button
+          type="button"
+          onClick={() => onSelectTab?.('updates')}
+          className={`flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-primary transition-colors hover:bg-hover-primary ${
+            activeTab === 'updates' ? 'bg-hover-primary' : ''
+          }`}
+        >
+          <GoDesktopDownload size={14} />
+          Updates
         </button>
       </div>
     </aside>

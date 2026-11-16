@@ -157,10 +157,19 @@ export default function ChatInput({ agentID = 'default', onSend, busy = false, o
   const resize = () => {
     const el = textareaRef.current
     if (!el) return
+    // Everything is sized in rem so the pill keeps its shape at any font-size
+    // setting: the cap is 10rem and "expanded" means the content is taller
+    // than one line (line height + vertical padding), both resolved from the
+    // live computed styles rather than hardcoded pixels.
+    const root = parseFloat(getComputedStyle(document.documentElement).fontSize)
+    const cs = getComputedStyle(el)
+    const baseline = Math.ceil(
+      parseFloat(cs.lineHeight) + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom),
+    )
     el.style.height = 'auto'
-    const next = Math.min(el.scrollHeight, 160)
+    const next = Math.min(el.scrollHeight, root * 10)
     el.style.height = `${next}px`
-    setExpanded(el.scrollHeight > 40)
+    setExpanded(el.scrollHeight > baseline + 1)
   }
 
   return (
@@ -175,7 +184,7 @@ export default function ChatInput({ agentID = 'default', onSend, busy = false, o
               {f.type.startsWith('image/') ? (
                 <img src={previewUrl(f)} alt={f.name} className="h-8 w-8 rounded object-cover" />
               ) : (
-                <span className="rounded bg-accent px-1 py-0.5 text-[10px] font-semibold uppercase text-black">
+                <span className="rounded bg-accent px-1 py-0.5 text-[10px] font-semibold uppercase text-accent-foreground">
                   {f.name.split('.').pop()}
                 </span>
               )}
@@ -186,7 +195,7 @@ export default function ChatInput({ agentID = 'default', onSend, busy = false, o
                 onClick={() => removeFile(i)}
                 className="text-secondary transition-colors hover:text-primary"
               >
-                <FiX size={14} />
+                <FiX className="size-3.5" />
               </button>
             </div>
           ))}
@@ -195,7 +204,7 @@ export default function ChatInput({ agentID = 'default', onSend, busy = false, o
       <div
         className={`flex flex-col border border-primary bg-transparent ${expanded ? 'rounded-2xl' : 'rounded-full'}`}
       >
-        {attachError && <div className="px-3 pt-2 text-xs text-red-400">{attachError}</div>}
+        {attachError && <div className="px-3 pt-2 text-xs text-danger">{attachError}</div>}
         <div className="flex items-end p-1">
           <input ref={fileRef} type="file" multiple hidden onChange={handlePick} />
           <button
@@ -204,7 +213,7 @@ export default function ChatInput({ agentID = 'default', onSend, busy = false, o
             onClick={() => fileRef.current?.click()}
             className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-secondary text-primary transition-colors hover:bg-hover-secondary"
           >
-            <LuPlus size={14} />
+            <LuPlus className="size-3.5" />
           </button>
           <textarea
             ref={textareaRef}
@@ -224,8 +233,7 @@ export default function ChatInput({ agentID = 'default', onSend, busy = false, o
               }
             }}
             placeholder={files.length ? 'Add a message…' : 'Message…'}
-            className="mx-2 flex-1 resize-none overflow-hidden bg-transparent py-1 text-sm leading-5 text-primary placeholder:text-grey-300 focus:outline-none"
-            style={{ minHeight: 28, maxHeight: 160 }}
+            className="mx-2 min-h-7 max-h-40 flex-1 resize-none overflow-hidden bg-transparent py-1 text-sm leading-5 text-primary placeholder:text-grey-300 focus:outline-none"
           />
           {text.trim() || files.length ? (
             <button
@@ -233,11 +241,11 @@ export default function ChatInput({ agentID = 'default', onSend, busy = false, o
               onClick={handleSend}
               disabled={busy || uploading}
               aria-label="Send message"
-              className={`flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent text-black transition-colors hover:bg-hover-accent disabled:cursor-not-allowed ${
+              className={`flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent text-accent-foreground transition-colors hover:bg-hover-accent disabled:cursor-not-allowed ${
                 busy || uploading ? 'opacity-50' : ''
               }`}
             >
-              <FaArrowUp size={12} />
+              <FaArrowUp className="size-3" />
             </button>
           ) : (
             <button
@@ -245,16 +253,16 @@ export default function ChatInput({ agentID = 'default', onSend, busy = false, o
               aria-label="Start voice call"
               disabled={voiceActive}
               onClick={() => onStartVoice?.()}
-              className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent text-black transition-colors hover:bg-hover-accent disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent text-accent-foreground transition-colors hover:bg-hover-accent disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <VoiceIcon size={18} />
+              <VoiceIcon className="size-4.5" />
             </button>
           )}
         </div>
       </div>
       <div className="relative flex items-center justify-between pr-2">
         <span className="flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs text-secondary transition-colors hover:bg-hover-secondary hover:text-primary">
-          <FiCircle size={12} />
+          <FiCircle className="size-3" />
           {usage && usage.requests ? formatUsage((usage.input_tokens ?? 0) + (usage.output_tokens ?? 0)) : '—'} tokens
         </span>
         <button

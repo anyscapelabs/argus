@@ -49,7 +49,7 @@ export default function TakeoverCard({ request, state, error, busy = false, onTa
       </div>
       <div className="flex w-full items-center justify-end gap-2">
       {settled ? (
-        <span className="flex shrink-0 items-center gap-1 px-3 py-1 rounded-full bg-accent text-black text-sm font-medium">
+        <span className="flex shrink-0 items-center gap-1 px-3 py-1 rounded-full bg-accent text-accent-foreground text-sm font-medium">
           <FiCheck size={12} />
           {state === 'done' ? 'Handed back' : 'Declined'}
         </span>
@@ -58,7 +58,7 @@ export default function TakeoverCard({ request, state, error, busy = false, onTa
           onClick={onDone}
           type="button"
           disabled={busy}
-          className="shrink-0 px-3 py-1 rounded-full bg-accent text-black text-sm font-medium hover:bg-hover-accent cursor-pointer"
+          className="shrink-0 px-3 py-1 rounded-full bg-accent text-accent-foreground text-sm font-medium hover:bg-hover-accent cursor-pointer"
         >
           I'm done
         </button>
@@ -76,7 +76,7 @@ export default function TakeoverCard({ request, state, error, busy = false, onTa
             type="button"
             onClick={onTakeover}
             disabled={busy}
-            className="flex items-center gap-1 px-3 py-1 rounded-full bg-accent text-black text-sm font-medium hover:bg-hover-accent cursor-pointer"
+            className="flex items-center gap-1 px-3 py-1 rounded-full bg-accent text-accent-foreground text-sm font-medium hover:bg-hover-accent cursor-pointer"
           >
             <FiMousePointer size={12} />
             Take Over

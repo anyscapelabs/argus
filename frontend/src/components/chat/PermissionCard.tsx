@@ -86,7 +86,7 @@ export default function PermissionCard({ permission, agentName, busy, onNotify, 
           type="button"
           disabled={disabled}
           onClick={click(`Denied ${who} access ${scope}`, onDeny)}
-          className="cursor-pointer rounded-full bg-red-500 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+          className="cursor-pointer rounded-full bg-danger px-3 py-1 text-xs font-medium text-danger-foreground transition-colors hover:bg-danger/80 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Deny
         </button>
@@ -94,7 +94,7 @@ export default function PermissionCard({ permission, agentName, busy, onNotify, 
           type="button"
           disabled={disabled}
           onClick={click(`Allowed ${who} ${scope} once`, onAllowOnce)}
-          className="cursor-pointer rounded-full bg-accent px-3 py-1 text-xs font-medium text-black transition-colors hover:bg-hover-accent disabled:cursor-not-allowed disabled:opacity-50"
+          className="cursor-pointer rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground transition-colors hover:bg-hover-accent disabled:cursor-not-allowed disabled:opacity-50"
         >
           Allow Once
         </button>
@@ -102,7 +102,7 @@ export default function PermissionCard({ permission, agentName, busy, onNotify, 
           type="button"
           disabled={disabled}
           onClick={click(`Allowed ${who} ${scope} always`, onAllowAlways)}
-          className="cursor-pointer rounded-full bg-accent px-3 py-1 text-xs font-medium text-black transition-colors hover:bg-hover-accent disabled:cursor-not-allowed disabled:opacity-50"
+          className="cursor-pointer rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground transition-colors hover:bg-hover-accent disabled:cursor-not-allowed disabled:opacity-50"
         >
           Allow Always
         </button>

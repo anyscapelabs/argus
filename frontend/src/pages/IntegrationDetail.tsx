@@ -12,6 +12,7 @@ import {
 import { BsThreeDots } from 'react-icons/bs'
 import { useIntegrationCatalog, useIntegrations } from '../domains/mcp/hooks'
 import { useAgents } from '../domains/models/hooks'
+import { AVATAR_COLORS } from '../components/AgentGem'
 import {
   disconnectAccount,
   previewDisconnect,
@@ -59,7 +60,7 @@ export default function IntegrationDetail({
     () =>
       agents.length > 0
         ? agents
-        : [{ id: 'default', name: 'Argus', avatar: '/argus-logo.svg', handle: 'argus', role: '', last_message: '', last_message_kind: '', last_message_at: 0 }],
+        : [{ id: 'default', name: 'Argus', avatar: AVATAR_COLORS[0], handle: 'argus', role: '', last_message: '', last_message_kind: '', last_message_at: 0 }],
     [agents],
   )
 
@@ -70,6 +71,7 @@ export default function IntegrationDetail({
   const [disconnectAllOpen, setDisconnectAllOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [openAccessKey, setOpenAccessKey] = useState<string | null>(null)
+  const [openAddAgentConnId, setOpenAddAgentConnId] = useState<string | null>(null)
   const [connectTarget, setConnectTarget] = useState<{ mode: 'new' | 'reauth'; connection?: IntegrationConnection } | null>(null)
   const [labelInput, setLabelInput] = useState('')
   const [emailInput, setEmailInput] = useState('')
@@ -79,6 +81,7 @@ export default function IntegrationDetail({
   const [connectError, setConnectError] = useState('')
   const menuRef = useRef<HTMLDivElement | null>(null)
   const accessMenuRef = useRef<HTMLDivElement | null>(null)
+  const addAgentMenuRef = useRef<HTMLDivElement | null>(null)
 
   const invalidate = async () => {
     await Promise.all([
@@ -106,6 +109,17 @@ export default function IntegrationDetail({
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [openAccessKey])
+
+  useEffect(() => {
+    if (!openAddAgentConnId) return
+    const handler = (e: MouseEvent) => {
+      if (addAgentMenuRef.current && !addAgentMenuRef.current.contains(e.target as Node)) {
+        setOpenAddAgentConnId(null)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [openAddAgentConnId])
 
   useEffect(() => {
     const unsub = Events.On('mcp:connect:status', (event: any) => {
@@ -274,7 +288,7 @@ export default function IntegrationDetail({
           <button
             type="button"
             onClick={onBack}
-            className="cursor-pointer rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-black transition-colors hover:bg-hover-accent"
+            className="cursor-pointer rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground transition-colors hover:bg-hover-accent"
           >
             Back to Integrations
           </button>
@@ -311,7 +325,7 @@ export default function IntegrationDetail({
               type="button"
               onClick={() => setDisconnectAllOpen(true)}
               disabled={connections.length === 0 || busyKey === 'disconnectAll'}
-              className="cursor-pointer rounded-full border border-red-500/40 px-3 py-1.5 text-sm font-medium text-red-400 transition-colors hover:bg-hover-secondary disabled:cursor-not-allowed disabled:opacity-50"
+              className="cursor-pointer rounded-full border border-danger/40 px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-hover-secondary disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busyKey === 'disconnectAll' ? 'Disconnecting…' : 'Disconnect'}
             </button>
@@ -348,10 +362,10 @@ export default function IntegrationDetail({
             role="status"
             className={`flex items-start gap-2 rounded-xl border px-3 py-2 text-sm ${
               banner.kind === 'connected'
-                ? 'border-green-500/30 bg-green-500/10 text-green-300'
+                ? 'border-success/30 bg-success/10 text-success'
                 : banner.kind === 'working'
                   ? 'border-secondary bg-secondary text-secondary'
-                  : 'border-red-500/30 bg-red-500/10 text-red-300'
+                  : 'border-danger/30 bg-danger/10 text-danger'
             }`}
           >
             <span className="min-w-0 flex-1">{banner.message}</span>
@@ -366,7 +380,7 @@ export default function IntegrationDetail({
           </div>
         )}
         {actionError && (
-          <div role="alert" className="flex items-start gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          <div role="alert" className="flex items-start gap-2 rounded-xl border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
             <IoWarningOutline size={16} className="mt-0.5 shrink-0" />
             <span className="min-w-0 flex-1">{actionError}</span>
             <button type="button" onClick={() => setActionError('')} aria-label="Dismiss" className="cursor-pointer opacity-70 hover:opacity-100">
@@ -400,15 +414,15 @@ export default function IntegrationDetail({
             <button
               type="button"
               onClick={() => openConnectModal('new')}
-              className="cursor-pointer rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-black transition-colors hover:bg-hover-accent"
+              className="cursor-pointer rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground transition-colors hover:bg-hover-accent"
             >
               Connect Account
             </button>
           </div>
           {catalogError ? (
-            <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+            <div className="mt-3 rounded-xl border border-danger/30 bg-danger/10 p-4 text-sm text-danger">
               Could not load accounts.{' '}
-              <button type="button" onClick={() => void invalidate()} className="cursor-pointer underline underline-offset-2 hover:text-red-200">
+              <button type="button" onClick={() => void invalidate()} className="cursor-pointer underline underline-offset-2 hover:text-danger">
                 Try again
               </button>
             </div>
@@ -420,7 +434,7 @@ export default function IntegrationDetail({
               <button
                 type="button"
                 onClick={() => openConnectModal('new')}
-                className="cursor-pointer rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-black transition-colors hover:bg-hover-accent"
+                className="cursor-pointer rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground transition-colors hover:bg-hover-accent"
               >
                 Connect account
               </button>
@@ -450,7 +464,7 @@ export default function IntegrationDetail({
                         <button
                           type="button"
                           onClick={() => openConnectModal('reauth', conn)}
-                          className="shrink-0 cursor-pointer rounded-full border border-amber-500/40 px-2.5 py-1 text-sm font-medium text-amber-400 transition-colors hover:bg-amber-500/10"
+                          className="shrink-0 cursor-pointer rounded-full border border-warning/40 px-2.5 py-1 text-sm font-medium text-warning transition-colors hover:bg-warning/10"
                         >
                           Reconnect
                         </button>
@@ -459,7 +473,7 @@ export default function IntegrationDetail({
                         type="button"
                         onClick={() => void requestDisconnect(conn)}
                         disabled={busyKey === `preview:${conn.connection_id}` || busyKey === 'disconnect'}
-                        className="shrink-0 cursor-pointer rounded-full border border-red-500/40 px-2 py-1 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+                        className="shrink-0 cursor-pointer rounded-full border border-danger/40 px-2 py-1 text-sm font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
                       >
                         Disconnect
                       </button>
@@ -468,22 +482,41 @@ export default function IntegrationDetail({
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-medium uppercase tracking-wide text-secondary">Agent access</span>
                         {unboundAgents.length > 0 && (
-                          <select
-                            value=""
-                            onChange={(e) => {
-                              void addBinding(conn, e.target.value)
-                              e.target.value = ''
-                            }}
-                            disabled={busyKey?.startsWith(`binding:${conn.connection_id}`)}
-                            className="cursor-pointer rounded-lg border border-secondary bg-secondary px-1.5 py-1 text-xs text-primary outline-none disabled:opacity-50"
+                          <div
+                            ref={openAddAgentConnId === conn.connection_id ? addAgentMenuRef : null}
+                            className="relative"
                           >
-                            <option value="">+ Add agent…</option>
-                            {unboundAgents.map((agent) => (
-                              <option key={agent.id} value={agent.id}>
-                                @{agent.handle} ({agent.name})
-                              </option>
-                            ))}
-                          </select>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setOpenAddAgentConnId(
+                                  openAddAgentConnId === conn.connection_id ? null : conn.connection_id,
+                                )
+                              }
+                              disabled={busyKey?.startsWith(`binding:${conn.connection_id}`)}
+                              className="flex cursor-pointer items-center gap-1 rounded-full border border-secondary bg-secondary px-2 py-1 text-sm text-primary transition-colors hover:bg-hover-secondary disabled:opacity-50"
+                            >
+                              <span>+ Add agent</span>
+                              <IoChevronDownOutline size={14} className="text-secondary" />
+                            </button>
+                            {openAddAgentConnId === conn.connection_id && (
+                              <div className="absolute right-0 z-20 mt-1 min-w-max rounded-xl border border-primary bg-primary p-1 shadow-lg">
+                                {unboundAgents.map((agent) => (
+                                  <button
+                                    key={agent.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setOpenAddAgentConnId(null)
+                                      void addBinding(conn, agent.id)
+                                    }}
+                                    className="flex w-full cursor-pointer items-center whitespace-nowrap rounded-lg px-2 py-1.5 text-left text-sm text-primary transition-colors hover:bg-hover-primary"
+                                  >
+                                    {agent.name}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                       {conn.bindings.length === 0 ? (
@@ -547,7 +580,7 @@ export default function IntegrationDetail({
                                 onClick={() => void removeBinding(conn, binding.agent_id)}
                                 disabled={busyKey === `binding:${conn.connection_id}:${binding.agent_id}`}
                                 aria-label={`Remove ${binding.agent_name} from this account`}
-                                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-secondary text-secondary transition-colors hover:bg-hover-secondary hover:text-red-400 disabled:opacity-50"
+                                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-secondary text-secondary transition-colors hover:bg-hover-secondary hover:text-danger disabled:opacity-50"
                               >
                                 <IoClose size={16} />
                               </button>
@@ -649,7 +682,7 @@ export default function IntegrationDetail({
               </div>
             </div>
             {connectError && (
-              <p role="alert" className="text-xs text-red-400">
+              <p role="alert" className="text-xs text-danger">
                 {connectError}
               </p>
             )}
@@ -666,7 +699,7 @@ export default function IntegrationDetail({
                 type="button"
                 onClick={() => void submitConnect()}
                 disabled={connectBusy}
-                className="cursor-pointer rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-black transition-colors hover:bg-hover-accent disabled:opacity-50"
+                className="cursor-pointer rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground transition-colors hover:bg-hover-accent disabled:opacity-50"
               >
                 {connectBusy ? 'Opening browser…' : 'Continue to sign in'}
               </button>
@@ -728,7 +761,7 @@ export default function IntegrationDetail({
                 type="button"
                 onClick={() => void confirmDisconnect()}
                 disabled={busyKey === 'disconnect'}
-                className="cursor-pointer rounded-full bg-red-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-600 disabled:opacity-50"
+                className="cursor-pointer rounded-full bg-danger px-3 py-1.5 text-sm font-medium text-danger-foreground transition-colors hover:bg-danger/80 disabled:opacity-50"
               >
                 {busyKey === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
               </button>
@@ -787,7 +820,7 @@ export default function IntegrationDetail({
                 type="button"
                 onClick={() => void confirmDisconnectAll()}
                 disabled={busyKey === 'disconnectAll'}
-                className="cursor-pointer rounded-full bg-red-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-600 disabled:opacity-50"
+                className="cursor-pointer rounded-full bg-danger px-3 py-1.5 text-sm font-medium text-danger-foreground transition-colors hover:bg-danger/80 disabled:opacity-50"
               >
                 {busyKey === 'disconnectAll' ? 'Disconnecting…' : 'Disconnect all'}
               </button>

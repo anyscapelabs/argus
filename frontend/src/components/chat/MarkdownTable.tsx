@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react'
 
 // Frame for a GFM table. The grid itself is styled once, in index.css under
-// "GFM tables". The frame is a fixed-width, bordered, rounded box that clips the
-// corners and scrolls sideways when the table is wider than the bubble, so the
-// bubble never has to resize to fit its data.
+// "GFM tables". The frame uses a fixed bubble width and scrolls sideways when the
+// table is wider, so the bubble never has to resize to fit its data.
 export default function MarkdownTable({ children }: { children?: ReactNode }) {
   return (
-    <div className="my-2 max-w-full overflow-x-auto overscroll-x-contain rounded-xl border border-tertiary bg-primary [scrollbar-width:thin]">
-      <table className="text-left text-xs">{children}</table>
+    <div className="my-2 max-w-full overflow-x-auto overscroll-x-contain [scrollbar-width:thin]">
+      <table className="text-left text-sm">{children}</table>
     </div>
   )
 }

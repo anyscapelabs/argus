@@ -58,7 +58,7 @@ export default function EmailDraftCard({ draft, agentName, status = 'pending', o
             : `${who} wants to send this email. Review it first.`}
       </span>
 
-      <div className="mt-1 divide-y divide-[#363636] rounded-md border border-secondary">
+      <div className="mt-1 divide-y divide-tertiary rounded-md border border-secondary">
         {draft.from && (
           <div className="flex items-start gap-3 px-3 py-1.5">
             <span className="w-12 shrink-0 text-xs text-secondary">From</span>
@@ -88,7 +88,7 @@ export default function EmailDraftCard({ draft, agentName, status = 'pending', o
               type="button"
               disabled={disabled}
               onClick={onDeny}
-              className="cursor-pointer rounded-full bg-red-500 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="cursor-pointer rounded-full bg-danger px-3 py-1 text-xs font-medium text-danger-foreground transition-colors hover:bg-danger/80 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Deny
             </button>
@@ -96,7 +96,7 @@ export default function EmailDraftCard({ draft, agentName, status = 'pending', o
               type="button"
               disabled={disabled}
               onClick={onSend}
-              className="cursor-pointer rounded-full bg-accent px-3 py-1 text-xs font-medium text-black transition-colors hover:bg-hover-accent disabled:cursor-not-allowed disabled:opacity-50"
+              className="cursor-pointer rounded-full bg-accent px-3 py-1 text-xs font-medium text-accent-foreground transition-colors hover:bg-hover-accent disabled:cursor-not-allowed disabled:opacity-50"
             >
               {sending ? 'Sending…' : 'Send'}
             </button>

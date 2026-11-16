@@ -3,6 +3,8 @@ import { useAgentProfile } from '../domains/models/hooks'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FiChevronRight } from 'react-icons/fi'
 import Toolbar from '../components/layout/Toolbar'
+import AgentAvatar from '../components/AgentAvatar'
+import { AVATAR_COLORS } from '../components/AgentGem'
 const RightPanel = lazy(() => import('../components/layout/RightPanel'))
 import ChatInput from '../components/chat/ChatInput'
 
@@ -39,7 +41,7 @@ export default function Home({ onSend, onOpenArtifact }: HomeProps) {
               transition={{ type: 'spring', stiffness: 300, damping: 20 }}
               className="group flex cursor-pointer items-center gap-2 rounded-full bg-secondary px-3 py-1 transition-colors hover:bg-hover-secondary"
             >
-              <img src="/argus-logo.svg" alt="Argus" className="h-10 w-10 rounded-full" />
+              <AgentAvatar avatar={agentProfile?.avatar || AVATAR_COLORS[0]} name={agentProfile?.agent_name || 'Argus'} size={28} />
               <span className="text-sm font-medium text-primary">{agentProfile?.agent_name || 'Argus'}</span>
               <FiChevronRight size={14} className="w-0 overflow-hidden opacity-0 transition-all duration-300 ease-out group-hover:w-4 group-hover:translate-x-1 group-hover:opacity-100" />
             </motion.button>

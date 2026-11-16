@@ -42,7 +42,7 @@ func (s *Service) GetAgentProfile(id string) Shared.AgentProfileResult {
 		profile.UpdatedAt = p.UpdatedAt
 	} else {
 		profile.AgentName = "Argus"
-		profile.Avatar = "/logo.png"
+		profile.Avatar = Storage.DefaultAgentAvatar
 	}
 	return Shared.AgentProfileResult{Profile: &profile}
 }
@@ -88,7 +88,7 @@ func (s *Service) SetAgentModel(id, modelRef string) Shared.ActionResult {
 	if err != nil {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
-	profile := Storage.AgentProfile{ID: id, AgentName: "Argus", Avatar: "/logo.png"}
+	profile := Storage.AgentProfile{ID: id, AgentName: "Argus", Avatar: Storage.DefaultAgentAvatar}
 	if found {
 		profile.Avatar = existing.Avatar
 		profile.AgentName = existing.AgentName
@@ -99,7 +99,7 @@ func (s *Service) SetAgentModel(id, modelRef string) Shared.ActionResult {
 	}
 	profile.ModelRef = modelRef
 	if profile.Avatar == "" {
-		profile.Avatar = "/logo.png"
+		profile.Avatar = Storage.DefaultAgentAvatar
 	}
 	if profile.AgentName == "" {
 		profile.AgentName = "Argus"

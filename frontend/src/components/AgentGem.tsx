@@ -37,22 +37,22 @@ export default function AgentGem({ color, className = '' }: AgentGemProps) {
         fill={color}
       />
       <rect
+        className="fill-ink"
         x="298.6"
         y="513.768"
         width="105"
         height="300"
         rx="52.5"
         transform="rotate(-45 298.6 513.768)"
-        fill="#121214"
       />
       <rect
+        className="fill-ink"
         x="440.022"
         y="372.346"
         width="105"
         height="300"
         rx="52.5"
         transform="rotate(-45 440.022 372.346)"
-        fill="#121214"
       />
     </svg>
   )

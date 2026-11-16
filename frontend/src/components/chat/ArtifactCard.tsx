@@ -17,11 +17,11 @@ export default function ArtifactCard({ title, words, version = 1, kind = 'docume
       onClick={onClick}
       className="flex items-center gap-2 w-full h-14 rounded-lg bg-secondary px-2 transition-colors hover:bg-hover-secondary cursor-pointer text-left"
     >
-      <div className={`flex h-8 w-8 items-center justify-center rounded-md ${isDeck ? 'bg-amber-500/10' : 'bg-blue-500/10'}`}>
+      <div className={`flex h-8 w-8 items-center justify-center rounded-md ${isDeck ? 'bg-warning/10' : 'bg-info/10'}`}>
         {isDeck ? (
-          <HiOutlinePresentationChartBar size={18} className="text-amber-500" />
+          <HiOutlinePresentationChartBar size={18} className="text-warning" />
         ) : (
-          <HiOutlineDocumentDuplicate size={18} className="text-blue-500" />
+          <HiOutlineDocumentDuplicate size={18} className="text-info" />
         )}
       </div>
       <div className="flex min-w-0 flex-col">

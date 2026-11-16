@@ -5,6 +5,11 @@ import (
 	"strings"
 )
 
+// DefaultAgentAvatar is the avatar every agent profile falls back to when no
+// explicit avatar exists: the bundled argus logo, stored in the DB so every
+// surface reads the same value instead of hardcoding its own guess.
+const DefaultAgentAvatar = "/argus-logo.svg"
+
 func (db *DB) migrate() error {
 	var version int
 	if err := db.conn.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
@@ -32,6 +37,7 @@ func (db *DB) migrate() error {
 		migration18,
 		migration19,
 		migration20,
+		migration21,
 	}
 
 	for i := version; i < len(migrations); i++ {
@@ -469,7 +475,7 @@ func migration15(db *DB) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_message_reactions_updated ON message_reactions(updated_at DESC)`,
 		`INSERT OR IGNORE INTO agent_profiles (id, avatar, agent_name, updated_at)
-		 SELECT 'default', '/logo.png', 'Argus', CURRENT_TIMESTAMP
+		 SELECT 'default', '` + DefaultAgentAvatar + `', 'Argus', CURRENT_TIMESTAMP
 		 WHERE EXISTS (SELECT 1 FROM user_memories)`,
 		`INSERT OR IGNORE INTO memory_items (
 			id, agent_id, key, value, scope, confidence, source_type,
@@ -647,7 +653,7 @@ func migration20(db *DB) error {
 		`ALTER TABLE agent_profiles ADD COLUMN role_instructions TEXT NOT NULL DEFAULT ''`,
 		`INSERT OR IGNORE INTO agent_profiles
 			(id, avatar, agent_name, model_ref, system_prompt, updated_at, handle, role, role_instructions)
-		 VALUES ('default', '/logo.png', 'Argus', NULL, '', CURRENT_TIMESTAMP, '', '', '')`,
+		 VALUES ('default', '` + DefaultAgentAvatar + `', 'Argus', NULL, '', CURRENT_TIMESTAMP, '', '', '')`,
 		`INSERT OR IGNORE INTO agent_profiles
 			(id, avatar, agent_name, model_ref, system_prompt, updated_at, handle, role, role_instructions)
 		 VALUES ('__global_memory__', '', '', NULL, '', CURRENT_TIMESTAMP, '', '', '')`,
@@ -679,4 +685,25 @@ func migration20(db *DB) error {
 		}
 	}
 	return backfillAgentHandles(db.conn)
+}
+
+// migration21 makes the default agent's avatar a DB-owned value. Old installs
+// were seeded with the retired /logo.png asset (or none at all), which every
+// avatar surface then had to patch with its own fallback; the DB now holds
+// the real avatar and reads stop guessing.
+func migration21(db *DB) error {
+	statements := []string{
+		fmt.Sprintf(`UPDATE agent_profiles
+		 SET avatar = '%s'
+		 WHERE id <> '%s' AND avatar IN ('', '/logo.png')`, DefaultAgentAvatar, GlobalMemoryAgentID),
+		fmt.Sprintf(`INSERT OR IGNORE INTO agent_profiles
+			(id, avatar, agent_name, updated_at)
+		 VALUES ('default', '%s', 'Argus', CURRENT_TIMESTAMP)`, DefaultAgentAvatar),
+	}
+	for _, q := range statements {
+		if _, err := db.conn.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
 }

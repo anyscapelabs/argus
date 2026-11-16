@@ -10,7 +10,7 @@ describe('EmailDraftCard', () => {
     const html = renderToStaticMarkup(<EmailDraftCard draft={draft} agentName="Argus" />)
     expect(html).toContain('ana@acme.com')
     expect(html).toContain('Q4 plan')
-    expect(html).toMatch(/rounded-full bg-red-500[^>]*>Deny</)
+    expect(html).toMatch(/rounded-full bg-danger[^>]*>Deny</)
     expect(html).toMatch(/rounded-full bg-accent[^>]*>Send</)
   })
 

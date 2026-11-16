@@ -11,6 +11,7 @@ import { useAgents } from '../../domains/models/hooks'
 import { voiceMessagePreview } from '../../lib/voice'
 import VoiceIcon from '../chat/VoiceIcon'
 import AgentListItem from './AgentListItem'
+import { AVATAR_COLORS } from '../AgentGem'
 
 type SidebarProps = {
   mode?: 'main' | 'settings'
@@ -160,7 +161,7 @@ export default function Sidebar({
             return (
               <AgentListItem
                 key={agent.id}
-                avatar={agent.avatar || '/argus-logo.svg'}
+                avatar={agent.avatar || AVATAR_COLORS[0]}
                 name={agent.name}
                 lastMessage={preview}
                 lastMessageIcon={voice ? <VoiceIcon size={11} className="shrink-0" /> : undefined}
@@ -226,7 +227,7 @@ export default function Sidebar({
           <button
             type="button"
             onClick={() => setAgentMenu(null)}
-            className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-left text-sm text-red-400 transition-colors hover:bg-hover-primary"
+            className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-left text-sm text-danger transition-colors hover:bg-hover-primary"
           >
             <IoTrash size={14} />
             Delete Agent

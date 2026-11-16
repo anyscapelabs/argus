@@ -36,7 +36,7 @@ export default function SignIn({ onSignIn, onCreateAccount }: SignInProps) {
           <button
             type="button"
             onClick={onSignIn}
-            className="flex h-10 w-full cursor-pointer items-center justify-center rounded-full bg-accent px-4 text-sm font-medium text-foreground transition-colors hover:bg-hover-accent"
+            className="flex h-10 w-full cursor-pointer items-center justify-center rounded-full bg-accent px-4 text-sm font-medium text-accent-foreground transition-colors hover:bg-hover-accent"
           >
             Sign in
           </button>

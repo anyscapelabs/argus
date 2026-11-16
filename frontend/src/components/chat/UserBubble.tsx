@@ -45,7 +45,7 @@ function UserBubble({
   const text = markerAt === -1 ? raw : raw.slice(0, markerAt).trim()
   return (
     <div
-      className={`${align === 'left' ? 'mr-auto' : 'ml-auto'} flex w-fit max-w-xl select-text flex-col gap-2 break-words rounded-xl border border-accent-secondary bg-accent-secondary px-2 py-1 text-sm font-medium text-primary ${className}`}
+      className={`${align === 'left' ? 'mr-auto' : 'ml-auto'} flex w-fit max-w-xl select-text flex-col gap-2 break-words rounded-xl border border-accent-secondary bg-accent-secondary px-2 py-1 text-sm font-medium text-accent-foreground ${className}`}
     >
       {images.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-1">

@@ -485,7 +485,7 @@ func (s *Service) ensureAgent(agentID string) (Storage.AgentProfile, error) {
 	if found {
 		return p, nil
 	}
-	p = Storage.AgentProfile{ID: agentID, AgentName: "Argus", Avatar: "/logo.png", UpdatedAt: ""}
+	p = Storage.AgentProfile{ID: agentID, AgentName: "Argus", Avatar: Storage.DefaultAgentAvatar, UpdatedAt: ""}
 	if err := s.Core.DB.SaveAgentProfile(p); err != nil {
 		return p, err
 	}

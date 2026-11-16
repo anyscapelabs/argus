@@ -56,6 +56,7 @@ type Service struct {
 	pending    map[string]pendingRun    // chat run id -> the schedule that fired it
 	failures   map[string]*failureState // task id -> send failures, for backoff
 	lastBusyAt time.Time                // when an agent-busy retry was last seen
+	wake       chan struct{}            // nudges the loop out of its timer early
 	ctx        context.Context
 	cancel     context.CancelFunc
 	onlineMu   sync.Mutex
@@ -103,6 +104,15 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 	// The engine hears about finished runs through the chat service itself,
 	// so it never has to poll for the assistant row to settle.
 	s.Chat.OnRunFinished(s.runFinished)
+	// Task writes (the agent's tools, a pause) and a freed agent both demand
+	// an immediate sweep, not the next timer tick: a routine that came due
+	// while its agent was mid-chat must fire the moment that chat ends.
+	s.wake = make(chan struct{}, 1)
+	s.Core.OnEvent(func(name string, _ any) {
+		if name == Shared.EventScheduleUpdated {
+			s.poke()
+		}
+	})
 	go s.loop()
 	return nil
 }
@@ -138,9 +148,22 @@ func (s *Service) loop() {
 		case <-s.ctx.Done():
 			timer.Stop()
 			return
+		case <-s.wake:
+			// A schedule changed or an agent freed up: sweep again now. The
+			// wait the timer promised is only a backstop.
+			timer.Stop()
 		case <-timer.C:
 			timer.Stop()
 		}
+	}
+}
+
+// poke nudges the loop into an immediate sweep. It never blocks and never
+// queues more than one nudge: a sweep is cheap even when nothing is due.
+func (s *Service) poke() {
+	select {
+	case s.wake <- struct{}{}:
+	default:
 	}
 }
 
@@ -472,6 +495,10 @@ func (s *Service) runFinished(out servicechat.RunOutcome) {
 	}
 	// The row now carries the run's outcome, which is what the panel shows.
 	s.notifyChanged()
+	// The agent just freed up. Anything that was deferred because it was busy
+	// — the exact case of a routine coming due mid-conversation — should not
+	// wait for the next timer tick.
+	s.poke()
 	body := "The scheduled run finished."
 	if msg, found, err := s.Core.DB.GetMessage(out.AssistantMessageID); err == nil && found {
 		if line := firstLine(msg.Text); line != "" {

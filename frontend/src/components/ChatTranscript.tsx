@@ -20,9 +20,9 @@ export function ChatTranscript({ items }: { items: TranscriptItem[] }) {
           return (
             <div
               key={m.id}
-              className="rounded-xl border border-sky-400/20 bg-sky-500/[0.06] px-3.5 py-2.5 text-xs text-zinc-200"
+              className="rounded-xl border border-info/20 bg-info/[0.06] px-3.5 py-2.5 text-xs text-grey-100"
             >
-              <div className="text-[11px] font-mono text-sky-300 mb-1">
+              <div className="text-[11px] font-mono text-info mb-1">
                 From @{m.fromHandle || 'teammate'}
               </div>
               <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
@@ -31,7 +31,7 @@ export function ChatTranscript({ items }: { items: TranscriptItem[] }) {
         }
 
         return (
-          <div key={m.id} className="text-sm text-zinc-200">
+          <div key={m.id} className="text-sm text-grey-100">
             {m.content}
           </div>
         );

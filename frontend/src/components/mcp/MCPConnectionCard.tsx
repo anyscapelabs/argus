@@ -22,7 +22,7 @@ export default function MCPConnectionCard({
       </div>
       <button
         onClick={onConnect}
-        className="px-3 py-1 rounded-full bg-accent text-black text-sm font-medium hover:bg-hover-accent cursor-pointer"
+        className="px-3 py-1 rounded-full bg-accent text-accent-foreground text-sm font-medium hover:bg-hover-accent cursor-pointer"
       >
         Connect
       </button>

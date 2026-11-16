@@ -64,7 +64,7 @@ export default function CodeBlock({ children }: { children?: ReactNode }) {
   }
 
   return (
-    <div ref={containerRef} className="group relative my-2 overflow-hidden rounded-xl border border-secondary bg-[#24292e]">
+    <div ref={containerRef} className="group relative my-2 overflow-hidden rounded-xl border border-secondary bg-grey-800">
       <pre className="m-0 overflow-x-auto p-3 text-xs leading-5">
         <code ref={codeRef} className={`hljs language-${language}`}>
           {code}

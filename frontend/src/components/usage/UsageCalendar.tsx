@@ -126,10 +126,10 @@ export default function UsageCalendar({
               <div key={i} className="flex flex-1 justify-center">
                 <div
                   onMouseEnter={() => setHovered({ date: slot.date, tokens: slot.tokens })}
-                  className="h-5 w-2.5 rounded-sm transition-shadow hover:ring-2 hover:ring-accent-secondary hover:ring-offset-1 hover:ring-offset-primary"
+                  className="h-5 w-2.5 rounded-sm transition-shadow hover:ring-2 hover:ring-accent-secondary hover:ring-offset-1 hover:ring-offset-surface"
                   style={{
                     backgroundColor:
-                      level === 0 ? 'var(--color-tertiary, #363636)' : 'var(--color-accent-secondary, #7B61FF)',
+                      level === 0 ? 'var(--color-tertiary)' : 'var(--color-accent-secondary)',
                     opacity: level === 0 ? 1 : [0, 0.25, 0.5, 0.75, 1][level],
                   }}
                 />
@@ -141,11 +141,11 @@ export default function UsageCalendar({
           <span>{hovered ? `${formatHoverDate(hovered.date)} , ${formatTokens(hovered.tokens)} tokens` : ''}</span>
           <div className="flex items-center gap-1">
             <span>Less</span>
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-tertiary, #363636)' }} />
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary, #7B61FF)', opacity: 0.25 }} />
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary, #7B61FF)', opacity: 0.5 }} />
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary, #7B61FF)', opacity: 0.75 }} />
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary, #7B61FF)' }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-tertiary)' }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary)', opacity: 0.25 }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary)', opacity: 0.5 }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary)', opacity: 0.75 }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary)' }} />
             <span>More</span>
           </div>
         </div>
@@ -185,10 +185,10 @@ export default function UsageCalendar({
                       <div key={i} className="flex flex-1 justify-center">
                         <div
                           onMouseEnter={() => setHovered({ date: d, tokens })}
-                          className="h-3 w-3 rounded-full transition-shadow hover:ring-2 hover:ring-accent-secondary hover:ring-offset-1 hover:ring-offset-primary"
+                          className="h-3 w-3 rounded-full transition-shadow hover:ring-2 hover:ring-accent-secondary hover:ring-offset-1 hover:ring-offset-surface"
                           style={{
                             backgroundColor:
-                              level === 0 ? 'var(--color-tertiary, #363636)' : 'var(--color-accent-secondary, #7B61FF)',
+                              level === 0 ? 'var(--color-tertiary)' : 'var(--color-accent-secondary)',
                             opacity: level === 0 ? 1 : [0, 0.25, 0.5, 0.75, 1][level],
                           }}
                         />
@@ -204,11 +204,11 @@ export default function UsageCalendar({
           <span>{hovered ? `${formatHoverDate(hovered.date)} , ${formatTokens(hovered.tokens)} tokens` : ''}</span>
           <div className="flex items-center gap-1">
             <span>Less</span>
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-tertiary, #363636)' }} />
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary, #7B61FF)', opacity: 0.25 }} />
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary, #7B61FF)', opacity: 0.5 }} />
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary, #7B61FF)', opacity: 0.75 }} />
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary, #7B61FF)' }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-tertiary)' }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary)', opacity: 0.25 }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary)', opacity: 0.5 }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary)', opacity: 0.75 }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary)' }} />
             <span>More</span>
           </div>
         </div>
@@ -239,10 +239,10 @@ export default function UsageCalendar({
                   <div
                     key={di}
                     onMouseEnter={() => setHovered({ date: day, tokens })}
-                    className="flex h-10 w-full cursor-default items-start justify-start rounded-md p-1.5 text-xs transition-shadow hover:ring-2 hover:ring-accent-secondary hover:ring-offset-1 hover:ring-offset-primary"
+                    className="flex h-10 w-full cursor-default items-start justify-start rounded-md p-1.5 text-xs transition-shadow hover:ring-2 hover:ring-accent-secondary hover:ring-offset-1 hover:ring-offset-surface"
                     style={{
                       backgroundColor:
-                        level === 0 ? 'var(--color-tertiary, #363636)' : 'var(--color-accent-secondary, #7B61FF)',
+                        level === 0 ? 'var(--color-tertiary)' : 'var(--color-accent-secondary)',
                       opacity: level === 0 ? 1 : [0, 0.25, 0.5, 0.75, 1][level],
                     }}
                   >
@@ -257,11 +257,11 @@ export default function UsageCalendar({
           <span>{hovered ? `${formatDayHoverDate(hovered.date)} , ${formatTokens(hovered.tokens)} tokens` : ''}</span>
           <div className="flex items-center gap-1">
             <span>Less</span>
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-tertiary, #363636)' }} />
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary, #7B61FF)', opacity: 0.25 }} />
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary, #7B61FF)', opacity: 0.5 }} />
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary, #7B61FF)', opacity: 0.75 }} />
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary, #7B61FF)' }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-tertiary)' }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary)', opacity: 0.25 }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary)', opacity: 0.5 }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary)', opacity: 0.75 }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary)' }} />
             <span>More</span>
           </div>
         </div>
@@ -347,10 +347,10 @@ export default function UsageCalendar({
                       <div
                         key={di}
                         onMouseEnter={() => setHovered({ date: day, tokens })}
-                        className="h-3 w-3 rounded-full transition-shadow hover:ring-2 hover:ring-accent-secondary hover:ring-offset-1 hover:ring-offset-primary"
+                        className="h-3 w-3 rounded-full transition-shadow hover:ring-2 hover:ring-accent-secondary hover:ring-offset-1 hover:ring-offset-surface"
                         style={{
                           backgroundColor:
-                            level === 0 ? 'var(--color-tertiary, #363636)' : 'var(--color-accent-secondary, #7B61FF)',
+                            level === 0 ? 'var(--color-tertiary)' : 'var(--color-accent-secondary)',
                           opacity: level === 0 ? 1 : [0, 0.25, 0.5, 0.75, 1][level],
                         }}
                       />
@@ -365,11 +365,11 @@ export default function UsageCalendar({
           <span>{hovered ? `${formatDayHoverDate(hovered.date)} , ${formatTokens(hovered.tokens)} tokens` : ''}</span>
           <div className="flex items-center gap-1">
             <span>Less</span>
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-tertiary, #363636)' }} />
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary, #7B61FF)', opacity: 0.25 }} />
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary, #7B61FF)', opacity: 0.5 }} />
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary, #7B61FF)', opacity: 0.75 }} />
-            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary, #7B61FF)' }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-tertiary)' }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary)', opacity: 0.25 }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary)', opacity: 0.5 }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary)', opacity: 0.75 }} />
+            <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: 'var(--color-accent-secondary)' }} />
             <span>More</span>
           </div>
         </div>

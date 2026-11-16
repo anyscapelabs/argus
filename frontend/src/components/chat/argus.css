@@ -1,5 +1,10 @@
 /* Switch states by setting data-state="idle" | "thinking" | "typing" on the root svg element.
    Motion is built from slow, independent, eased loops (different periods per axis) so it never looks mechanical. */
+/* Colours come from the design tokens: the shell follows the app accent, the
+   eye/lid cuts use the ink colour. */
+.argus .ar-shell { fill: var(--color-accent); }
+.argus .ar-body, .argus .ar-cap-a, .argus .ar-cap-b { fill: var(--color-ink); }
+
 .argus .ar-pose, .argus .ar-motion, .argus .ar-gaze, .argus .ar-gm, .argus .ar-len, .argus .ar-lid { transform-box: fill-box; transform-origin: 50% 50%; }
 .argus .ar-body { transform-box: fill-box; transform-origin: 50% 50%; }
 .argus .ar-pose { transform-origin: 50% 60%; transition: transform 1.1s cubic-bezier(.4, 0, .2, 1); }

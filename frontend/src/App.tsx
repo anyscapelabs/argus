@@ -11,12 +11,17 @@ import type { SettingsTab } from './components/settings/SettingsSidebar'
 import Spinner from './components/Spinner'
 import { getChat } from './domains/chat/api'
 import { usePairing, useAccount } from './domains/account/hooks'
+import { useThemeMode, useAccent } from './lib/theme'
 
 const Onboarding = lazy(() => import('./pages/Onboarding'))
 const SignIn = lazy(() => import('./pages/SignIn'))
 const Home = lazy(() => import('./pages/Home'))
 const Chat = lazy(() => import('./pages/Chat'))
 const Usage = lazy(() => import('./pages/Usage'))
+const Profile = lazy(() => import('./pages/Profile'))
+const Appearance = lazy(() => import('./pages/Appearance'))
+const Notifications = lazy(() => import('./pages/Notifications'))
+const Updates = lazy(() => import('./pages/Updates'))
 const Integrations = lazy(() => import('./pages/Integrations'))
 const IntegrationDetail = lazy(() => import('./pages/IntegrationDetail'))
 const ArtifactViewer = lazy(() => import('./pages/ArtifactViewer'))
@@ -105,6 +110,9 @@ export default function App() {
     return unsubscribe
   }, [])
 
+  useThemeMode()
+  useAccent()
+
   const artifactOverlay = openArtifact ? (
     <div className="fixed inset-0 z-50">
       <Suspense fallback={null}>
@@ -143,7 +151,7 @@ export default function App() {
       {account?.offline && (
         <div
           role="status"
-          className="flex shrink-0 items-center justify-center gap-2 bg-yellow-500/15 px-3 py-1 text-xs text-yellow-200"
+          className="flex shrink-0 items-center justify-center gap-2 bg-warning/15 px-3 py-1 text-xs text-warning"
         >
           <FiWifiOff size={12} aria-hidden="true" />
           Offline — showing your last synced plan and identity. Changes sync when the backend is reachable.
@@ -290,6 +298,10 @@ export default function App() {
             <div className="flex min-h-0 flex-1 flex-col">
               <Toolbar />
               {settingsTab === 'usage' && <Usage />}
+              {settingsTab === 'profile' && <Profile onManageBilling={() => setSettingsTab('billing')} />}
+              {settingsTab === 'appearance' && <Appearance />}
+              {settingsTab === 'notifications' && <Notifications />}
+              {settingsTab === 'updates' && <Updates />}
             </div>
           </div>
         ) : (

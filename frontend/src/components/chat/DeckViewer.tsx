@@ -37,8 +37,7 @@ export default function DeckViewer({ artifact }: { artifact: ArtifactView }) {
         <span className="truncate max-w-[40%]">{deck.title ?? ''}</span>
       </div>
       <div
-        className="relative flex flex-1 min-h-0 items-center justify-center rounded-xl p-4"
-        style={{ backgroundColor: '#0b0c10' }}
+        className="relative flex flex-1 min-h-0 items-center justify-center rounded-xl bg-grey-950 p-4"
       >
         {slides.length > 0 ? (
           <div
