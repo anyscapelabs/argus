@@ -32,6 +32,7 @@ import VoiceMessage from '../components/chat/VoiceMessage'
 const RightPanel = lazy(() => import('../components/layout/RightPanel'))
 import ArtifactCard from '../components/chat/ArtifactCard'
 import { weaveTranscript } from '../lib/transcript'
+import { errorText } from '../lib/errorText'
 import { useLiveCall, type VoiceCallSummary } from '../domains/live/useLiveCall'
 import { saveVoiceCall } from '../domains/live/api'
 import type { PendingAttachment } from '../domains/uploads/api'
@@ -317,7 +318,7 @@ export default function Chat({
             <div className="mx-auto flex max-w-3xl flex-col gap-3">
               {!isLoading && messagesError && <ErrorNotifier text={String(messagesError)} />}
               {!isLoading && send.isError && (
-                <ErrorNotifier text={String((send.error as any)?.message ?? send.error)} />
+                <ErrorNotifier text={errorText((send.error as any)?.message ?? send.error)} />
               )}
               {transcript.map((item) =>
                 item.kind === 'chip' ? (
@@ -397,7 +398,7 @@ export default function Chat({
                 ) : item.msg.error_message ? (
                   <ErrorNotifier
                     key={item.id}
-                    text={item.msg.error_message}
+                    text={errorText(item.msg.error_message)}
                   />
                 ) : (
                   <div key={item.id}>
@@ -478,7 +479,7 @@ export default function Chat({
           <div className="relative">
             {voice.error && !voiceActive && (
               <div className="mb-1">
-                <ErrorNotifier text={voice.error} />
+                <ErrorNotifier text={errorText(voice.error)} />
               </div>
             )}
             <ChatInput
