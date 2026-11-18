@@ -350,6 +350,8 @@ export default function Chat({
                       onAnswer={(answer) => void askUser.answer(answer)}
                     />
                   )
+                ) : item.kind === 'askUserAnswered' ? (
+                  <AskUserCard key={item.id} question={item.question} answer={item.answer} />
                 ) : item.kind === 'fileWriteCard' ? (
                   <FileWriteCard key={item.id} write={item.write} />
                 ) : item.kind === 'mcpCard' ? (

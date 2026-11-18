@@ -28,6 +28,14 @@ func messageIsOpaqueProviderError(e *Protocol.Error) bool {
 	if msg == "error" || msg == "internal error" {
 		return true
 	}
+	// The argus-router masks every upstream rejection as this one message and
+	// streams it as an error chunk over an HTTP 200 (its type arrives as
+	// invalid_request_error), so a transient upstream failure is otherwise
+	// indistinguishable from a request we got wrong. The user can act on
+	// neither, so it gets the same single retry as the other catch-alls.
+	if msg == "an error has occurred. try again later." {
+		return true
+	}
 	return false
 }
 

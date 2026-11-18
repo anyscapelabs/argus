@@ -35,6 +35,13 @@ func (s *Service) buildHistory(agentID string, throughSeq int, budgetTokens int6
 			// user turn.
 			continue
 		}
+		if m.Kind == Storage.MessageKindAskUser {
+			// The settled question card is the transcript's record of what was
+			// asked and chosen; its text is that card's payload, not speech.
+			// The answer already reached the run that asked, so replaying the
+			// JSON here would only add noise.
+			continue
+		}
 		if m.Kind == "steering" {
 			// A steer row is a user turn wearing a hidden costume; it can
 			// never be the answer to a tool call, so it is replayed as text

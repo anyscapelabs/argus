@@ -23,7 +23,7 @@ export function Active(): $CancellablePromise<string[] | null> {
  * BeginFirstRun prepares the default agent's first conversation: it seeds the
  * static greeting and raises the naming card. No model call is made. The card
  * is fixed content, so the first screen after pairing is free and immediate;
- * the model is called only after the user answers, when there is a name to save.
+ * the answer is applied locally too, so onboarding never spends a model turn.
  * 
  * Everything is guarded by the firstRunSettingKey app setting, so calling it on
  * every chat mount is cheap and idempotent. A chat with real history marks

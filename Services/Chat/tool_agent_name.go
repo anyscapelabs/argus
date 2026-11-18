@@ -3,6 +3,7 @@ package Chat
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"unicode/utf8"
 
@@ -52,24 +53,34 @@ func runAgentNameTool(
 	}
 	activity("tool_started", name)
 
-	profile, found, err := s.Core.DB.GetAgentProfile(agentID)
+	handle, err := saveAgentName(s.Core.DB, agentID, name)
 	if err != nil {
-		return result("could not read the agent profile: "+err.Error(), true)
+		return result(err.Error(), true)
+	}
+	s.Core.EmitEvent(Shared.EventSlotsChanged, nil)
+	raw, _ := json.Marshal(map[string]string{"name": name, "handle": handle})
+	return result(string(raw), false)
+}
+
+// saveAgentName writes the display name and its @handle. The set_agent_name
+// tool and the onboarding card both go through here, so the two can never
+// disagree about what a rename touches. The handle rides along so @mentions
+// keep matching the new name; it is slugged and de-duplicated by storage.
+func saveAgentName(db *Storage.DB, agentID, name string) (string, error) {
+	profile, found, err := db.GetAgentProfile(agentID)
+	if err != nil {
+		return "", fmt.Errorf("could not read the agent profile: %w", err)
 	}
 	if !found {
 		profile = Storage.AgentProfile{ID: agentID, Avatar: Storage.DefaultAgentAvatar}
 	}
 	profile.AgentName = name
-	if err := s.Core.DB.SaveAgentProfile(profile); err != nil {
-		return result("could not save the agent name: "+err.Error(), true)
+	if err := db.SaveAgentProfile(profile); err != nil {
+		return "", fmt.Errorf("could not save the agent name: %w", err)
 	}
-	// The handle rides along so @mentions keep matching the new name. It is
-	// slugged and de-duplicated by the storage layer.
-	handle, herr := Storage.SetAgentHandle(s.Core.DB.SQL(), agentID, name)
+	handle, herr := Storage.SetAgentHandle(db.SQL(), agentID, name)
 	if herr != nil {
 		handle = ""
 	}
-	s.Core.EmitEvent(Shared.EventSlotsChanged, nil)
-	raw, _ := json.Marshal(map[string]string{"name": name, "handle": handle})
-	return result(string(raw), false)
+	return handle, nil
 }

@@ -2,12 +2,11 @@ package Chat
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
-	"github.com/anyscapelabs/argus/Catalog"
 	"github.com/anyscapelabs/argus/Protocol"
-	"github.com/anyscapelabs/argus/Provider"
 	"github.com/anyscapelabs/argus/Services/Shared"
 	"github.com/anyscapelabs/argus/Storage"
 )
@@ -53,7 +52,8 @@ func TestAgentNameToolRejectsUnattended(t *testing.T) {
 }
 
 // The first screen must cost no model call: a seeded greeting plus a card drawn
-// from fixed choices. Only the answer starts a run.
+// from fixed choices. The answer is applied locally too, so onboarding costs
+// nothing end to end.
 func TestBeginFirstRunSeedsGreetingAndCardWithoutModel(t *testing.T) {
 	s, db := newVoiceTestService(t)
 
@@ -189,15 +189,10 @@ func TestAnswerFirstRunOnlyWhilePending(t *testing.T) {
 	}
 }
 
-// A failed launch must keep the card up: otherwise the user is left with a
-// greeting and no way to name the agent.
-func TestAnswerFirstRunKeepsCardWhenLaunchFails(t *testing.T) {
+// Naming is a local write, not a model turn: the answer must land with no run
+// and no configured provider, and a refused name must leave the card up.
+func TestAnswerFirstRunSavesNameWithoutModel(t *testing.T) {
 	s, db := newVoiceTestService(t)
-	store, err := Catalog.NewStore(&Provider.Overlay{}, t.TempDir(), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s.Core.Store = store
 	if res := s.BeginFirstRun("default"); res.Error != nil {
 		t.Fatalf("begin failed: %+v", res)
 	}
@@ -209,29 +204,76 @@ func TestAnswerFirstRunKeepsCardWhenLaunchFails(t *testing.T) {
 		t.Fatalf("over-long name changed the state to %q", state)
 	}
 
-	// No provider is configured in this test, so the run cannot launch.
-	if res := s.RespondAskUser(firstRunQuestionID, "Nova"); res.Error == nil {
-		t.Fatal("expected the launch to fail without a configured provider")
+	if res := s.RespondAskUser(firstRunQuestionID, "  Chief of Staff  "); res.Error != nil || !res.Ok {
+		t.Fatalf("answer failed: %+v", res)
 	}
-	if state, _, _ := db.GetAppSetting(firstRunSettingKey); state != firstRunStatePending {
-		t.Fatalf("failed launch settled onboarding: state=%q", state)
+	profile, found, err := db.GetAgentProfile("default")
+	if err != nil || !found {
+		t.Fatalf("profile read failed: found=%v err=%v", found, err)
 	}
-	if list := s.PendingAskUser("default"); len(list.Requests) != 1 {
-		t.Fatalf("failed launch dropped the card: %+v", list)
+	if profile.AgentName != "Chief of Staff" {
+		t.Fatalf("name was not saved: %q", profile.AgentName)
 	}
-	msgs, err := db.ListMessages("default", 0, 10)
+	var handle string
+	if err := db.SQL().QueryRow(`SELECT handle FROM agent_profiles WHERE id = 'default'`).Scan(&handle); err != nil {
+		t.Fatalf("handle read failed: %v", err)
+	}
+	if handle == "" {
+		t.Fatal("the @handle was not set alongside the name")
+	}
+	if state, seen, _ := db.GetAppSetting(firstRunSettingKey); !seen || state != firstRunStateDone {
+		t.Fatalf("onboarding was not settled: state=%q seen=%v", state, seen)
+	}
+	if list := s.PendingAskUser("default"); len(list.Requests) != 0 {
+		t.Fatalf("answered card is still pending: %+v", list)
+	}
+
+	msgs, err := db.ListVisibleMessages("default", 0, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(msgs) != 1 {
-		t.Fatalf("failed launch wrote conversation rows: %+v", msgs)
+	if len(msgs) != 3 {
+		t.Fatalf("expected the greeting, the answered card and one confirmation, got %+v", msgs)
 	}
-}
+	card := msgs[1]
+	if card.Kind != Storage.MessageKindAskUser || card.Role != "assistant" {
+		t.Fatalf("the answered card was not persisted: %+v", card)
+	}
+	var record struct {
+		Question string `json:"question"`
+		Answer   string `json:"answer"`
+	}
+	if err := json.Unmarshal([]byte(card.Text), &record); err != nil {
+		t.Fatalf("the card payload is not readable: %v (%s)", err, card.Text)
+	}
+	if record.Question != firstRunQuestion || record.Answer != "Chief of Staff" {
+		t.Fatalf("the card kept the wrong question/answer: %+v", record)
+	}
+	if last := msgs[2]; last.Role != "assistant" || !strings.Contains(last.Text, "Chief of Staff") {
+		t.Fatalf("confirmation does not name the agent: %+v", last)
+	}
+	// The card is a UI record, not speech: history must not replay its JSON.
+	for _, message := range s.buildHistory("default", msgs[2].Seq, 4096, 40) {
+		for _, block := range message.Blocks {
+			if strings.Contains(block.Text, `"question"`) {
+				t.Fatalf("the card payload leaked into model history: %+v", message)
+			}
+		}
+	}
+	reqs, err := db.ListModelRequests("default", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reqs) != 0 {
+		t.Fatalf("onboarding called a model: %+v", reqs)
+	}
 
-func TestFirstRunAnswerSteerNamesTheToolAndChoice(t *testing.T) {
-	steer := firstRunAnswerSteer("Nova")
-	if !strings.Contains(steer, `"Nova"`) || !strings.Contains(steer, "set_agent_name") {
-		t.Fatalf("steer does not carry the choice and the tool: %s", steer)
+	// A second answer must not stack a second confirmation.
+	if res := s.RespondAskUser(firstRunQuestionID, "Nova"); res.Error == nil {
+		t.Fatal("answered a settled card")
+	}
+	if msgs, _ := db.ListVisibleMessages("default", 0, 10); len(msgs) != 3 {
+		t.Fatalf("a second answer wrote another row: %+v", msgs)
 	}
 }
 

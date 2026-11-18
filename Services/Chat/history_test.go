@@ -13,7 +13,7 @@ func opaqueError(msg string) *Protocol.Error {
 }
 
 func TestMessageIsOpaqueProviderError(t *testing.T) {
-	for _, m := range []string{"Provider returned error", "", "provider returned error", "ERROR", "internal error"} {
+	for _, m := range []string{"Provider returned error", "", "provider returned error", "ERROR", "internal error", "An error has occurred. Try again later."} {
 		if !messageIsOpaqueProviderError(opaqueError(m)) {
 			t.Errorf("%q should be treated as opaque", m)
 		}

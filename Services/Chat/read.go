@@ -47,8 +47,10 @@ func (s *Service) GetChat(agentID string, beforeSeq, limit int) Shared.GetChatRe
 		// them here would put words in the user's mouth that they never typed.
 		// Voice-call rows are the one app-authored kind the chat draws: they
 		// carry the transcript of a finished voice session as a JSON record,
-		// which the frontend renders as a collapsible transcript card.
-		if m.Kind != "" && m.Kind != "voice" && m.Kind != Storage.MessageKindFileWrite {
+		// which the frontend renders as a collapsible transcript card. A
+		// settled question card rides the same way.
+		if m.Kind != "" && m.Kind != "voice" && m.Kind != Storage.MessageKindFileWrite &&
+			m.Kind != Storage.MessageKindAskUser {
 			continue
 		}
 		if m.Kind == Storage.MessageKindFileWrite {

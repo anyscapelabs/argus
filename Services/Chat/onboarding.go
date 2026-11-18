@@ -2,6 +2,8 @@ package Chat
 
 import (
 	"fmt"
+	"log"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/anyscapelabs/argus/Services/Shared"
@@ -12,8 +14,7 @@ const (
 	// firstRunSettingKey tracks where this install stands with the default
 	// agent's onboarding: absent means it has not started, firstRunStatePending
 	// means the greeting and the naming card are waiting for an answer, and
-	// firstRunStateDone means the card was answered and the turn that saves the
-	// name has launched.
+	// firstRunStateDone means the card was answered and the name is saved.
 	firstRunSettingKey    = "onboarding_default_greeted"
 	firstRunStatePending  = "pending"
 	firstRunStateDone     = "1"
@@ -67,7 +68,7 @@ func (s *Service) firstRunCardPending(agentID string) bool {
 // BeginFirstRun prepares the default agent's first conversation: it seeds the
 // static greeting and raises the naming card. No model call is made. The card
 // is fixed content, so the first screen after pairing is free and immediate;
-// the model is called only after the user answers, when there is a name to save.
+// the answer is applied locally too, so onboarding never spends a model turn.
 //
 // Everything is guarded by the firstRunSettingKey app setting, so calling it on
 // every chat mount is cheap and idempotent. A chat with real history marks
@@ -134,11 +135,11 @@ func (s *Service) BeginFirstRun(agentID string) Shared.ActionResult {
 	return Shared.ActionResult{Ok: true}
 }
 
-// answerFirstRun handles the onboarding card's answer. Nothing has been sent to
-// a model before this point: the card was drawn from fixed content, so this is
-// the first turn that costs an API call, and its only job is to save the name
-// the user picked and confirm it. A launch that fails leaves the state pending
-// so the card stays up and the answer can be tried again.
+// answerFirstRun handles the onboarding card's answer. Naming the agent is a
+// local write, not a model turn: the answer is already known, so spending an
+// API call to store it bought nothing and made onboarding fail whenever the
+// provider hiccuped on that turn. The confirmation is seeded like the greeting,
+// so the whole first screen stays free and works offline.
 func (s *Service) answerFirstRun(answer string) Shared.ActionResult {
 	const agentID = "default"
 	state, seen, err := s.Core.DB.GetAppSetting(firstRunSettingKey)
@@ -148,16 +149,35 @@ func (s *Service) answerFirstRun(answer string) Shared.ActionResult {
 	if !seen || state != firstRunStatePending {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeNotFound, "That question is no longer waiting")}
 	}
-	if utf8.RuneCountInString(answer) > firstRunMaxNameLength {
+	name := strings.TrimSpace(answer)
+	if name == "" {
+		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeBadInput, "Type or select a name")}
+	}
+	if utf8.RuneCountInString(name) > firstRunMaxNameLength {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeBadInput, "Agent names are limited to 40 characters")}
 	}
-	res := s.Steer(agentID, firstRunAnswerSteer(answer))
-	if res.Error != nil {
-		return Shared.ActionResult{Error: res.Error}
+	if _, err := saveAgentName(s.Core.DB, agentID, name); err != nil {
+		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
+	// Settle before seeding so a double-submit cannot write two confirmations;
+	// the name is already saved at this point, so the answer is final either way.
 	if err := s.Core.DB.SetAppSetting(firstRunSettingKey, firstRunStateDone); err != nil {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
+	// The card itself stays in the transcript: the question asked and the name
+	// picked, so the chat reads as a conversation instead of a vanished card.
+	// Neither seed announces chat:message: that event is the run indicator's
+	// "a turn is live" signal, and with no run behind it the chat would sit on
+	// "Thinking…" forever. SlotsChanged below is what refreshes the transcript.
+	if _, err := s.persistAskUserAnswer(agentID, firstRunQuestion, name, false); err != nil {
+		log.Printf("chat: could not persist the onboarding card: %v", err)
+	}
+	if err := s.seedFirstRunConfirmation(agentID, name); err != nil {
+		// The rename landed; a missing confirmation line is cosmetic, so the
+		// card still closes instead of trapping the user on a saved answer.
+		log.Printf("chat: could not seed the onboarding confirmation: %v", err)
+	}
+	s.Core.EmitEvent(Shared.EventSlotsChanged, nil)
 	s.Core.EmitEvent(Shared.EventAskUserResolved, Shared.AskUserResolvedView{
 		RequestID: firstRunQuestionID,
 		AgentID:   agentID,
@@ -166,13 +186,29 @@ func (s *Service) answerFirstRun(answer string) Shared.ActionResult {
 	return Shared.ActionResult{Ok: true}
 }
 
-// firstRunAnswerSteer is the hidden row that drives the turn saving the name.
-// The card already asked the question, so the model never re-asks it.
-func firstRunAnswerSteer(name string) string {
-	return fmt.Sprintf("The onboarding card was answered: the user would like to call you %q. "+
-		"Search your tools for \"save my name\" and invoke set_agent_name with that name. "+
-		"Then reply with one short sentence confirming the name and inviting the user's first request. "+
-		"Do nothing else in this turn.", name)
+// seedFirstRunConfirmation writes the assistant row that names the agent, the
+// same way BeginFirstRun writes the greeting: fixed content, no model call.
+func (s *Service) seedFirstRunConfirmation(agentID, name string) error {
+	seq, err := s.Core.DB.NextSeq(agentID)
+	if err != nil {
+		return err
+	}
+	createdAt := nowUnixMs()
+	message := Storage.Message{
+		ID:          newID(),
+		AgentID:     agentID,
+		Seq:         seq,
+		Role:        "assistant",
+		BlocksJSON:  "[]",
+		Text:        fmt.Sprintf("Nice to meet you — I'm %s from now on. What should we work on first?", name),
+		Status:      "complete",
+		CreatedAt:   createdAt,
+		CompletedAt: createdAt,
+	}
+	if err := s.Core.DB.InsertMessage(message); err != nil {
+		return err
+	}
+	return nil
 }
 
 // isSeededGreeting reports whether a message row is the static first-run

@@ -15,6 +15,7 @@ export type TranscriptItem =
   | { kind: 'mcpCard'; id: string }
   | { kind: 'voiceMsg'; id: string; seconds: number; turns?: VoiceTurn[] }
   | { kind: 'askUserCard'; id: string }
+  | { kind: 'askUserAnswered'; id: string; question: string; answer: string }
   | { kind: 'fileWriteCard'; id: string; write: FileWrite }
 
 export type VoiceNote = { id: string; created_at: number; seconds: number }
@@ -29,6 +30,20 @@ function parseVoiceRecord(text: string): { seconds: number; turns: VoiceTurn[] }
   } catch {
   }
   return { seconds: 0, turns: [] }
+}
+
+// A settled question card stores the question and the chosen answer as JSON in
+// the row's text column, the same way a voice record does.
+function parseAskUserRecord(text: string): { question: string; answer: string } {
+  try {
+    const rec = JSON.parse(text)
+    return {
+      question: typeof rec?.question === 'string' ? rec.question : '',
+      answer: typeof rec?.answer === 'string' ? rec.answer : '',
+    }
+  } catch {
+  }
+  return { question: '', answer: '' }
 }
 
 // Notices ride the same weave: each one lands between the messages it sits
@@ -168,6 +183,15 @@ export function weaveTranscript({
         items.push({ kind: 'chip', id: `chip-${m.id}`, label: dayChipLabel(ts) })
       }
       items.push({ kind: 'voiceMsg', id: m.id, seconds: rec.seconds, turns: rec.turns })
+      if (ts) prevTs = ts
+      continue
+    }
+    if (m.kind === 'ask_user') {
+      const rec = parseAskUserRecord(m.text || '')
+      if (needsChip(ts)) {
+        items.push({ kind: 'chip', id: `chip-${m.id}`, label: dayChipLabel(ts) })
+      }
+      items.push({ kind: 'askUserAnswered', id: m.id, question: rec.question, answer: rec.answer })
       if (ts) prevTs = ts
       continue
     }

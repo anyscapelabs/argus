@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Services/Shared"
+	"github.com/anyscapelabs/argus/Storage"
 )
 
 type pendingUserQuestion struct {
@@ -83,7 +85,57 @@ func (s *Service) RespondAskUser(requestID, answer string) Shared.ActionResult {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeNotFound, "That question is no longer waiting")}
 	}
 	s.finishAskUser(request, "answered")
+	// The card is the user's own record of the exchange, so it stays in the
+	// transcript after it is answered — question and chosen answer only.
+	if _, err := s.persistAskUserAnswer(request.view.AgentID, request.view.Question, answer, true); err != nil {
+		log.Printf("chat: could not persist the answered card: %v", err)
+	}
 	return Shared.ActionResult{Ok: true}
+}
+
+// askUserRecord is the persisted card. It lives in the row's text column the
+// way a voice transcript does, so storage holds exactly what the transcript
+// draws and buildHistory can skip it without inventing a wire shape.
+type askUserRecord struct {
+	Question string `json:"question"`
+	Answer   string `json:"answer"`
+}
+
+// persistAskUserAnswer writes the settled question card into the transcript.
+// announce is false for app-authored seeding (onboarding), because
+// chat:message is the run indicator's "a turn is live" signal: emitting it with
+// no run behind it leaves the chat stuck on "Thinking…" forever. It is best-
+// effort for the generic path (a failed write must not undo the answer the run
+// already received), so callers log the failure rather than ignoring it.
+func (s *Service) persistAskUserAnswer(agentID, question, answer string, announce bool) (string, error) {
+	seq, err := s.Core.DB.NextSeq(agentID)
+	if err != nil {
+		return "", err
+	}
+	raw, err := json.Marshal(askUserRecord{Question: question, Answer: answer})
+	if err != nil {
+		return "", err
+	}
+	createdAt := nowUnixMs()
+	message := Storage.Message{
+		ID:          newID(),
+		AgentID:     agentID,
+		Seq:         seq,
+		Role:        "assistant",
+		Kind:        Storage.MessageKindAskUser,
+		BlocksJSON:  "[]",
+		Text:        string(raw),
+		Status:      "complete",
+		CreatedAt:   createdAt,
+		CompletedAt: createdAt,
+	}
+	if err := s.Core.DB.InsertMessage(message); err != nil {
+		return "", err
+	}
+	if announce {
+		s.Core.EmitEvent(Shared.EventChatMessage, map[string]any{"agent_id": agentID, "message_id": message.ID})
+	}
+	return message.ID, nil
 }
 
 func (s *Service) finishAskUser(request *pendingUserQuestion, state string) {
