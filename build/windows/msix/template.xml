@@ -10,15 +10,15 @@
     <Installer
         Path="argus"
         Arguments=""
-        InstallLocation="C:\Program Files\Anyscape Labs\My Product">
+        InstallLocation="C:\Program Files\Anyscape Labs PLC\Argus Agent">
     </Installer>
     <PackageInformation
-        PackageName="My Product"
-        PackageDisplayName="My Product"
-        PublisherName="CN=Anyscape Labs"
-        PublisherDisplayName="Anyscape Labs"
+        PackageName="Argus Agent"
+        PackageDisplayName="Argus Agent"
+        PublisherName="CN=Anyscape Labs PLC"
+        PublisherDisplayName="Anyscape Labs PLC"
         Version="0.1.0.0"
-        PackageDescription="A argus application">
+        PackageDescription="Your AI Pro Active Teammate">
         <Capabilities>
             <Capability Name="runFullTrust" />
             
@@ -26,8 +26,8 @@
         <Applications>
             <Application
                 Id="com.anyscapelabs.argus"
-                Description="A argus application"
-                DisplayName="My Product"
+                Description="Your AI Pro Active Teammate"
+                DisplayName="Argus Agent"
                 ExecutableName="argus"
                 EntryPoint="Windows.FullTrustApplication">
                 
@@ -41,9 +41,9 @@
         </Dependencies>
         <Properties>
             <Framework>false</Framework>
-            <DisplayName>My Product</DisplayName>
-            <PublisherDisplayName>Anyscape Labs</PublisherDisplayName>
-            <Description>A argus application</Description>
+            <DisplayName>Argus Agent</DisplayName>
+            <PublisherDisplayName>Anyscape Labs PLC</PublisherDisplayName>
+            <Description>Your AI Pro Active Teammate</Description>
             <Logo>Assets\AppIcon.png</Logo>
         </Properties>
     </PackageInformation>

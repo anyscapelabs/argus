@@ -9,14 +9,14 @@
   
   <Identity 
     Name="com.anyscapelabs.argus"
-    Publisher="CN=Anyscape Labs"
+    Publisher="CN=Anyscape Labs PLC"
     Version="0.1.0.0" 
     ProcessorArchitecture="x64" />
   
   <Properties>
-    <DisplayName>My Product</DisplayName>
-    <PublisherDisplayName>Anyscape Labs</PublisherDisplayName>
-    <Description>A argus application</Description>
+    <DisplayName>Argus Agent</DisplayName>
+    <PublisherDisplayName>Anyscape Labs PLC</PublisherDisplayName>
+    <Description>Your AI Pro Active Teammate</Description>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   
@@ -31,8 +31,8 @@
   <Applications>
     <Application Id="com.anyscapelabs.argus" Executable="argus" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="My Product"
-        Description="A argus application"
+        DisplayName="Argus Agent"
+        Description="Your AI Pro Active Teammate"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
