@@ -227,6 +227,12 @@ func nextUserCarriesResult(msgs []Storage.Message, seq, throughSeq int) bool {
 		if m.Seq > throughSeq {
 			return false
 		}
+		if m.Status != "complete" {
+			continue
+		}
+		if m.Kind == "voice" || m.Kind == Storage.MessageKindAskUser {
+			continue
+		}
 		if m.Role != "user" {
 			// The next row is not a user carrier; the round-trip did not
 			// persist its result.

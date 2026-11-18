@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Services/Shared"
 	"github.com/anyscapelabs/argus/Storage"
 )
@@ -112,12 +113,13 @@ func (s *Service) BeginFirstRun(agentID string) Shared.ActionResult {
 			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 		}
 		createdAt := nowUnixMs()
+		blocksJSON := mustMarshal([]Protocol.Block{{Type: Protocol.BlockText, Text: firstRunGreeting}})
 		if err := s.Core.DB.InsertMessage(Storage.Message{
 			ID:          newID(),
 			AgentID:     agentID,
 			Seq:         seq,
 			Role:        "assistant",
-			BlocksJSON:  "[]",
+			BlocksJSON:  blocksJSON,
 			Text:        firstRunGreeting,
 			Status:      "complete",
 			CreatedAt:   createdAt,
@@ -172,6 +174,9 @@ func (s *Service) answerFirstRun(answer string) Shared.ActionResult {
 	if _, err := s.persistAskUserAnswer(agentID, firstRunQuestion, name, false); err != nil {
 		log.Printf("chat: could not persist the onboarding card: %v", err)
 	}
+	if err := s.seedFirstRunUserChoice(agentID, name); err != nil {
+		log.Printf("chat: could not seed the onboarding user turn: %v", err)
+	}
 	if err := s.seedFirstRunConfirmation(agentID, name); err != nil {
 		// The rename landed; a missing confirmation line is cosmetic, so the
 		// card still closes instead of trapping the user on a saved answer.
@@ -186,6 +191,30 @@ func (s *Service) answerFirstRun(answer string) Shared.ActionResult {
 	return Shared.ActionResult{Ok: true}
 }
 
+// seedFirstRunUserChoice writes an invisible steering user row for the chosen
+// name so history has a valid user turn between the greeting and confirmation
+// without showing a duplicate bubble in the transcript.
+func (s *Service) seedFirstRunUserChoice(agentID, name string) error {
+	seq, err := s.Core.DB.NextSeq(agentID)
+	if err != nil {
+		return err
+	}
+	createdAt := nowUnixMs()
+	choiceText := fmt.Sprintf("Call yourself %s.", name)
+	return s.Core.DB.InsertMessage(Storage.Message{
+		ID:          newID(),
+		AgentID:     agentID,
+		Seq:         seq,
+		Role:        "user",
+		Kind:        Storage.MessageKindSteering,
+		BlocksJSON:  mustMarshal([]Protocol.Block{{Type: Protocol.BlockText, Text: choiceText}}),
+		Text:        choiceText,
+		Status:      "complete",
+		CreatedAt:   createdAt,
+		CompletedAt: createdAt,
+	})
+}
+
 // seedFirstRunConfirmation writes the assistant row that names the agent, the
 // same way BeginFirstRun writes the greeting: fixed content, no model call.
 func (s *Service) seedFirstRunConfirmation(agentID, name string) error {
@@ -194,13 +223,14 @@ func (s *Service) seedFirstRunConfirmation(agentID, name string) error {
 		return err
 	}
 	createdAt := nowUnixMs()
+	confirmText := fmt.Sprintf("Nice to meet you — I'm %s from now on. What should we work on first?", name)
 	message := Storage.Message{
 		ID:          newID(),
 		AgentID:     agentID,
 		Seq:         seq,
 		Role:        "assistant",
-		BlocksJSON:  "[]",
-		Text:        fmt.Sprintf("Nice to meet you — I'm %s from now on. What should we work on first?", name),
+		BlocksJSON:  mustMarshal([]Protocol.Block{{Type: Protocol.BlockText, Text: confirmText}}),
+		Text:        confirmText,
 		Status:      "complete",
 		CreatedAt:   createdAt,
 		CompletedAt: createdAt,
