@@ -7,6 +7,8 @@ import (
 	"github.com/anyscapelabs/argus/Protocol"
 )
 
+const publicModelError = "An error has occurred. Try again later."
+
 // messageIsOpaqueProviderError reports whether an error carries no usable
 // detail: the provider said something generic ("Provider returned error" or
 // empty) and gave no code a user could act on. These are upstream flakiness,
@@ -36,16 +38,29 @@ func messageIsOpaqueProviderError(e *Protocol.Error) bool {
 	if msg == "an error has occurred. try again later." {
 		return true
 	}
+	if strings.Contains(msg, "upstream provider rejected") {
+		return true
+	}
 	return false
 }
 
-// Only the visible opaque provider message is replaced; the raw body and code
-// remain in the database for debugging.
+// Model failures expose only rate and usage limits. Raw provider bodies stay in
+// model_requests.error_raw for diagnostics and never enter the transcript.
 func friendlyError(e *Protocol.Error) {
-	if e == nil || !messageIsOpaqueProviderError(e) {
+	if e == nil {
 		return
 	}
-	e.Message = "Sorry, something went wrong connecting to the model. Please try again."
+	e.Message = publicErrorMessage(e.Code, e.Message)
+}
+
+func publicErrorMessage(code, message string) string {
+	if strings.TrimSpace(message) == "" {
+		return ""
+	}
+	if code == Protocol.CodeRateLimited || Protocol.IsUsageLimit(code) {
+		return message
+	}
+	return publicModelError
 }
 
 // retryDelay honors the provider's Retry-After when present, otherwise backs

@@ -256,12 +256,22 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	// behind the loader, so a request costs schemas for one integration at
 	// most instead of all of them.
 	withTools := s.attachTools(&req, &target, mcpServersReferenced(history, s.connectedServerIDs()))
+	firstRunPending := s.firstRunPending(agentID)
+	if firstRunPending && withTools {
+		// Naming is the one first-run capability exposed directly. The model can
+		// ask naturally on one turn and save the answer on the next without an
+		// extra search_tools/invoke_tool round-trip.
+		req.Tools = append(req.Tools, setAgentNameToolDef)
+	}
 	scheduledFire := kind == Storage.MessageKindScheduled
 	if scheduledFire {
 		req.Tools = withoutScheduleCreationTools(req.Tools)
 	}
 	delegated := envelope != nil && envelope.Delegated != nil
 	sysPrompt := BuildSystemPrompt(s.Core.DB.SQL(), agentID, systemPromptFor(profile, withTools), delegated)
+	if firstRunPending {
+		sysPrompt += s.firstRunPrompt(agentID, withTools)
+	}
 	if envelope != nil {
 		sysPrompt += Memory.ThreadPrompt(s.Core.DB, envelope.ThreadID)
 	}

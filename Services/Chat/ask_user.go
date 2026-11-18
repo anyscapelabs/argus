@@ -51,14 +51,7 @@ func (s *Service) PendingAskUser(agentID string) Shared.AskUserListResult {
 	}
 	agentID = normalizeAgentID(agentID)
 	pending := s.askUserStore.List(agentID)
-	out := make([]Shared.AskUserRequestView, 0, len(pending)+1)
-	// Onboarding's naming card has no blocked tool call behind it — it is drawn
-	// from the app setting — so it is served from there and still appears after
-	// a reload. It leads because it gates the conversation: the chat input is
-	// disabled while it waits.
-	if s.firstRunCardPending(agentID) {
-		out = append(out, firstRunCard(agentID))
-	}
+	out := make([]Shared.AskUserRequestView, 0, len(pending))
 	for _, request := range pending {
 		out = append(out, request.view)
 	}
@@ -74,12 +67,6 @@ func (s *Service) RespondAskUser(requestID, answer string) Shared.ActionResult {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeBadInput, "The answer is too long")}
 	}
 	requestID = strings.TrimSpace(requestID)
-	// The onboarding card is answered without a run behind it: its answer is
-	// what starts the first model turn. Everything else is the answer to a
-	// tool call waiting in a live run.
-	if requestID == firstRunQuestionID {
-		return s.answerFirstRun(answer)
-	}
 	request, ok := s.askUserStore.Get(requestID)
 	if !ok || !request.settle(answer, "answered") {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeNotFound, "That question is no longer waiting")}
@@ -101,12 +88,9 @@ type askUserRecord struct {
 	Answer   string `json:"answer"`
 }
 
-// persistAskUserAnswer writes the settled question card into the transcript.
-// announce is false for app-authored seeding (onboarding), because
-// chat:message is the run indicator's "a turn is live" signal: emitting it with
-// no run behind it leaves the chat stuck on "Thinking…" forever. It is best-
-// effort for the generic path (a failed write must not undo the answer the run
-// already received), so callers log the failure rather than ignoring it.
+// persistAskUserAnswer writes a settled model-requested question card into the
+// transcript. It is best-effort: a failed write must not undo the answer the
+// live run already received.
 func (s *Service) persistAskUserAnswer(agentID, question, answer string, announce bool) (string, error) {
 	seq, err := s.Core.DB.NextSeq(agentID)
 	if err != nil {

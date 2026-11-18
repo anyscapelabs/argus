@@ -92,7 +92,7 @@ func (s *Service) GetChat(agentID string, beforeSeq, limit int) Shared.GetChatRe
 			Kind:         m.Kind,
 			Text:         m.Text,
 			Status:       m.Status,
-			ErrorMessage: m.ErrorMessage,
+			ErrorMessage: publicErrorMessage(m.ErrorCode, m.ErrorMessage),
 			ErrorCode:    m.ErrorCode,
 			StopReason:   m.StopReason,
 			ModelRef:     m.ModelRef,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"unicode/utf8"
 
@@ -57,15 +58,18 @@ func runAgentNameTool(
 	if err != nil {
 		return result(err.Error(), true)
 	}
+	if agentID == "default" {
+		if err := s.completeFirstRun(); err != nil {
+			log.Printf("chat: could not complete first-run onboarding after rename: %v", err)
+		}
+	}
 	s.Core.EmitEvent(Shared.EventSlotsChanged, nil)
 	raw, _ := json.Marshal(map[string]string{"name": name, "handle": handle})
 	return result(string(raw), false)
 }
 
-// saveAgentName writes the display name and its @handle. The set_agent_name
-// tool and the onboarding card both go through here, so the two can never
-// disagree about what a rename touches. The handle rides along so @mentions
-// keep matching the new name; it is slugged and de-duplicated by storage.
+// saveAgentName writes the display name and its @handle. The handle rides along
+// so @mentions keep matching the new name; storage slugs and de-duplicates it.
 func saveAgentName(db *Storage.DB, agentID, name string) (string, error) {
 	profile, found, err := db.GetAgentProfile(agentID)
 	if err != nil {
