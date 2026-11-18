@@ -1,11 +1,13 @@
 ---
 name: gmail
-description: Search, read, draft, reply, send, and label email in Gmail.
+description: Search, read, draft, reply, and label email in Gmail. Sending mail is a separate Argus action that requires explicit user approval.
 ---
 
 # Gmail Workflow
 
 All Gmail tools are prefixed `gmail__` and are unlocked in your session after reading this skill.
+
+There is **no** `gmail__send_message` tool. The Gmail connector can search, read, draft, reply, and label — it cannot send. Never claim an email was sent: a created draft is not a sent email.
 
 ## Standard Chains
 
@@ -21,7 +23,8 @@ All Gmail tools are prefixed `gmail__` and are unlocked in your session after re
 
 3. **Send or Draft a New Email**
    - If the user says "draft" or does not explicitly confirm sending to an external recipient, prefer `gmail__create_draft`.
-   - For explicit send requests, verify recipient email address (`to`), `subject`, and `body` before calling `gmail__send_message`.
+   - There is no send tool in this session. To get an email out: create the draft with `gmail__create_draft`, then tell the user the draft is ready in their Gmail drafts box for them to review and send themselves.
+   - NEVER claim an email was sent. A created draft is not a sent email. If the user insists on sending, say plainly that sending is not available yet and the draft is ready for them to send.
 
 ## Gotchas
 - Always inspect the unlocked schema list below for exact parameter names (`thread_id` vs `threadId`, `q` vs `query`).

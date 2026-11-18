@@ -7,11 +7,3 @@ export default function Spinner({ className = '' }: { className?: string }) {
     />
   )
 }
-
-export function CenteredSpinner() {
-  return (
-    <div className="flex h-full w-full items-center justify-center bg-primary">
-      <Spinner />
-    </div>
-  )
-}

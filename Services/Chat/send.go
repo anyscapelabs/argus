@@ -23,9 +23,11 @@ const defaultMaxOutputTokens = int64(4096)
 
 // maxToolRounds is a runaway backstop for the agent loop (model turn + tool
 // execution pairs), not a work budget. It used to be 12, which ended any
-// multi-step coding or ops task mid-plan. Real limits live elsewhere: context
-// is kept in check by compactRunMessages, and a model stuck repeating itself
-// is caught by stuckRoundLimit.
+// multi-step coding or ops task mid-plan. The real work budgets are
+// maxToolCallsPerTurn and noProgressRoundLimit in run_budget.go, which bound
+// total calls and aimless rounds no matter how the inputs vary; context is
+// kept in check by compactRunMessages, and a model repeating the same calls
+// is caught by stuckRoundLimit. 250 stays as the last-resort backstop.
 const maxToolRounds = 250
 
 // maxModelRetries bounds retries per model turn when the provider failed in
@@ -91,10 +93,7 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.SendResult{Error: aerr}
 	}
-	agentID = strings.TrimSpace(agentID)
-	if agentID == "" {
-		agentID = "default"
-	}
+	agentID = normalizeAgentID(agentID)
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeBadInput, "Message text is required")}
@@ -104,9 +103,7 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	if err != nil {
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
-	if strings.TrimSpace(profile.ModelRef) == "" {
-		return Shared.SendResult{Error: Shared.NewError(Shared.CodeBadInput, "Select a model before sending")}
-	}
+	modelRef := Shared.RouterAutoModelRef
 
 	// Reserve the agent's run slot up front so a double-click cannot start
 	// two runs. The empty value marks the reservation; it is filled with
@@ -121,31 +118,34 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	}
 	s.agentRun[agentID] = ""
 	s.mu.Unlock()
-	release := func() {
+	// Every early return below gives the reservation back. Once the real run id
+	// owns the slot (launched), the run releases it itself when it finishes.
+	launched := false
+	defer func() {
+		if launched {
+			return
+		}
 		s.mu.Lock()
 		if s.agentRun[agentID] == "" {
 			delete(s.agentRun, agentID)
 		}
 		s.mu.Unlock()
-	}
+	}()
 
 	// Validate the provider, key and routing target before any message or
 	// request row is written, so a rejected send never leaves artifacts
 	// behind in the chat.
-	providerID, modelID := Models.SplitRef(profile.ModelRef)
+	providerID, modelID := Models.SplitRef(modelRef)
 	provider, ok := s.Core.Store.Get().Provider(providerID)
 	if !ok {
-		release()
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeUnknownProvider, "Unknown provider")}
 	}
 	if base := s.baseURLOverride(providerID); base != "" {
 		provider.BaseURL = base
 	}
-	// Defence in depth: the selected model must be in the paired plan's
-	// allowlist. The router enforces it server-side too, but failing here
-	// keeps the agent's profile honest.
+	// Defence in depth: the auto alias must be in the paired plan's allowlist.
+	// The router enforces the same boundary server-side.
 	if providerID == Shared.RouterProviderID && !s.allowedModel(modelID) {
-		release()
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeBadInput, "This model is not in your plan")}
 	}
 	overlayProvider, _ := s.Core.Overlay.Lookup(providerID)
@@ -153,14 +153,12 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	if !provider.NoAuth {
 		stored, kerr := getKey(providerID)
 		if kerr != nil {
-			release()
 			if errors.Is(kerr, Keyring.ErrNotFound) {
 				return Shared.SendResult{Error: Shared.NewError(Shared.CodeNotConfigured, "Connect "+providerID+" before sending")}
 			}
 			return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, "The secrets store is unreachable. Re-enter the key")}
 		}
 		if strings.TrimSpace(stored) == "" {
-			release()
 			return Shared.SendResult{Error: Shared.NewError(Shared.CodeNotConfigured, "Connect "+providerID+" before sending")}
 		}
 		key = stored
@@ -170,7 +168,6 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 		Quirks:       overlayProvider.Quirks,
 	})
 	if terr != nil {
-		release()
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeBadInput, terr.Error())}
 	}
 
@@ -180,25 +177,17 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	// allocation collides on the (agent_id, seq) unique index.
 	userSeq, serr := s.Core.DB.NextSeq(agentID)
 	if serr != nil {
-		release()
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, serr.Error())}
 	}
 	assistantSeq, aserr := s.Core.DB.NextSeq(agentID)
 	if aserr != nil {
-		release()
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, aserr.Error())}
 	}
 
-	uid, _ := uuid.NewV7()
-	userID := uid.String()
-	aid, _ := uuid.NewV7()
-	assistantID := aid.String()
-	rid, _ := uuid.NewV7()
-	runID := rid.String()
+	userID, assistantID, runID := newID(), newID(), newID()
 
 	userBlocks, aerr := s.attachmentBlocks(agentID, attachmentIDs)
 	if aerr != nil {
-		release()
 		return Shared.SendResult{Error: aerr}
 	}
 	userBlocks = append([]Protocol.Block{{Type: Protocol.BlockText, Text: text}}, userBlocks...)
@@ -220,7 +209,6 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 		CompletedAt: nowUnixMs(),
 	}
 	if err := s.Core.DB.InsertMessage(userMsg); err != nil {
-		release()
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
 
@@ -232,11 +220,10 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 		BlocksJSON: "[]",
 		Text:       "",
 		Status:     "streaming",
-		ModelRef:   profile.ModelRef,
+		ModelRef:   modelRef,
 		CreatedAt:  nowUnixMs(),
 	}
 	if err := s.Core.DB.InsertMessage(assistantMsg); err != nil {
-		release()
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
 
@@ -247,7 +234,7 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	if merr != nil {
 		log.Printf("chat: memory selection failed: %v", merr)
 	}
-	historyBudget := s.historyBudgetTokens(profile.ModelRef, providerID, modelID) - int64(memorySelection.EstimatedTokens)
+	historyBudget := s.historyBudgetTokens(modelRef, providerID, modelID) - int64(memorySelection.EstimatedTokens)
 	if historyBudget < 1000 {
 		historyBudget = 1000
 	}
@@ -315,7 +302,7 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 
 	// Keep the default output budget unless the model's own limit is tighter,
 	// so reasoning models aren't handed a field they reject.
-	clampToModel(s, profile.ModelRef, providerID, modelID, &target, &req.MaxOutputTokens)
+	clampToModel(s, modelRef, providerID, modelID, &target, &req.MaxOutputTokens)
 
 	mr := Storage.ModelRequest{
 		ID:                  runID,
@@ -324,7 +311,7 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 		Attempt:             1,
 		ProviderID:          providerID,
 		ModelID:             modelID,
-		ModelRef:            profile.ModelRef,
+		ModelRef:            modelRef,
 		AdapterFamily:       string(target.Family),
 		BaseHost:            hostOf(provider.BaseURL),
 		Slot:                "",
@@ -337,7 +324,6 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 		StartedAt:           nowUnixMs(),
 	}
 	if err := s.Core.DB.InsertModelRequest(mr); err != nil {
-		release()
 		return Shared.SendResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
 	if len(memorySelection.Items) > 0 {
@@ -358,6 +344,7 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 		s.cancels = map[string]context.CancelFunc{}
 	}
 	s.agentRun[agentID] = runID
+	launched = true
 	ctx, cancel := context.WithCancel(context.Background())
 	threadID := runID
 	baseHops := 0
@@ -384,7 +371,7 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 		prepared(started)
 	}
 	s.Core.EmitEvent(Shared.EventChatRunStarted, map[string]any{"agent_id": agentID, "run_id": runID})
-	go s.runTurn(runID, ctx, cancel, agentID, assistantID, profile.ModelRef, kind, req, &target, profile, mr, envelope)
+	go s.runTurn(runID, ctx, cancel, agentID, assistantID, modelRef, req, &target, profile, mr, envelope)
 
 	s.Core.EmitEvent(Shared.EventChatMessage, map[string]any{"agent_id": agentID, "message_id": userID})
 	s.Core.EmitEvent(Shared.EventChatMessage, map[string]any{"agent_id": agentID, "message_id": assistantID})

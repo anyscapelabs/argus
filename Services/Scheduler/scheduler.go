@@ -11,6 +11,7 @@ package Scheduler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -42,9 +43,10 @@ type Notifier interface {
 }
 
 type pendingRun struct {
-	taskID string
-	runID  string
-	title  string
+	taskID  string
+	runID   string
+	title   string
+	agentID string
 }
 
 type Service struct {
@@ -394,7 +396,7 @@ func (s *Service) fire(t Storage.ScheduledTask, now int64) error {
 		if s.pending == nil {
 			s.pending = map[string]pendingRun{}
 		}
-		s.pending[start.RunID] = pendingRun{taskID: t.ID, runID: runRowID, title: t.Title}
+		s.pending[start.RunID] = pendingRun{taskID: t.ID, runID: runRowID, title: t.Title, agentID: agentID}
 		s.mu.Unlock()
 	})
 	if !res.Ok {
@@ -508,9 +510,30 @@ func (s *Service) runFinished(out servicechat.RunOutcome) {
 	if detail != "" {
 		body = fmt.Sprintf("%s (%s)", body, detail)
 	}
-	if s.Notifier != nil {
+	if s.Notifier != nil && !s.isAgentMuted(p.agentID) {
 		s.Notifier.Notify(p.runID, p.title, body)
 	}
+}
+
+func (s *Service) isAgentMuted(agentID string) bool {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" || s.Core == nil || s.Core.DB == nil {
+		return false
+	}
+	raw, _, err := s.Core.DB.GetAppSetting("muted_agent_ids")
+	if err != nil || strings.TrimSpace(raw) == "" {
+		return false
+	}
+	var ids []string
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+		return false
+	}
+	for _, id := range ids {
+		if strings.TrimSpace(id) == agentID {
+			return true
+		}
+	}
+	return false
 }
 
 func firstLine(text string) string {

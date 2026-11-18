@@ -3,6 +3,7 @@ package Chat
 import (
 	"fmt"
 	"hash/fnv"
+	"strings"
 
 	"github.com/anyscapelabs/argus/Protocol"
 )
@@ -19,6 +20,17 @@ const (
 	// generous: an unattended agent polling a long build is legitimate, a
 	// model repeating one failing call forever is not.
 	stuckRoundLimit = 8
+	// maxToolCallsPerTurn bounds how many tool calls one turn may execute in
+	// total, regardless of round count. Varied-but-aimless discovery spam
+	// (27 connector calls in one turn hunting for a send tool that does not
+	// exist) evaded the identical-signature stuck detector; a total-call
+	// budget cannot be evaded by rewording the inputs.
+	maxToolCallsPerTurn = 25
+	// noProgressRoundLimit is how many consecutive rounds may end with every
+	// tool call failing before the turn is stopped as making no progress. A
+	// model course-correcting from one or two errors is normal; five rounds
+	// of nothing but errors is not.
+	noProgressRoundLimit = 5
 )
 
 // modelContextTokens resolves the model's context window. Unknown models are
@@ -110,4 +122,28 @@ func callSignature(calls []Protocol.ToolCall) uint64 {
 		_, _ = h.Write([]byte{0})
 	}
 	return h.Sum64()
+}
+
+// isQuotaRateLimitError reports whether a tool result is a rate-limit or
+// quota-exhaustion failure. Retrying inside the same turn is pointless — a
+// daily cap will not lift mid-turn — so the loop stops and reports honestly
+// instead of burning calls against a closed door.
+func isQuotaRateLimitError(text string) bool {
+	t := strings.ToLower(text)
+	for _, marker := range []string{
+		"429",
+		"too many requests",
+		"rate limit",
+		"ratelimit",
+		"daily_limit_reached",
+		"daily limit",
+		"quota exceeded",
+		"quota_exceeded",
+		"resource_exhausted",
+	} {
+		if strings.Contains(t, marker) {
+			return true
+		}
+	}
+	return false
 }

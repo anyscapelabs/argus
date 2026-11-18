@@ -82,22 +82,11 @@ function AgentBubble({
 
   const reactionBadge = <ReactionBadge reaction={reaction} />
 
-  if (failed && !text.trim() && !error) {
-    return (
-      <div className={`group flex w-fit max-w-full items-center gap-2 ${className}`}>
-        <div className="relative max-w-xl rounded-xl border border-danger/40 bg-secondary px-2 py-1 text-sm text-danger">
-          The model call failed
-          {reactionBadge}
-        </div>
-        {actions}
-      </div>
-    )
-  }
   if (failed && !text.trim()) {
     return (
       <div className={`group flex w-fit max-w-full items-center gap-2 ${className}`}>
         <div className="relative max-w-xl rounded-xl border border-danger/40 bg-secondary px-2 py-1 text-sm text-danger">
-          <Markdown>{error ?? ''}</Markdown>
+          {error ? <Markdown>{error}</Markdown> : 'The model call failed'}
           {reactionBadge}
         </div>
         {actions}

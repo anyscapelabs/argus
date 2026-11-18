@@ -1,20 +1,19 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { lazy, Suspense } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useAgentProfile, ensureAgentModel } from '../domains/models/hooks'
-import { useChatMessages, useSendMessage, useSetMessageReaction } from '../domains/chat/hooks'
+import { useAgentProfile } from '../domains/models/hooks'
+import { useChatMessages, useSendMessage, useSetMessageReaction, useStopRun } from '../domains/chat/hooks'
 import { noticeText } from '../domains/permission/api'
 import { usePermissionFlow } from '../domains/permission/hooks'
+import { useEmailActionFlow } from '../domains/action/hooks'
 import { useMCPConnectFlow } from '../domains/mcp/hooks'
 import { useTakeoverFlow } from '../domains/browser/hooks'
 import { useRunIndicator } from '../domains/chat/runIndicator'
 import { createCoalescedInvalidator } from '../domains/chat/invalidate'
 import { useArtifacts } from '../domains/artifacts/hooks'
-import { motion, AnimatePresence } from 'framer-motion'
-import { FiArrowDown, FiChevronRight, FiGlobe, FiLink, FiTerminal } from 'react-icons/fi'
+import { AnimatePresence } from 'framer-motion'
+import { FiArrowDown, FiGlobe, FiLink, FiTerminal } from 'react-icons/fi'
 import Toolbar from '../components/layout/Toolbar'
-import AgentAvatar from '../components/AgentAvatar'
-import { AVATAR_COLORS } from '../components/AgentGem'
 import ChatInput from '../components/chat/ChatInput'
 import AgentBubble from '../components/chat/AgentBubble'
 import UserBubble from '../components/chat/UserBubble'
@@ -22,6 +21,7 @@ import ThinkingIndicator from '../components/chat/ThinkingIndicator'
 import Argus from '../components/chat/Argus'
 import Spinner from '../components/Spinner'
 import PermissionCard from '../components/chat/PermissionCard'
+import EmailDraftCard from '../components/chat/EmailDraftCard'
 import MCPConnectCard from '../components/mcp/MCPConnectCard'
 import TakeoverCard from '../components/browser/TakeoverCard'
 import Notifier from '../components/chat/Notifier'
@@ -34,25 +34,29 @@ import ArtifactCard from '../components/chat/ArtifactCard'
 import { weaveTranscript } from '../lib/transcript'
 import { useLiveCall, type VoiceCallSummary } from '../domains/live/useLiveCall'
 import { saveVoiceCall } from '../domains/live/api'
+import type { PendingAttachment } from '../domains/uploads/api'
 import { useAskUserFlow } from '../domains/askUser/hooks'
+import { beginFirstRun } from '../domains/chat/api'
 import AskUserCard from '../components/chat/AskUserCard'
 import FileWriteCard from '../components/chat/FileWriteCard'
 
-type PendingSend = {
-  id: number
-  text: string
-  modelRef: string | null
-  attachments: { id: string; filename: string; kind: string; dataUrl?: string }[]
+type BadgeIcon = ComponentType<{ size?: number; className?: string }>
+
+// The small outlined icon that leads a notice line in the transcript.
+const NOTICE_ICONS: Record<string, BadgeIcon> = { mcp: FiLink, takeover: FiGlobe }
+
+function NoticeBadge({ icon: Icon }: { icon: BadgeIcon }) {
+  return (
+    <div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary">
+      <Icon size={9} className="text-secondary" />
+    </div>
+  )
 }
 
 export default function Chat({
-  pendingSend,
-  onPendingConsumed,
   onOpenArtifact,
   agentID = 'default',
 }: {
-  pendingSend?: PendingSend | null
-  onPendingConsumed?: () => void
   onOpenArtifact?: (artifactID: string) => void
   agentID?: string
 }) {
@@ -64,6 +68,7 @@ export default function Chat({
     noticeLines,
     noticeKeyText,
   } = usePermissionFlow(agentID)
+  const emailAction = useEmailActionFlow(agentID)
   const { mcpConnect, mcpState, mcpError, decide: decideMCP } = useMCPConnectFlow(agentID)
   const { takeover, takeoverState, takeoverError, takeoverBusy, decide: decideTakeover } = useTakeoverFlow(agentID)
   // The documents this agent has written. They come from the table, not from the
@@ -89,19 +94,37 @@ export default function Chat({
   // The hook hands each call over once; identity alone prevents duplicate
   // persistence if surrounding query state causes another render.
   const savedCallRef = useRef<VoiceCallSummary | null>(null)
-  const pendingConsumedId = useRef<number | null>(null)
   // Backend events arrive in bursts; one coalesced refetch per burst keeps the
   // transcript from re-rendering (and flickering) several times per message.
   const chatInvalidator = useMemo(() => createCoalescedInvalidator(qc), [qc])
   useEffect(() => () => chatInvalidator.dispose(), [chatInvalidator])
   const invalidateChat = chatInvalidator.invalidate
+  // First-run onboarding: the default agent's first conversation opens with a
+  // seeded greeting plus a naming question driven by the backend. The backend
+  // call is idempotent, and the ref keeps re-mounts from paying for it again.
+  const firstRunStartedRef = useRef(false)
+  useEffect(() => {
+    if (agentID !== 'default' || firstRunStartedRef.current) return
+    firstRunStartedRef.current = true
+    beginFirstRun(agentID)
+      .then(() => invalidateChat(['chat', agentID, 'history']))
+      .catch((err) => console.warn('first run could not start', err))
+  }, [agentID, invalidateChat])
   const {
     status,
     chip,
     runActive,
+    runID,
     setRunActive,
     beginThink,
   } = useRunIndicator(agentID, invalidateChat)
+  const stopRun = useStopRun()
+  const handleStop = () => {
+    if (!runID || stopRun.isPending) return
+    stopRun.mutate(runID, {
+      onError: (err) => console.warn('stop failed', err),
+    })
+  }
 
   useEffect(() => {
     if (voice.status !== 'ended') return
@@ -140,40 +163,15 @@ export default function Chat({
       .catch((err) => console.error('saving voice call failed', err))
   }, [voice.status, voice.lastCall, send, runActive, setRunActive, beginThink, qc])
 
-  // Serialize sends through the async model settle: a second Enter while the
-  // first is still waiting on ensureAgentModel must not double-send.
-  const sendingRef = useRef(false)
-  const handleSend = async (
-    text: string,
-    _modelRef: string | null,
-    attachments?: { id: string; filename: string; kind: string; dataUrl?: string }[],
-  ) => {
-    if (sendingRef.current || send.isPending || runActive) return
-    sendingRef.current = true
-    // Same settle as the pendingSend path: a send racing ChatInput's one-time
-    // agent-model write must not leave with no model configured.
-    try {
-      await ensureAgentModel(qc, agentID)
-    } catch {
-      // the send reports its own error if the model write failed
-    }
+  // Every turn, from the composer or a voice fallback, sends the same way. The
+  // backend pins every turn to the auto router, including unattended runs.
+  const startSend = (text: string, attachments: PendingAttachment[] = [], onSettled?: () => void) => {
     setRunActive(true)
     beginThink()
     send.mutate(
+      { text, attachmentIDs: attachments.map((a) => a.id), attachments },
       {
-        text,
-        attachmentIDs: attachments?.map((a) => a.id),
-        attachments: attachments?.map((a) => ({
-          id: a.id,
-          filename: a.filename,
-          kind: a.kind,
-          dataUrl: a.dataUrl,
-        })),
-      },
-      {
-        onSettled: () => {
-          sendingRef.current = false
-        },
+        onSettled,
         onError: (err: any) => {
           console.error('send failed', err)
           setRunActive(false)
@@ -182,42 +180,15 @@ export default function Chat({
     )
   }
 
-  // The first message must never be lost to a startup race. The consumption
-  // does not wait on the mounted profile query (a boot-time error there used
-  // to stall this effect forever and swallow the message); ensureAgentModel
-  // re-reads the profile fresh, settles the agent model when one is truly
-  // missing, and any failure still falls through to the send, whose backend
-  // error is visible instead of silent.
-  useEffect(() => {
-    if (!pendingSend?.text) return
-    if (pendingConsumedId.current === pendingSend.id) return
-    if (send.isPending || runActive) return
-    pendingConsumedId.current = pendingSend.id
-    onPendingConsumed?.()
-    const consume = async () => {
-      try {
-        await ensureAgentModel(qc, agentID)
-      } catch (err) {
-        console.warn('default model could not be settled', err)
-      }
-      setRunActive(true)
-      beginThink()
-      send.mutate(
-        {
-          text: pendingSend.text,
-          attachmentIDs: pendingSend.attachments.map((a) => a.id),
-          attachments: pendingSend.attachments,
-        },
-        {
-          onError: (err: any) => {
-            console.error('send failed', err)
-            setRunActive(false)
-          },
-        },
-      )
-    }
-    void consume()
-  }, [pendingSend, qc, send, runActive, beginThink, setRunActive])
+  // Serialize sends so a second Enter cannot double-send.
+  const sendingRef = useRef(false)
+  const handleSend = (text: string, attachments?: PendingAttachment[]) => {
+    if (sendingRef.current || send.isPending || runActive) return
+    sendingRef.current = true
+    startSend(text, attachments, () => {
+      sendingRef.current = false
+    })
+  }
 
   // The turn in flight has a database row but is deliberately not drawn until it
   // finishes, so anything anchored inside that window waits with it: the card and
@@ -282,7 +253,7 @@ export default function Chat({
     const el = scrollRef.current
     if (!el || !pinnedRef.current) return
     el.scrollTop = el.scrollHeight
-  }, [messages, permission, noticeKeyText, errorNotice, status, mcpConnect?.request_id, takeover?.request_id, askUser.request?.request_id, artifacts.length])
+  }, [messages, permission, emailAction.action, noticeKeyText, errorNotice, status, mcpConnect?.request_id, takeover?.request_id, askUser.request?.request_id, artifacts.length])
 
   // Images, markdown cards and fonts can settle after a message commits. Follow
   // those size changes only while the reader is pinned; never pull them down
@@ -317,22 +288,18 @@ export default function Chat({
   return (
     <div className="relative flex h-dvh flex-1 min-h-0 overflow-hidden">
       <div className="relative flex flex-1 flex-col min-h-0">
-        {/* The bar overlays the transcript: window controls float above the
-            chat with no background of their own. */}
-        <Toolbar className="absolute inset-x-0 top-0" />
+        {/* The bar is transparent and overlays the transcript: the window controls
+            and the agent pill float above the chat, which scrolls underneath it
+            (the viewport below fades out toward its top edge). */}
+        <Toolbar
+          className="absolute inset-x-0 top-0"
+          agentAvatar={agentProfile?.avatar}
+          agentName={agentProfile?.agent_name}
+          onAgentClick={() => setRightOpen((v) => !v)}
+        />
         <div className="relative flex flex-1 min-h-0 flex-col">
-          <div className="absolute left-1/2 -top-10 z-30 flex -translate-x-1/2 flex-col items-center gap-2">
-            <motion.button
-              type="button"
-              onClick={() => setRightOpen((v) => !v)}
-              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-              className="group flex cursor-pointer items-center gap-2 rounded-full bg-secondary px-3 py-1 transition-colors hover:bg-hover-secondary"
-            >
-              <AgentAvatar avatar={agentProfile?.avatar || AVATAR_COLORS[0]} name={agentProfile?.agent_name || 'Argus'} size={28} />
-              <span className="text-sm font-medium text-primary">{agentProfile?.agent_name || 'Argus'}</span>
-              <FiChevronRight size={14} className="w-0 overflow-hidden opacity-0 transition-all duration-300 ease-out group-hover:w-4 group-hover:translate-x-1 group-hover:opacity-100" />
-            </motion.button>
-            {voiceActive && (
+          {voiceActive && (
+            <div className="absolute left-1/2 top-14 z-30 -translate-x-1/2">
               <VoiceNotifier
                 status={voice.status}
                 time={voice.display()}
@@ -340,12 +307,12 @@ export default function Chat({
                 onTogglePause={() => voice.togglePause()}
                 onEnd={() => voice.end()}
               />
-            )}
-          </div>
+            </div>
+          )}
           <div
             ref={scrollRef}
             onScroll={onScroll}
-            className={`flex-1 min-h-0 overflow-y-auto px-6 pb-24 [scrollbar-gutter:stable] transition-[padding] duration-200 ${voiceActive ? 'pt-24' : 'pt-14'}`}
+            className={`fade-top flex-1 min-h-0 overflow-y-auto px-6 pb-24 [scrollbar-gutter:stable] transition-[padding] duration-200 ${voiceActive ? 'pt-24' : 'pt-14'}`}
           >
             <div className="mx-auto flex max-w-3xl flex-col gap-3">
               {!isLoading && messagesError && <ErrorNotifier text={String(messagesError)} />}
@@ -361,15 +328,7 @@ export default function Chat({
                   <Notifier
                     key={item.id}
                     text={noticeText(item.notice)}
-                    icon={
-                      item.notice.kind === 'mcp' ? (
-                        <div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary"><FiLink size={9} className="text-secondary" /></div>
-                      ) : item.notice.kind === 'takeover' ? (
-                        <div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary"><FiGlobe size={9} className="text-secondary" /></div>
-                      ) : (
-                        <div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary"><FiTerminal size={9} className="text-secondary" /></div>
-                      )
-                    }
+                    icon={<NoticeBadge icon={NOTICE_ICONS[item.notice.kind] ?? FiTerminal} />}
                   />
                 ) : item.kind === 'voiceMsg' ? (
                   item.turns && item.turns.length > 0 ? (
@@ -378,11 +337,7 @@ export default function Chat({
                     <Notifier
                       key={item.id}
                       text={`Voice message · ${String(item.seconds).padStart(2, '0')}s`}
-                      icon={
-                        <div className="flex h-4 w-4 items-center justify-center rounded-md border border-secondary">
-                          <VoiceIcon size={9} className="text-secondary" />
-                        </div>
-                      }
+                      icon={<NoticeBadge icon={VoiceIcon} />}
                     />
                   )
                 ) : item.kind === 'askUserCard' ? (
@@ -424,7 +379,7 @@ export default function Chat({
                     />
                   )
                 ) : item.kind === 'artifactCard' ? (
-                  <div key={item.id} className="w-[450px]">
+                  <div key={item.id} className="w-full max-w-[450px]">
                     <ArtifactCard
                       title={item.artifact.title}
                       words={item.artifact.words}
@@ -455,13 +410,42 @@ export default function Chat({
                   </div>
                 ),
               )}
-              {!isLoading && permission && (
+              {!isLoading && permission && permission.tool === 'email_send' && emailAction.action ? (
+                <EmailDraftCard
+                  draft={{
+                    to: emailAction.action.to,
+                    cc: emailAction.action.cc,
+                    subject: emailAction.action.subject,
+                    body: emailAction.action.body,
+                    from: emailAction.action.from,
+                  }}
+                  agentName={agentProfile?.agent_name}
+                  status={emailAction.status}
+                  outcomeText={emailAction.errorText}
+                  onSend={() => decide('allow_once')}
+                  onDeny={() => decide('deny')}
+                />
+              ) : !isLoading && permission ? (
                 <PermissionCard
                   permission={permission}
                   agentName={agentProfile?.agent_name}
                   onAllowAlways={() => decide('allow_always')}
                   onAllowOnce={() => decide('allow_once')}
                   onDeny={() => decide('deny')}
+                />
+              ) : null}
+              {!isLoading && !permission && emailAction.action && emailAction.resolved && (
+                <EmailDraftCard
+                  draft={{
+                    to: emailAction.action.to,
+                    cc: emailAction.action.cc,
+                    subject: emailAction.action.subject,
+                    body: emailAction.action.body,
+                    from: emailAction.action.from,
+                  }}
+                  agentName={agentProfile?.agent_name}
+                  status={emailAction.status}
+                  outcomeText={emailAction.errorText}
                 />
               )}
               {!isLoading && errorNotice && <ErrorNotifier text={errorNotice} icon={<FiTerminal size={18} className="shrink-0 text-danger" />} />}
@@ -486,7 +470,9 @@ export default function Chat({
             </button>
           )}
         </div>
-        <div className="shrink-0">
+        {/* Same horizontal padding as the transcript viewport above, so the
+            composer lines up with the message column at every window width. */}
+        <div className="shrink-0 px-6">
           <div className="relative">
             {voice.error && !voiceActive && (
               <div className="mb-1">
@@ -499,6 +485,8 @@ export default function Chat({
               busy={send.isPending || !!askUser.request}
               onStartVoice={() => void voice.start()}
               voiceActive={voiceActive}
+              runActive={runActive}
+              onStop={handleStop}
             />
           </div>
         </div>

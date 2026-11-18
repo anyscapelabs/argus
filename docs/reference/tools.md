@@ -57,6 +57,7 @@ of waiting.
 | Tool | What it does |
 |---|---|
 | `ask_user` | Pauses the run to ask the user a question; refused in unattended contexts. |
+| `set_agent_name` | Saves the display name the user chose for the agent; refused in unattended contexts. |
 | `conversation_read` | Reads conversation history (search/list with pagination). |
 | `list_messages` | Lists messages, including other threads where permitted. |
 | `delete_message` | Deletes a message. |

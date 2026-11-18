@@ -22,9 +22,23 @@ const (
 	// BrowserTool guards the irreversible half of browsing: buying, sending,
 	// posting, deleting. Reading is free and never reaches the gate.
 	BrowserTool = "browser_action"
+	// BrowserUseTool controls whether an agent may drive the browser at all.
+	// It is separate from BrowserTool, which only gates irreversible actions.
+	BrowserUseTool = "browser_use"
 	// SkillInstallTool guards enabling/installing an Agent Skill.
 	SkillInstallTool = "skill_install"
+	// EmailSendTool guards sending email on the user's behalf: a draft is
+	// reversible, a sent message is not.
+	EmailSendTool = "email_send"
 )
+
+const (
+	GlobalAgentID = "*"
+	PolicyAsk     = "ask"
+	PolicyInherit = "inherit"
+)
+
+var policyTools = []string{TerminalTool, FileAccessTool, BrowserTool, SkillInstallTool, BrowserUseTool, EmailSendTool}
 
 // BrowserHostTool scopes a browsing grant to one site. "Always allow" then means
 // "on this site", which is what a user means when they click it on a card, and it
@@ -163,7 +177,7 @@ func (s *Service) State(agentID string) Shared.PermissionStateResult {
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.PermissionStateResult{Error: aerr}
 	}
-	grant, found, err := s.Core.DB.GetGrant(agentID, TerminalTool)
+	grant, found, err := resolveStoredGrant(s.Core.DB, agentID, TerminalTool)
 	if err != nil {
 		return Shared.PermissionStateResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
@@ -179,6 +193,97 @@ func (s *Service) State(agentID string) Shared.PermissionStateResult {
 	return Shared.PermissionStateResult{State: state}
 }
 
+// Policies returns the global defaults and per-agent overrides used by the
+// settings UI. Browser use defaults on; sensitive actions default to asking.
+func (s *Service) Policies(agentID string) Shared.PermissionPoliciesResult {
+	if aerr := s.Core.Ready(); aerr != nil {
+		return Shared.PermissionPoliciesResult{Error: aerr}
+	}
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return Shared.PermissionPoliciesResult{Error: Shared.NewError(Shared.CodeBadInput, "Choose an agent")}
+	}
+
+	policies := make([]Shared.PermissionPolicyView, 0, len(policyTools))
+	for _, tool := range policyTools {
+		globalMode := defaultPolicy(tool)
+		if grant, found, err := s.Core.DB.GetGrant(GlobalAgentID, tool); err != nil {
+			return Shared.PermissionPoliciesResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+		} else if found {
+			globalMode = grant.Mode
+		}
+
+		agentMode := PolicyInherit
+		if agentID != GlobalAgentID {
+			if grant, found, err := s.Core.DB.GetGrant(agentID, tool); err != nil {
+				return Shared.PermissionPoliciesResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+			} else if found {
+				agentMode = grant.Mode
+			}
+		}
+		effective := globalMode
+		if agentMode != PolicyInherit {
+			effective = agentMode
+		}
+		policies = append(policies, Shared.PermissionPolicyView{
+			Tool:          tool,
+			GlobalMode:    globalMode,
+			AgentMode:     agentMode,
+			EffectiveMode: effective,
+		})
+	}
+	return Shared.PermissionPoliciesResult{Policies: policies}
+}
+
+// SetPolicy writes a global default (agentID="*") or one agent override.
+// Clearing the browser action family also removes old site-specific grants so
+// the broad setting shown in the UI is the whole truth.
+func (s *Service) SetPolicy(agentID, tool, mode string) Shared.ActionResult {
+	if aerr := s.Core.Ready(); aerr != nil {
+		return Shared.ActionResult{Error: aerr}
+	}
+	agentID = strings.TrimSpace(agentID)
+	tool = strings.TrimSpace(tool)
+	mode = strings.TrimSpace(mode)
+	if agentID == "" || !isPolicyTool(tool) {
+		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeBadInput, "Unknown permission setting")}
+	}
+
+	clear := mode == PolicyAsk || mode == PolicyInherit
+	if !clear && mode != string(Storage.GrantAllow) && mode != string(Storage.GrantDeny) {
+		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeBadInput, "Unknown permission mode")}
+	}
+	if tool == BrowserTool {
+		if err := s.Core.DB.ClearGrantPrefix(agentID, BrowserTool); err != nil {
+			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+		}
+	} else if clear {
+		if err := s.Core.DB.ClearGrant(agentID, tool); err != nil {
+			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+		}
+	}
+	if clear {
+		return Shared.ActionResult{Ok: true}
+	}
+	if err := s.Core.DB.SetGrant(agentID, tool, Storage.GrantMode(mode)); err != nil {
+		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+	}
+	return Shared.ActionResult{Ok: true}
+}
+
+// IsBrowserAllowed is the runtime browser kill switch. With no saved policy,
+// browsing remains available to preserve the existing behavior.
+func (s *Service) IsBrowserAllowed(agentID string) bool {
+	if s == nil || s.Core == nil || s.Core.DB == nil {
+		return false
+	}
+	grant, found, err := resolveStoredGrant(s.Core.DB, agentID, BrowserUseTool)
+	if err != nil {
+		return false
+	}
+	return !found || grant.Mode != string(Storage.GrantDeny)
+}
+
 // Revoke removes the persisted grants of an agent — terminal, file access and
 // every site-scoped browsing grant — so one revoke leaves nothing quietly still
 // permitted.
@@ -186,7 +291,7 @@ func (s *Service) Revoke(agentID string) Shared.ActionResult {
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.ActionResult{Error: aerr}
 	}
-	for _, tool := range []string{TerminalTool, FileAccessTool, SkillInstallTool} {
+	for _, tool := range []string{TerminalTool, FileAccessTool, SkillInstallTool, BrowserUseTool} {
 		if err := s.Core.DB.ClearGrant(agentID, tool); err != nil {
 			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 		}
@@ -204,7 +309,7 @@ func (s *Service) Revoke(agentID string) Shared.ActionResult {
 // permission:requested event and blocks until the user answers through
 // Respond or the context is cancelled.
 func Request(ctx context.Context, svc *Service, agentID, agentName, tool, command string) (string, error) {
-	grant, found, err := svc.Core.DB.GetGrant(agentID, tool)
+	grant, found, err := resolveStoredGrant(svc.Core.DB, agentID, tool)
 	if err != nil {
 		return "", err
 	}
@@ -269,6 +374,47 @@ func Request(ctx context.Context, svc *Service, agentID, agentName, tool, comman
 		Command:   command,
 	})
 	return await(ctx, svc, w, id, agentID, tool, command, agentName)
+}
+
+func defaultPolicy(tool string) string {
+	if tool == BrowserUseTool {
+		return string(Storage.GrantAllow)
+	}
+	return PolicyAsk
+}
+
+func isPolicyTool(tool string) bool {
+	for _, allowed := range policyTools {
+		if tool == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+// resolveStoredGrant applies the narrowest override first: agent + host,
+// agent family, global + host, then global family.
+func resolveStoredGrant(db *Storage.DB, agentID, tool string) (Storage.Grant, bool, error) {
+	agentID = strings.TrimSpace(agentID)
+	tool = strings.TrimSpace(tool)
+	type candidate struct{ agentID, tool string }
+	candidates := []candidate{{agentID, tool}}
+	if IsBrowserGrant(tool) && tool != BrowserTool {
+		candidates = append(candidates, candidate{agentID, BrowserTool})
+	}
+	if agentID != GlobalAgentID {
+		candidates = append(candidates, candidate{GlobalAgentID, tool})
+		if IsBrowserGrant(tool) && tool != BrowserTool {
+			candidates = append(candidates, candidate{GlobalAgentID, BrowserTool})
+		}
+	}
+	for _, candidate := range candidates {
+		grant, found, err := db.GetGrant(candidate.agentID, candidate.tool)
+		if err != nil || found {
+			return grant, found, err
+		}
+	}
+	return Storage.Grant{}, false, nil
 }
 
 func await(ctx context.Context, svc *Service, w *waitingRequest, rid, agentID, tool, command, agentName string) (string, error) {

@@ -1,11 +1,21 @@
 import { useEffect, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Events } from '@wailsio/runtime'
-import { getNotices, noticeText, respondPermission, type PermissionDecision, type PermissionRequestView } from './api'
+import {
+  getNotices,
+  getPermissionPolicies,
+  noticeText,
+  resetPermissionPolicies,
+  respondPermission,
+  setPermissionPolicy,
+  type PermissionDecision,
+  type PermissionPolicyMode,
+  type PermissionRequestView,
+} from './api'
 import type { PermissionNoticeView } from './api'
 
 const noticesKey = (agentID: string) => ['chat', agentID, 'notices']
+const policiesKey = (agentID: string) => ['settings', 'permissions', agentID]
 
 export function useNotices(agentID: string) {
   return useQuery({
@@ -44,6 +54,34 @@ export function useRespondPermission(agentID: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: noticesKey(agentID) })
     },
+  })
+}
+
+export function usePermissionPolicies(agentID: string) {
+  return useQuery({
+    queryKey: policiesKey(agentID),
+    queryFn: async () => {
+      const res = await getPermissionPolicies(agentID)
+      return res.policies ?? []
+    },
+    enabled: !!agentID,
+  })
+}
+
+export function useSetPermissionPolicy() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ agentID, tool, mode }: { agentID: string; tool: string; mode: PermissionPolicyMode }) =>
+      setPermissionPolicy(agentID, tool, mode),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'permissions'] }),
+  })
+}
+
+export function useResetPermissionPolicies() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (agentID: string) => resetPermissionPolicies(agentID),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'permissions'] }),
   })
 }
 

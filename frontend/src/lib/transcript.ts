@@ -68,6 +68,8 @@ export function weaveTranscript({
   const items: TranscriptItem[] = []
   let prevTs = 0
   let ni = 0
+  // A chip marks the start of a new day, or a gap of an hour or more.
+  const needsChip = (ts: number) => !!ts && (!prevTs || dayKey(ts) !== dayKey(prevTs) || ts - prevTs >= HOUR_MS)
   const pushExtra = (e: Extra) => {
     if (e.notice) items.push({ kind: 'notice', id: e.id, notice: e.notice })
     else if (e.takeover) items.push({ kind: 'takeoverCard', id: e.id })
@@ -162,7 +164,7 @@ export function weaveTranscript({
     const start = m.created_at || ts
     if (m.kind === 'voice') {
       const rec = parseVoiceRecord(m.text || '')
-      if (ts && (!prevTs || dayKey(ts) !== dayKey(prevTs) || ts - prevTs >= HOUR_MS)) {
+      if (needsChip(ts)) {
         items.push({ kind: 'chip', id: `chip-${m.id}`, label: dayChipLabel(ts) })
       }
       items.push({ kind: 'voiceMsg', id: m.id, seconds: rec.seconds, turns: rec.turns })
@@ -170,7 +172,7 @@ export function weaveTranscript({
       continue
     }
     if (m.kind === 'file_write' && m.file_write?.path) {
-      if (ts && (!prevTs || dayKey(ts) !== dayKey(prevTs) || ts - prevTs >= HOUR_MS)) {
+      if (needsChip(ts)) {
         items.push({ kind: 'chip', id: `chip-${m.id}`, label: dayChipLabel(ts) })
       }
       items.push({ kind: 'fileWriteCard', id: m.id, write: m.file_write })
@@ -182,7 +184,7 @@ export function weaveTranscript({
       pushExtra(extras[ni])
       ni++
     }
-    if (ts && (!prevTs || dayKey(ts) !== dayKey(prevTs) || ts - prevTs >= HOUR_MS)) {
+    if (needsChip(ts)) {
       placeBefore(start)
       items.push({ kind: 'chip', id: `chip-${m.id}`, label: dayChipLabel(ts) })
     }

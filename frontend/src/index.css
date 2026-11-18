@@ -196,16 +196,12 @@
     --wails-draggable: no-drag;
 }
 
-/* Title bar: a translucent gradient of the app surface that fades out, so
-   content under the overlaying bar shows through a soft fade instead of a
-   hard colour edge. */
-@utility bar-fade {
-    background: linear-gradient(
-        to bottom,
-        color-mix(in srgb, var(--color-surface) 92%, transparent) 0%,
-        color-mix(in srgb, var(--color-surface) 70%, transparent) 55%,
-        transparent 100%
-    );
+/* A scroll viewport whose content dissolves toward its top edge. The chat
+   scrolls underneath the transparent toolbar; the fade keeps text from
+   colliding with it instead of cutting off at a hard line. */
+@utility fade-top {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 2rem);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 2rem);
 }
 
 /* ----- Appearance preferences ------------------------------------------------

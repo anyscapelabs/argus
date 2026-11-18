@@ -12,10 +12,7 @@ func (s *Service) SetMessageReaction(agentID, messageID, reaction string) Shared
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.MessageReactionResult{Error: aerr}
 	}
-	agentID = strings.TrimSpace(agentID)
-	if agentID == "" {
-		agentID = "default"
-	}
+	agentID = normalizeAgentID(agentID)
 	message, found, err := s.Core.DB.GetMessage(strings.TrimSpace(messageID))
 	if err != nil {
 		return Shared.MessageReactionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}

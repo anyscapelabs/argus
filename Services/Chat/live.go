@@ -16,10 +16,7 @@ func (s *Service) LiveConfig(agentID string) Shared.LiveConfigResult {
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.LiveConfigResult{Error: aerr}
 	}
-	agentID = strings.TrimSpace(agentID)
-	if agentID == "" {
-		agentID = "default"
-	}
+	agentID = normalizeAgentID(agentID)
 	base := s.routerBaseURL()
 	if base == "" {
 		return Shared.LiveConfigResult{Error: Shared.NewError(Shared.CodeNotConfigured, "The router is not configured")}

@@ -47,12 +47,16 @@ func (s *Service) PendingAskUser(agentID string) Shared.AskUserListResult {
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.AskUserListResult{Error: aerr}
 	}
-	agentID = strings.TrimSpace(agentID)
-	if agentID == "" {
-		agentID = "default"
-	}
+	agentID = normalizeAgentID(agentID)
 	pending := s.askUserStore.List(agentID)
-	out := make([]Shared.AskUserRequestView, 0, len(pending))
+	out := make([]Shared.AskUserRequestView, 0, len(pending)+1)
+	// Onboarding's naming card has no blocked tool call behind it — it is drawn
+	// from the app setting — so it is served from there and still appears after
+	// a reload. It leads because it gates the conversation: the chat input is
+	// disabled while it waits.
+	if s.firstRunCardPending(agentID) {
+		out = append(out, firstRunCard(agentID))
+	}
 	for _, request := range pending {
 		out = append(out, request.view)
 	}
@@ -67,7 +71,14 @@ func (s *Service) RespondAskUser(requestID, answer string) Shared.ActionResult {
 	if utf8.RuneCountInString(answer) > 2000 {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeBadInput, "The answer is too long")}
 	}
-	request, ok := s.askUserStore.Get(strings.TrimSpace(requestID))
+	requestID = strings.TrimSpace(requestID)
+	// The onboarding card is answered without a run behind it: its answer is
+	// what starts the first model turn. Everything else is the answer to a
+	// tool call waiting in a live run.
+	if requestID == firstRunQuestionID {
+		return s.answerFirstRun(answer)
+	}
+	request, ok := s.askUserStore.Get(requestID)
 	if !ok || !request.settle(answer, "answered") {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeNotFound, "That question is no longer waiting")}
 	}

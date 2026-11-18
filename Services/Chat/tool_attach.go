@@ -44,7 +44,7 @@ func (s *Service) baseToolDefs() []Protocol.ToolDef {
 		listAgentsToolDef, messageAgentToolDef, saveAgentNoteToolDef, setMyRoleToolDef,
 		scheduleReminderToolDef, createRoutineToolDef, listScheduledToolDef, cancelScheduledToolDef,
 		writeArtifactToolDef, createSlidesToolDef, conversationReadToolDef, s.connectToolDef()}
-	defs = append(defs, askUserToolDef)
+	defs = append(defs, askUserToolDef, setAgentNameToolDef, emailSendToolDef)
 	if s.Browser != nil {
 		if ok, _ := s.Browser.Available(); ok {
 			defs = append(defs, browserToolDef)

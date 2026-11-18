@@ -7,6 +7,7 @@ export {
 };
 
 export type {
+    CustomServerInput,
     Manager,
     ServerConfig,
     Tool

@@ -2,6 +2,7 @@ package Chat
 
 import (
 	"log"
+	"slices"
 	"strings"
 
 	"github.com/anyscapelabs/argus/Protocol"
@@ -14,7 +15,6 @@ func (s *Service) buildHistory(agentID string, throughSeq int, budgetTokens int6
 		return nil
 	}
 	msgs = dropErroredTurns(msgs, throughSeq)
-	agentName := agentDisplayName(s, agentID)
 	var out []Protocol.Message
 	// Steer rows are invisible turns the app raises itself (takeover
 	// handover, sign-in settled). The model must still see them, so they
@@ -82,39 +82,24 @@ func (s *Service) buildHistory(agentID string, throughSeq int, budgetTokens int6
 		// than in each adapter.
 		blocks := m.Blocks()
 		var assistantBlocks []Protocol.Block
-		firstText := true
-		hasToolUse := false
-		for _, b := range blocks {
-			if b.Type == Protocol.BlockToolUse {
-				hasToolUse = true
-				break
-			}
-		}
-		if hasToolUse {
-			hasToolUse = nextUserCarriesResult(msgs, m.Seq, throughSeq)
-		}
+		keepToolUse := slices.ContainsFunc(blocks, func(b Protocol.Block) bool { return b.Type == Protocol.BlockToolUse }) &&
+			nextUserCarriesResult(msgs, m.Seq, throughSeq)
 		for _, b := range blocks {
 			switch b.Type {
 			case Protocol.BlockText:
 				text := b.Text
-				if firstText {
-					// Cleaned history stops old titled replies from priming
-					// the model into repeating the pattern.
-					text = StripLeadingTitle(text, agentName, "history")
-					firstText = false
-				}
 				if text == "" && m.Text != "" {
 					text = m.Text
 				}
 				assistantBlocks = append(assistantBlocks, Protocol.Block{Type: Protocol.BlockText, Text: text})
 			case Protocol.BlockToolUse:
-				if hasToolUse {
+				if keepToolUse {
 					assistantBlocks = append(assistantBlocks, b)
 				}
 			}
 		}
 		if len(assistantBlocks) == 0 && m.Text != "" {
-			assistantBlocks = []Protocol.Block{{Type: Protocol.BlockText, Text: StripLeadingTitle(m.Text, agentName, "history")}}
+			assistantBlocks = []Protocol.Block{{Type: Protocol.BlockText, Text: m.Text}}
 		}
 		if len(assistantBlocks) == 0 {
 			continue

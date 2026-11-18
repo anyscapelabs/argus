@@ -12,6 +12,7 @@ import (
 
 	"github.com/anyscapelabs/argus/Protocol"
 	ProtocolShared "github.com/anyscapelabs/argus/Protocol/Shared"
+	"github.com/anyscapelabs/argus/Services/Permission"
 	"github.com/anyscapelabs/argus/Services/Shared"
 	"github.com/anyscapelabs/argus/Storage"
 )
@@ -359,6 +360,22 @@ func (s *Service) connectedServerSet(agentID string) map[string]bool {
 	return out
 }
 
+func (s *Service) agentHasGmailConnection(agentID string) bool {
+	if s.Core == nil || s.Core.DB == nil {
+		return false
+	}
+	bindings, err := Storage.ListAgentConnectionsForAgent(s.Core.DB.SQL(), agentID)
+	if err != nil {
+		return false
+	}
+	for _, b := range bindings {
+		if b.ServerID == "gmail" && b.Status == "connected" {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Service) liveToolCatalog(agentID string, scheduledFire, allowMemoryMutation bool) []Protocol.ToolDef {
 	defs := make([]Protocol.ToolDef, 0, len(s.baseToolDefs()))
 	for _, def := range s.baseToolDefs() {
@@ -370,6 +387,10 @@ func (s *Service) liveToolCatalog(agentID string, scheduledFire, allowMemoryMuta
 		}
 		if (!allowMemoryMutation && (def.Name == rememberToolDef.Name || def.Name == forgetToolDef.Name)) ||
 			(scheduledFire && def.Name == askUserToolDef.Name) {
+			continue
+		}
+		// email_send is only offered when this agent can actually send.
+		if def.Name == Permission.EmailSendTool && !s.agentHasGmailConnection(agentID) {
 			continue
 		}
 		defs = append(defs, def)
@@ -490,6 +511,8 @@ func liveToolCategory(name string) string {
 		return "agent memory"
 	case "ask_user":
 		return "interaction"
+	case "set_agent_name":
+		return "identity"
 	default:
 		if strings.Contains(name, "__") {
 			return "integration"

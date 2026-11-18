@@ -48,6 +48,16 @@ export function CustomViews(providerID: string): $CancellablePromise<Shared$0.Mo
     return $Call.ByID(3671034797, providerID);
 }
 
+/**
+ * DeleteAgent removes a teammate agent and its local data. The default agent
+ * cannot be deleted. Deletion cascades through agent-scoped tables via foreign
+ * keys and the database schema; callers should ensure no active run depends on
+ * the agent.
+ */
+export function DeleteAgent(id: string): $CancellablePromise<Shared$0.ActionResult> {
+    return $Call.ByID(1252094134, id);
+}
+
 export function DeleteCustomModel(ref: string): $CancellablePromise<Shared$0.ActionResult> {
     return $Call.ByID(612532555, ref);
 }
@@ -72,6 +82,14 @@ export function ListAgents(): $CancellablePromise<Shared$0.AgentSummary[] | null
     return $Call.ByID(3915230656);
 }
 
+export function ListMutedAgents(): $CancellablePromise<string[] | null> {
+    return $Call.ByID(1298460259);
+}
+
+export function ListPinnedAgents(): $CancellablePromise<string[] | null> {
+    return $Call.ByID(3038213094);
+}
+
 export function Picker(providerID: string, options: Shared$0.PickerOptions): $CancellablePromise<Shared$0.PickerResult> {
     return $Call.ByID(207719992, providerID, options);
 }
@@ -86,6 +104,14 @@ export function SaveAgentProfile(profile: Shared$0.AgentProfile): $CancellablePr
 
 export function SetAgentModel(id: string, modelRef: string): $CancellablePromise<Shared$0.ActionResult> {
     return $Call.ByID(185260380, id, modelRef);
+}
+
+export function SetAgentMuted(id: string, muted: boolean): $CancellablePromise<Shared$0.ActionResult> {
+    return $Call.ByID(1920980342, id, muted);
+}
+
+export function SetAgentPinned(id: string, pinned: boolean): $CancellablePromise<Shared$0.ActionResult> {
+    return $Call.ByID(1492511081, id, pinned);
 }
 
 export function SetProviderSelection(providerID: string, refs: string[] | null): $CancellablePromise<Shared$0.ActionResult> {

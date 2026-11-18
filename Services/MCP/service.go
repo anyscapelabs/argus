@@ -43,6 +43,7 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 		s.catalog = cat
 		go s.restoreRemoteSessions(cat)
 	}
+	go s.restoreCustomServers()
 	return nil
 }
 

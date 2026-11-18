@@ -3,7 +3,11 @@ package Shared
 // RouterProviderID is the single provider id in the desktop app. All model
 // traffic goes through the argus-router (OpenAI-compat endpoint) using the
 // user's argus_pk_ service-account key. See Provider/overlay.json.
-const RouterProviderID = "argus-router"
+const (
+	RouterProviderID   = "argus-router"
+	RouterAutoModelID  = "argus/auto"
+	RouterAutoModelRef = RouterProviderID + "/" + RouterAutoModelID
+)
 
 const (
 	EventCatalogUpdated      = "catalog:updated"
@@ -40,6 +44,11 @@ const (
 	EventArtifactUpdated  = "artifact:updated"
 	EventAskUserRequested = "ask_user:requested"
 	EventAskUserResolved  = "ask_user:resolved"
+	// action:requested carries the draft an agent wants to send (the approval
+	// itself rides permission:requested); action:status carries every later
+	// transition of that action's life.
+	EventActionRequested = "action:requested"
+	EventActionStatus    = "action:status"
 )
 
 const (

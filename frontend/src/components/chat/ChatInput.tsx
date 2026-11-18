@@ -1,20 +1,9 @@
-import { useRef, useState, useEffect, useCallback } from 'react'
+import { useRef, useState, useCallback } from 'react'
 import { LuPlus } from 'react-icons/lu'
 import { FaArrowUp } from 'react-icons/fa'
-import { FiCircle, FiX } from 'react-icons/fi'
-import ModelPicker from './ModelPicker'
+import { FiSquare, FiX } from 'react-icons/fi'
 import VoiceIcon from './VoiceIcon'
-import { useChatModels, useAgentProfile, useSetAgentModel } from '../../domains/models/hooks'
-import { useUsage } from '../../domains/chat/hooks'
 import { uploadFile, type PendingAttachment } from '../../domains/uploads/api'
-import { ModelIcon } from '../../lib/modelIcons'
-
-function formatUsage(n: number): string {
-  if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`
-  if (n >= 1e3) return `${(n / 1e3).toFixed(1)}K`
-  return `${n}`
-}
 
 // maxUploadBytes matches the backend cap, so an oversized file is caught here
 // before it is even sent.
@@ -34,48 +23,22 @@ function previewUrl(file: File): string {
 
 type ChatInputProps = {
   agentID?: string
-  onSend?: (text: string, modelRef: string | null, attachments: PendingAttachment[]) => void
+  onSend?: (text: string, attachments: PendingAttachment[]) => void
   busy?: boolean
   onStartVoice?: () => void
   voiceActive?: boolean
+  runActive?: boolean
+  onStop?: () => void
 }
 
-export default function ChatInput({ agentID = 'default', onSend, busy = false, onStartVoice, voiceActive = false }: ChatInputProps) {
+export default function ChatInput({ agentID = 'default', onSend, busy = false, onStartVoice, voiceActive = false, runActive = false, onStop }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const [expanded, setExpanded] = useState(false)
-  const [modelOpen, setModelOpen] = useState(false)
-  const [selectedRef, setSelectedRef] = useState<string | null>(null)
   const [text, setText] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [attachError, setAttachError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
-  const { data: chatModelsData } = useChatModels()
-  const { data: agentProfile } = useAgentProfile(agentID)
-  const setAgentModel = useSetAgentModel()
-  const { data: usage } = useUsage(agentID)
-  const chatModels = chatModelsData ?? []
-
-  const initialized = useRef(false)
-  useEffect(() => {
-    if (initialized.current) return
-    if (agentProfile === undefined || chatModelsData === undefined) return
-    if (agentProfile?.model_ref) {
-      setSelectedRef(agentProfile.model_ref)
-    } else if (chatModels.length > 0) {
-      setSelectedRef(chatModels[0].ref)
-      setAgentModel.mutate({ id: agentID, modelRef: chatModels[0].ref })
-    }
-    initialized.current = true
-  }, [agentID, agentProfile, chatModelsData])
-
-  const selectedModel = chatModels.find((m) => m.ref === selectedRef)
-  const displayName = selectedModel?.model?.name ?? selectedRef ?? 'Select model'
-
-  const handleSelectModel = (ref: string) => {
-    setSelectedRef(ref)
-    setAgentModel.mutate({ id: agentID, modelRef: ref })
-  }
 
   const addFiles = useCallback((incoming: File[]) => {
     setAttachError(null)
@@ -140,7 +103,7 @@ export default function ChatInput({ agentID = 'default', onSend, busy = false, o
           dataUrl: att.data_url,
         })
       }
-      onSend?.(value, selectedRef, uploaded)
+      onSend?.(value, uploaded)
       setFiles([])
       setText('')
       if (textareaRef.current) {
@@ -173,7 +136,7 @@ export default function ChatInput({ agentID = 'default', onSend, busy = false, o
   }
 
   return (
-    <div className="mx-auto mb-2 flex w-3xl flex-col gap-1">
+    <div className="mx-auto mb-2 flex w-full max-w-3xl flex-col gap-1">
       {files.length > 0 && (
         <div className="flex flex-wrap gap-2 px-2">
           {files.map((f, i) => (
@@ -233,9 +196,19 @@ export default function ChatInput({ agentID = 'default', onSend, busy = false, o
               }
             }}
             placeholder={files.length ? 'Add a message…' : 'Message…'}
-            className="mx-2 min-h-7 max-h-40 flex-1 resize-none overflow-hidden bg-transparent py-1 text-sm leading-5 text-primary placeholder:text-grey-300 focus:outline-none"
+            className="mx-2 min-h-7 min-w-0 max-h-40 flex-1 resize-none overflow-hidden bg-transparent py-1 text-sm leading-5 text-primary placeholder:text-grey-300 focus:outline-none"
           />
-          {text.trim() || files.length ? (
+          {runActive ? (
+            <button
+              type="button"
+              aria-label="Stop"
+              title="Stop"
+              onClick={() => onStop?.()}
+              className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent text-accent-foreground transition-colors hover:bg-hover-accent"
+            >
+              <FiSquare className="size-3 fill-current" />
+            </button>
+          ) : text.trim() || files.length ? (
             <button
               type="button"
               onClick={handleSend}
@@ -259,34 +232,6 @@ export default function ChatInput({ agentID = 'default', onSend, busy = false, o
             </button>
           )}
         </div>
-      </div>
-      <div className="relative flex items-center justify-between pr-2">
-        <span className="flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs text-secondary transition-colors hover:bg-hover-secondary hover:text-primary">
-          <FiCircle className="size-3" />
-          {usage && usage.requests ? formatUsage((usage.input_tokens ?? 0) + (usage.output_tokens ?? 0)) : '—'} tokens
-        </span>
-        <button
-          type="button"
-          onClick={() => setModelOpen((v) => !v)}
-          className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors ${
-            modelOpen
-              ? 'bg-secondary text-primary'
-              : 'text-secondary hover:bg-hover-secondary hover:text-primary'
-          }`}
-        >
-          <ModelIcon
-            modelId={selectedModel?.model?.id}
-            modelRef={selectedRef}
-            providerId={selectedModel?.provider_id}
-            size={12}
-          />
-          {displayName}
-        </button>
-        {modelOpen && (
-          <div className="absolute bottom-full right-2 mb-1">
-            <ModelPicker selectedRef={selectedRef} onSelect={handleSelectModel} onClose={() => setModelOpen(false)} />
-          </div>
-        )}
       </div>
     </div>
   )

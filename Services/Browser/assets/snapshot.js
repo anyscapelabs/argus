@@ -1,4 +1,4 @@
-// Argus snapshot pass. Runs once per observation, in an isolated execution
+// Argus snapshot pass. Runs once per observation, in the page's own JavaScript
 // world, and returns a JSON string describing everything the agent can act on.
 //
 // Two rules shape this file. First: nothing is knowable without descending into
@@ -6,6 +6,12 @@
 // querySelectorAll('*') never crosses a boundary. Second: the output has to be
 // small enough to sit in a model's context every single step, so the pruning
 // here is the product.
+//
+// The pass writes nothing into the page. Element identity lives in JavaScript
+// maps on window (__argus_refs__, __argus_visited__, __argus_idx__), which the
+// agent needs to resolve refs against live nodes; but no attribute, class or
+// style is added to any element, because a page that inspects its own DOM —
+// and a bot check does exactly that — must find it untouched.
 (function () {
   'use strict';
 
@@ -394,29 +400,27 @@
     // make the ref map match the tree it printed. Without that step a ref points
     // at a different element than the row the agent read.
     var visitedMap = new Map();
+    // node → traversal index. A WeakMap, so it never keeps a node alive: the
+    // identity check on the action path asks "is this still the node we
+    // numbered", and a node the framework unmounted must be allowed to die.
+    var idxMap = new WeakMap();
     try {
       window.__argus_visited__ = visitedMap;
+      window.__argus_idx__ = idxMap;
       window.__argus_reassign__ = function (indices) {
         var map = new Map();
         var byIndex = window.__argus_visited__ || new Map();
-        // Clear through the visited map, not a selector: querySelectorAll cannot
-        // reach inside a shadow root, and a stale ref there would silently point
-        // at the wrong node.
-        byIndex.forEach(function (node) {
-          try { node.removeAttribute('data-af-ref'); } catch (e) {}
-        });
         for (var j = 0; j < indices.length; j++) {
           var node = byIndex.get(indices[j]);
           if (!node) continue;
           var ref = map.size + 1;
-          node.setAttribute('data-af-ref', String(ref));
           map.set(ref, node);
         }
         window.__argus_refs__ = map;
         return map.size;
       };
       window.__argus_refs__ = new Map();
-    } catch (e) { /* sealed realm */ }
+    } catch (e) { /* sealed realm: the page cannot be resolved into and cannot be acted on */ }
     // Every element the walk reaches, in the order Chrome's own accessibility
     // tree reaches it. The Go side zips this against Accessibility.getFullAXTree,
     // which needs no join key and no round trip per element.
@@ -432,18 +436,18 @@
       seen.push(key);
 
       var ref = out.elements.length + 1;
-      el.setAttribute('data-af-ref', String(ref));
-      el.setAttribute('data-af-idx', String(info.index));
       // window.__argus_refs__ is a Map from ref to node. An action resolves
-      // through it rather than re-querying [data-af-ref], because a node the
-      // framework unmounted should read as "gone" instead of as the new node that
-      // happened to reuse the attribute.
+      // through it rather than re-querying the DOM, because a node the
+      // framework unmounted should read as "gone" instead of as the new node
+      // that happened to take its place. Nothing is written to the node itself:
+      // an attribute every element suddenly carries is a page-visible change,
+      // and a page that inspects its own DOM should see nothing.
       try {
         if (!window.__argus_refs__ || !(window.__argus_refs__ instanceof Map)) {
           window.__argus_refs__ = new Map();
         }
         window.__argus_refs__.set(ref, el);
-      } catch (e) { /* sealed realm: the attribute is the fallback */ }
+      } catch (e) { /* sealed realm: refs cannot resolve and actions will report stale */ }
 
       out.elements.push({
         ref: ref,
@@ -476,11 +480,9 @@
       // computes covers nodes we deliberately drop, and the zip only lines up if
       // both walks number the same elements in the same order.
       var index = visitIndex++;
-      try {
-        el.setAttribute('data-af-idx', String(index));
-        out.visited.push([index, lower(el.tagName)]);
-        visitedMap.set(index, el);
-      } catch (e) { /* detached or sealed node: positional merge degrades, ref survives */ }
+      out.visited.push([index, lower(el.tagName)]);
+      visitedMap.set(index, el);
+      try { idxMap.set(el, index); } catch (e) { /* detached or sealed node: the identity check degrades */ }
 
       if (!isVisible(el, doc)) return;
 

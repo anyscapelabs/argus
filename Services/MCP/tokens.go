@@ -282,6 +282,26 @@ func SessionAccountEmail(ctx context.Context, serverID, connectionID string) (st
 	return strings.TrimSpace(info.Email), nil
 }
 
+// GoogleHTTPClient builds an authenticated *http.Client for a stored Google
+// session, refreshing and persisting tokens like live MCP calls do.
+func GoogleHTTPClient(ctx context.Context, serverID, connectionID string) (*http.Client, error) {
+	raw, err := LoadSessionToken(serverID, connectionID)
+	if err != nil {
+		return nil, err
+	}
+	var stored storedSession
+	if err := json.Unmarshal([]byte(raw), &stored); err != nil {
+		return nil, err
+	}
+	cfg, tok, ok := stored.usable()
+	if !ok {
+		return nil, fmt.Errorf("stored session is not usable")
+	}
+	store := tokenStore{serverID: serverID, connectionID: connectionID}
+	source := &savingSource{src: cfg.TokenSource(ctx, tok), cfg: cfg, save: store.save, last: tok.AccessToken}
+	return oauth2.NewClient(ctx, source), nil
+}
+
 // RevokeGoogleSession is best effort at the service layer: callers still
 // remove the local grant when Google's revocation endpoint is unavailable.
 func RevokeGoogleSession(ctx context.Context, serverID, connectionID string) error {

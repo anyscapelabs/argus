@@ -25,16 +25,19 @@ func isStaleRef(err error) bool { return errors.Is(err, errStaleRef) }
 // signatureScript is the cheap fingerprint that decides whether the page moved.
 // It reads the things that invalidate a ref — navigation, a re-render that
 // replaced nodes, a scroll that moved everything — and deliberately avoids
-// touching the whole tree.
+// touching the whole tree. The element count stands in for the ref markers an
+// earlier design stamped into the DOM: a re-render that swaps nodes changes the
+// document's element count, and the live HTMLCollection makes reading it cheap
+// enough to run before every action.
 const signatureScript = `(function(){
   var d = document;
-  var refs = d.querySelectorAll('[data-af-ref]').length;
+  var all = d.getElementsByTagName ? d.getElementsByTagName('*').length : 0;
   var root = d.body ? d.body.children.length : 0;
   return [
     location.href,
     d.title || '',
     root,
-    refs,
+    all,
     Math.round(window.scrollY || 0),
     Math.round(window.scrollX || 0),
     d.documentElement ? d.documentElement.scrollHeight : 0
@@ -78,8 +81,8 @@ func (p *Page) capture(ctx context.Context) (*Snapshot, error) {
 	p.refs.snapshot = snap
 	p.refs.signature = ""
 	snap.Generation = p.refs.generation
-	// Record the signature after stamping refs, so it includes our own
-	// data-af-ref count.
+	// Record the signature after stamping refs, so it captures the page as the
+	// tree we just printed saw it.
 	if sig, err := p.session.EvalString(ctx, signatureScript); err == nil {
 		p.refs.signature = sig
 	}

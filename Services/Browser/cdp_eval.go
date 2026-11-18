@@ -319,8 +319,9 @@ func (s *Session) CallOn(ctx context.Context, objectID, functionDeclaration stri
 var errHandleLost = errors.New("browser: that element is no longer on the page")
 
 // refMapKey is the window property the page pass stores the ref→element Map on.
-// It is a single well-named property rather than a scattered attribute, so a page
-// that inspects its own DOM sees nothing unusual.
+// It and its siblings (__argus_visited__, __argus_idx__) are the only traces the
+// snapshot leaves behind: no attribute, class or style is ever written to an
+// element, so a page that inspects its own DOM sees nothing unusual.
 const refMapKey = "__argus_refs__"
 
 // isMissingHandle reports the DevTools way of saying "that objectId is dead".

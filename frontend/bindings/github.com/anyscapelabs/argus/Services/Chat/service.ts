@@ -20,6 +20,21 @@ export function Active(): $CancellablePromise<string[] | null> {
 }
 
 /**
+ * BeginFirstRun prepares the default agent's first conversation: it seeds the
+ * static greeting and raises the naming card. No model call is made. The card
+ * is fixed content, so the first screen after pairing is free and immediate;
+ * the model is called only after the user answers, when there is a name to save.
+ * 
+ * Everything is guarded by the firstRunSettingKey app setting, so calling it on
+ * every chat mount is cheap and idempotent. A chat with real history marks
+ * onboarding as done without raising a card, so upgraded installs never see the
+ * naming question injected into an existing conversation.
+ */
+export function BeginFirstRun(agentID: string): $CancellablePromise<Shared$0.ActionResult> {
+    return $Call.ByID(2725617360, agentID);
+}
+
+/**
  * EndLiveSession cancels any tool or permission wait owned by a finished Live
  * call and removes its discovery state.
  */

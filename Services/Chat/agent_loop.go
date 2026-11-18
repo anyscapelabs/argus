@@ -21,7 +21,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (s *Service) runTurn(runID string, ctx context.Context, cancel context.CancelFunc, agentID, assistantID, modelRef, internalKind string, req Protocol.Request, target *Protocol.Target, profile Storage.AgentProfile, mr Storage.ModelRequest, envelope *runEnvelope) {
+func (s *Service) runTurn(runID string, ctx context.Context, cancel context.CancelFunc, agentID, assistantID, modelRef string, req Protocol.Request, target *Protocol.Target, profile Storage.AgentProfile, mr Storage.ModelRequest, envelope *runEnvelope) {
 	defer cancel()
 	trace := &Router.Trace{}
 	total := Protocol.Usage{}
@@ -46,6 +46,14 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	var lastSig uint64
 	repeats := 0
 	stuck := false
+	stopReason := ""
+	// Tool-call, no-progress and quota budgets close the gap the signature
+	// detector leaves open: a turn that keeps varying its failing calls makes
+	// no forward motion but never repeats a signature.
+	toolCallCount := 0
+	noProgressRounds := 0
+	quotaBlocked := false
+	quotaHits := map[string]int{}
 
 	// The request is stateless, so a retry simply re-runs
 	// the turn; tools already executed earlier are not re-executed.
@@ -129,6 +137,16 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 					}
 				}
 			}
+			if block.IsError && isQuotaRateLimitError(block.Text) {
+				// One quota failure may be transient; a second from the same
+				// tool means the cap will not lift this turn. One retry, then
+				// stop — 27 calls against a spent daily quota is the incident
+				// this guard exists to prevent.
+				quotaHits[innerName]++
+				if quotaHits[innerName] >= 2 {
+					quotaBlocked = true
+				}
+			}
 			roundResults = append(roundResults, block)
 		}
 		if len(roundResults) > 0 {
@@ -137,28 +155,63 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 			if wroteArtifact {
 				persisted.Blocks, _ = s.withoutArtifactEcho(agentID, mr.StartedAt, persisted.Blocks, "round")
 			}
-			s.persistRound(agentID, modelRef, internalKind, persisted, roundResults)
+			s.persistRound(agentID, modelRef, persisted, roundResults)
 		}
 		rounds++
 		if sig := callSignature(calls); sig == lastSig {
 			repeats++
 			if repeats+1 >= stuckRoundLimit {
-				stuck = true
+				stuck, stopReason = true, "repeating"
 			}
 		} else {
 			lastSig, repeats = sig, 0
 		}
+		toolCallCount += len(calls)
+		allFailed := len(roundResults) > 0
+		for _, b := range roundResults {
+			if !b.IsError {
+				allFailed = false
+				break
+			}
+		}
+		if allFailed {
+			noProgressRounds++
+		} else {
+			noProgressRounds = 0
+		}
+		if !stuck {
+			switch {
+			case quotaBlocked:
+				stuck, stopReason = true, "rate_limited"
+			case toolCallCount >= maxToolCallsPerTurn:
+				stuck, stopReason = true, "tool_call_budget"
+			case noProgressRounds >= noProgressRoundLimit:
+				stuck, stopReason = true, "no_progress"
+			}
+		}
 	}
 
 	if !reachedEnd && ctx.Err() == nil && result.Error == nil {
-		// Stopped early with the model still mid-plan: either the runaway
-		// backstop or a loop repeating the same calls. Don't end on the
-		// limit itself: give it one tools-off turn to summarize honestly
-		// what ran and what did not.
+		// Stopped early with the model still mid-plan: the runaway backstop,
+		// a repeating loop, the tool-call budget, aimless rounds, or a
+		// connector that hit its quota. Don't end on the limit itself: give
+		// it one tools-off turn to summarize honestly what ran and what did
+		// not, naming why the run stopped.
+		directive := wrapUpDirective
+		switch stopReason {
+		case "repeating":
+			directive += " The same tool calls were repeating without progress."
+		case "tool_call_budget":
+			directive += " The turn's tool-call budget ran out."
+		case "no_progress":
+			directive += " Repeated tool attempts made no progress."
+		case "rate_limited":
+			directive += " A connector reported a rate limit or exhausted quota; further calls would keep failing."
+		}
 		req.Tools = nil
 		req.Messages = append(req.Messages, Protocol.Message{
 			Role:   Protocol.RoleUser,
-			Blocks: []Protocol.Block{{Type: Protocol.BlockText, Text: wrapUpDirective}},
+			Blocks: []Protocol.Block{{Type: Protocol.BlockText, Text: directive}},
 		})
 		if wrap := runModelTurn(); wrap.Error == nil && len(toolCalls(wrap.Message)) == 0 {
 			result = wrap
@@ -220,17 +273,14 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 			log.Printf("chat: could not reseq reply %s: %v", assistantID, err)
 		}
 	}
-	stopReason := ""
-	if result.Stop.Raw != "" {
-		stopReason = result.Stop.Raw
-	}
+	providerStopReason := result.Stop.Raw
 	errorMessage := ""
 	errorCode := ""
 	if result.Error != nil {
 		errorMessage = result.Error.Message
 		errorCode = result.Error.Code
 	}
-	if err := s.Core.DB.FinalizeMessage(assistantID, blocks, text, msgStatus, stopReason, modelRef, errorMessage, errorCode, nowUnixMs()); err != nil {
+	if err := s.Core.DB.FinalizeMessage(assistantID, blocks, text, msgStatus, providerStopReason, modelRef, errorMessage, errorCode, nowUnixMs()); err != nil {
 		log.Printf("chat: could not finalize message %s: %v", assistantID, err)
 	}
 
@@ -245,7 +295,7 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 			finalMR.ErrorRetryable = true
 		}
 	}
-	finalMR.StopReason = stopReason
+	finalMR.StopReason = providerStopReason
 	finalMR.HTTPStatus = trace.HTTPStatus
 	finalMR.ProviderRequestID = trace.ProviderRequestID
 	if trace.FirstByteAt > 0 {
@@ -260,18 +310,12 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	hasUsage := usage.InputTokens != 0 || usage.OutputTokens != 0 || usage.CacheReadTokens != 0 || usage.CacheWriteTokens != 0 || usage.ReasoningTokens != 0
 	if hasUsage {
 		finalMR.UsageSource = "provider"
-		in := usage.InputTokens
-		cr := usage.CacheReadTokens
-		cw := usage.CacheWriteTokens
-		out := usage.OutputTokens
-		rs := usage.ReasoningTokens
-		finalMR.InputTokens = &in
-		finalMR.CacheReadTokens = &cr
-		finalMR.CacheWriteTokens = &cw
-		finalMR.OutputTokens = &out
-		finalMR.ReasoningTokens = &rs
-		cost := s.computeCost(usage, modelRef)
-		finalMR.CostUSD = cost
+		finalMR.InputTokens = &usage.InputTokens
+		finalMR.CacheReadTokens = &usage.CacheReadTokens
+		finalMR.CacheWriteTokens = &usage.CacheWriteTokens
+		finalMR.OutputTokens = &usage.OutputTokens
+		finalMR.ReasoningTokens = &usage.ReasoningTokens
+		finalMR.CostUSD = s.computeCost(usage, modelRef)
 	} else {
 		finalMR.UsageSource = "missing"
 	}
@@ -321,13 +365,13 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 // results. Carriers have no visible text and are hidden by GetChat, but
 // buildHistory replays them, which is exactly what makes past actions visible
 // to future turns.
-func (s *Service) persistRound(agentID, modelRef, internalKind string, assistantMsg Protocol.Message, results []Protocol.Block) {
-	aid, _ := uuid.NewV7()
-	uid, _ := uuid.NewV7()
-	roundKind := internalKind
-	if roundKind == "" {
-		roundKind = Storage.MessageKindToolRound
-	}
+//
+// Round rows are always tool_round, whatever launched the run. Inheriting the
+// run's kind (steering, scheduled, delegated) misfiled the model's own call:
+// buildHistory reads a steering row as user text, so it dropped the call and
+// the result that pairs with it, and the round vanished from every later turn.
+func (s *Service) persistRound(agentID, modelRef string, assistantMsg Protocol.Message, results []Protocol.Block) {
+	roundKind := Storage.MessageKindToolRound
 	carrierKind := roundKind
 	for _, block := range results {
 		if !block.IsError && block.FileWrite != nil {
@@ -336,10 +380,10 @@ func (s *Service) persistRound(agentID, modelRef, internalKind string, assistant
 		}
 	}
 	rows := []Storage.Message{
-		{ID: aid.String(), AgentID: agentID, Role: "assistant", Kind: roundKind,
+		{ID: newID(), AgentID: agentID, Role: "assistant", Kind: roundKind,
 			BlocksJSON: mustMarshal(assistantMsg.Blocks), Text: flattenText(assistantMsg.Blocks),
 			Status: "complete", ModelRef: modelRef, CreatedAt: nowUnixMs(), CompletedAt: nowUnixMs()},
-		{ID: uid.String(), AgentID: agentID, Role: "user", Kind: carrierKind,
+		{ID: newID(), AgentID: agentID, Role: "user", Kind: carrierKind,
 			BlocksJSON: mustMarshal(results), Text: "",
 			Status: "complete", CreatedAt: nowUnixMs(), CompletedAt: nowUnixMs()},
 	}
@@ -356,12 +400,6 @@ func (s *Service) persistRound(agentID, modelRef, internalKind string, assistant
 		}
 	}
 }
-
-// messageIsOpaqueProviderError reports whether an error carries no usable
-// detail: the provider said something generic ("Provider returned error" or
-// empty) and gave no code a user could act on. These are upstream flakiness,
-// not our bug, so the run retries once and, if it still fails, the friendly
-// message above replaces the opaque one.
 
 // collectWithTyping runs a model turn identically to Protocol.Collect, but
 // fires a single chat:typing event when the first text token arrives so the
@@ -657,6 +695,10 @@ func RunAgentLoop(ctx context.Context, db *sql.DB, cfg LoopConfig) (ModelRespons
 	}
 	var usageIn, usageOut, toolCalls int
 	var rounds int
+	var noProgressRounds int
+	var quotaBlocked bool
+	quotaHits := map[string]int{}
+	stopStatus := ""
 
 	for round := 0; round < cfg.MaxRounds; round++ {
 		rounds = round + 1
@@ -664,19 +706,19 @@ func RunAgentLoop(ctx context.Context, db *sql.DB, cfg LoopConfig) (ModelRespons
 			break
 		}
 
-		if inbox, err := DrainRoundInbox(db, cfg.AgentID, cfg.ThreadID); err == nil && len(inbox) > 0 {
-			messages = append(messages, LoopMessage{Role: "user", Content: strings.Join(inbox, "\n\n")})
+		if db != nil {
+			if inbox, err := DrainRoundInbox(db, cfg.AgentID, cfg.ThreadID); err == nil && len(inbox) > 0 {
+				messages = append(messages, LoopMessage{Role: "user", Content: strings.Join(inbox, "\n\n")})
+			}
 		}
 
 		resp, err := cfg.Turn(ctx, cfg, messages)
+		usageIn += resp.InputTokens
+		usageOut += resp.OutputTokens
 		if err != nil {
-			usageIn += resp.InputTokens
-			usageOut += resp.OutputTokens
 			recordLoopMetric(db, cfg, started, rounds, usageIn, usageOut, toolCalls, "failed")
 			return resp, err
 		}
-		usageIn += resp.InputTokens
-		usageOut += resp.OutputTokens
 
 		if len(resp.ToolCalls) == 0 {
 			recordLoopMetric(db, cfg, started, rounds, usageIn, usageOut, toolCalls, "completed")
@@ -690,16 +732,45 @@ func RunAgentLoop(ctx context.Context, db *sql.DB, cfg LoopConfig) (ModelRespons
 		}
 		guard.ObserveStuck(names)
 
+		roundFailed := true
 		for _, call := range resp.ToolCalls {
 			toolCalls++
 			text, err := cfg.Exec(ctx, cfg, call)
 			if err != nil {
 				text = "Tool error: " + err.Error()
+				if isQuotaRateLimitError(text) {
+					// Same rule as the interactive loop: one retry, then
+					// stop — a daily quota will not lift mid-run.
+					quotaHits[call.Name]++
+					if quotaHits[call.Name] >= 2 {
+						quotaBlocked = true
+					}
+				}
+			} else {
+				roundFailed = false
 			}
 			messages = append(messages, LoopMessage{Role: "tool", Content: text})
 		}
+		if roundFailed {
+			noProgressRounds++
+		} else {
+			noProgressRounds = 0
+		}
 
+		if toolCalls >= maxToolCallsPerTurn {
+			stopStatus = "stopped_call_budget"
+			break
+		}
+		if quotaBlocked {
+			stopStatus = "stopped_rate_limited"
+			break
+		}
 		if guard.Stuck() {
+			stopStatus = "stopped_repeating"
+			break
+		}
+		if noProgressRounds >= noProgressRoundLimit && stopStatus == "" {
+			stopStatus = "stopped_no_progress"
 			break
 		}
 	}
@@ -707,6 +778,8 @@ func RunAgentLoop(ctx context.Context, db *sql.DB, cfg LoopConfig) (ModelRespons
 	status := "completed"
 	if ctx.Err() != nil {
 		status = "cancelled"
+	} else if stopStatus != "" {
+		status = stopStatus
 	} else if guard.Stuck() {
 		status = "stopped_repeating"
 	}
@@ -716,7 +789,10 @@ func RunAgentLoop(ctx context.Context, db *sql.DB, cfg LoopConfig) (ModelRespons
 
 // recordLoopMetric persists one unattended run's metrics, ignoring failure:
 // metrics are observability, not correctness.
-func recordLoopMetric(db *sql.DB, cfg LoopConfig, started time.Time, rounds, in, out, calls int, status string) ModelResponse {
+func recordLoopMetric(db *sql.DB, cfg LoopConfig, started time.Time, rounds, in, out, calls int, status string) {
+	if db == nil {
+		return
+	}
 	_ = Storage.RecordAgentRunMetric(db, Storage.AgentRunMetric{
 		RunID:        "run_" + uuid.NewString(),
 		AgentID:      cfg.AgentID,
@@ -728,5 +804,4 @@ func recordLoopMetric(db *sql.DB, cfg LoopConfig, started time.Time, rounds, in,
 		DurationMs:   time.Since(started).Milliseconds(),
 		Status:       status,
 	})
-	return ModelResponse{}
 }

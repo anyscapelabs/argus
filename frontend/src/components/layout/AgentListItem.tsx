@@ -1,5 +1,13 @@
 import type { MouseEvent, ReactNode } from 'react'
+import Markdown, { type Components } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import AgentGem, { isAvatarColor } from '../AgentGem'
+
+const previewMarkdownComponents: Components = {
+  p: ({ children }) => <span>{children}</span>,
+  a: ({ children }) => <span>{children}</span>,
+  br: () => ' ',
+}
 
 export type AgentListItemProps = {
   avatar?: string
@@ -8,6 +16,7 @@ export type AgentListItemProps = {
   lastMessageIcon?: ReactNode
   time?: string
   active?: boolean
+  collapsed?: boolean
   onClick?: () => void
   onContextMenu?: (e: MouseEvent<HTMLButtonElement>) => void
   trailing?: ReactNode
@@ -20,6 +29,7 @@ export default function AgentListItem({
   lastMessageIcon,
   time,
   active = false,
+  collapsed = false,
   onClick,
   onContextMenu,
 }: AgentListItemProps) {
@@ -28,27 +38,46 @@ export default function AgentListItem({
       type="button"
       onClick={onClick}
       onContextMenu={onContextMenu}
-      className={`flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left transition-colors ${
+      aria-label={collapsed ? name : undefined}
+      title={collapsed ? name : undefined}
+      className={`flex items-center rounded-xl text-left transition-colors ${
+        collapsed ? 'h-12 w-12 justify-center p-1' : 'w-full gap-2 px-2 py-2'
+      } ${
         active ? 'bg-hover-primary' : 'hover:bg-hover-primary'
       }`}
     >
       {avatar && (
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border ${active ? 'border-accent-secondary bg-accent-secondary/10' : 'border-primary bg-secondary'}`}>
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center border ${collapsed ? 'rounded-xl' : 'rounded-full'} ${active ? 'border-accent-secondary bg-accent-secondary/10' : 'border-primary bg-secondary'}`}>
           {isAvatarColor(avatar) ? (
             <AgentGem color={avatar} className="h-8 w-8" />
           ) : (
-            <img src={avatar} alt="" className="h-8 w-8 rounded-full" />
+            <img src={avatar} alt="" className={`h-8 w-8 ${collapsed ? 'rounded-xl' : 'rounded-full'}`} />
           )}
         </div>
       )}
-      <div className="min-w-0 flex-1">
-        <div className={`truncate text-sm font-medium ${active ? 'text-primary' : 'text-primary'}`}>{name}</div>
-        <div className="flex min-w-0 items-center gap-1.5 text-xs text-secondary">
-          {lastMessageIcon}
-          <span className="truncate">{lastMessage || 'No messages yet'}</span>
-        </div>
-      </div>
-      <span className="shrink-0 text-xs text-secondary">{time}</span>
+      {!collapsed && (
+        <>
+          <div className="min-w-0 flex-1">
+            <div className={`truncate text-sm font-medium ${active ? 'text-primary' : 'text-primary'}`}>{name}</div>
+            <div className="flex min-w-0 items-center gap-1.5 text-xs text-secondary">
+              {lastMessageIcon}
+              <span className="markdown truncate">
+                {lastMessage ? (
+                  <Markdown
+                    remarkPlugins={[remarkGfm]}
+                    allowedElements={['p', 'strong', 'em', 'del', 'code', 'a', 'br']}
+                    unwrapDisallowed
+                    components={previewMarkdownComponents}
+                  >
+                    {lastMessage}
+                  </Markdown>
+                ) : 'No messages yet'}
+              </span>
+            </div>
+          </div>
+          <span className="shrink-0 text-xs text-secondary">{time}</span>
+        </>
+      )}
     </button>
   )
 }

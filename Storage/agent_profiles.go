@@ -106,7 +106,11 @@ func UpdateAgentRole(db *sql.DB, id, role, instructions string) error {
 }
 
 func (db *DB) DeleteAgentProfile(id string) error {
-	if _, err := db.conn.Exec(`DELETE FROM agent_profiles WHERE id = ?`, id); err != nil {
+	if id == "" || id == "default" || id == GlobalMemoryAgentID {
+		return fmt.Errorf("storage: refusing to delete protected agent profile %q", id)
+	}
+	_, err := db.conn.Exec(`DELETE FROM agent_profiles WHERE id = ?`, id)
+	if err != nil {
 		return fmt.Errorf("storage: agent profile delete failed: %w", err)
 	}
 	return nil
