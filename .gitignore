@@ -30,6 +30,9 @@ Services/Updater/version_stamped.go
 # Generated skills registry artifacts (published to S3 by CI, not committed)
 dist-skills/
 
+# Generated from GitHub secrets at build time — never commit
+Services/Shared/build_config_generated.go
+
 # Local signing keys and credentials — never commit these
 *.pem.key
 *.private.pem

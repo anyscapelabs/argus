@@ -62,13 +62,20 @@ gh secret list
 
 `Services/Shared/build_config.go` declares the `Build*` string variables.
 `Shared.ConfigValue(key)` checks the process environment first and then the
-baked value, so a developer run with a local `.env` behaves exactly as before.
+baked value, so a runtime override always wins.
 
-`build.yml` sets `BUILD_LDFLAGS` in each platform job, and the platform
-Taskfiles append it to the production `-ldflags` string. To change a shipped
-value, update the GitHub secret or variable and make a new release — no source
-change is needed. Local checks can override a build value with the matching environment variable,
-since `ConfigValue` prefers `os.Getenv`.
+`build.yml` runs `go run ./tools/gen-build-config` in every platform job before
+the build. That command reads the GitHub secrets/variables and writes the
+git-ignored `Services/Shared/build_config_generated.go`, which assigns those
+values at init time. To change a shipped value, update the GitHub secret or
+variable and make a new release — no source change is needed.
+
+In a **source checkout**, `.env` is loaded automatically (see
+`Services/MCP/dotenv_dev.go`), so `go run .` and `task dev` find the same OAuth
+credentials. **Production builds** (`-tags production`) deliberately ignore a
+stray `.env` in the launch directory; set `ARGUS_LOAD_DOTENV=1` explicitly if a
+staging build needs to read one.
+
 
 Frontend URLs use Vite's `import.meta.env`: `VITE_ANYSCAPE_GATEWAY_URL` and
 `VITE_ANYSCAPE_CONSOLE_URL` are supplied to the build job from GitHub variables

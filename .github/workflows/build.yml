@@ -27,14 +27,6 @@ jobs:
     name: macOS (${{ matrix.label }})
     runs-on: ${{ matrix.runner }}
     env:
-      BUILD_LDFLAGS: >-
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildGoogleOAuthClientID=${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildGoogleOAuthClientSecret=${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildArgusGoogleClientID=${{ secrets.ARGUS_GOOGLE_CLIENT_ID }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildArgusGoogleClientSecret=${{ secrets.ARGUS_GOOGLE_CLIENT_SECRET }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildGithubClientID=${{ secrets.ARGUS_GITHUB_CLIENT_ID }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildGithubClientSecret=${{ secrets.ARGUS_GITHUB_CLIENT_SECRET }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildPublicURL=${{ vars.ARGUS_PUBLIC_URL }}
       VITE_ANYSCAPE_GATEWAY_URL: ${{ vars.ANYSCAPE_GATEWAY_URL }}
       VITE_ANYSCAPE_CONSOLE_URL: ${{ vars.ANYSCAPE_CONSOLE_URL }}
       MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
@@ -68,6 +60,17 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+
+      - name: Generate build configuration
+        env:
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          ARGUS_GOOGLE_CLIENT_ID: ${{ secrets.ARGUS_GOOGLE_CLIENT_ID }}
+          ARGUS_GOOGLE_CLIENT_SECRET: ${{ secrets.ARGUS_GOOGLE_CLIENT_SECRET }}
+          ARGUS_GITHUB_CLIENT_ID: ${{ secrets.ARGUS_GITHUB_CLIENT_ID }}
+          ARGUS_GITHUB_CLIENT_SECRET: ${{ secrets.ARGUS_GITHUB_CLIENT_SECRET }}
+          ARGUS_PUBLIC_URL: ${{ vars.ARGUS_PUBLIC_URL }}
+        run: go run ./tools/gen-build-config
 
       - name: Install Task
         uses: arduino/setup-task@v2
@@ -195,14 +198,6 @@ jobs:
     name: Linux (${{ matrix.label }})
     runs-on: ${{ matrix.runner }}
     env:
-      BUILD_LDFLAGS: >-
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildGoogleOAuthClientID=${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildGoogleOAuthClientSecret=${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildArgusGoogleClientID=${{ secrets.ARGUS_GOOGLE_CLIENT_ID }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildArgusGoogleClientSecret=${{ secrets.ARGUS_GOOGLE_CLIENT_SECRET }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildGithubClientID=${{ secrets.ARGUS_GITHUB_CLIENT_ID }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildGithubClientSecret=${{ secrets.ARGUS_GITHUB_CLIENT_SECRET }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildPublicURL=${{ vars.ARGUS_PUBLIC_URL }}
       VITE_ANYSCAPE_GATEWAY_URL: ${{ vars.ANYSCAPE_GATEWAY_URL }}
       VITE_ANYSCAPE_CONSOLE_URL: ${{ vars.ANYSCAPE_CONSOLE_URL }}
     strategy:
@@ -240,6 +235,17 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+
+      - name: Generate build configuration
+        env:
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          ARGUS_GOOGLE_CLIENT_ID: ${{ secrets.ARGUS_GOOGLE_CLIENT_ID }}
+          ARGUS_GOOGLE_CLIENT_SECRET: ${{ secrets.ARGUS_GOOGLE_CLIENT_SECRET }}
+          ARGUS_GITHUB_CLIENT_ID: ${{ secrets.ARGUS_GITHUB_CLIENT_ID }}
+          ARGUS_GITHUB_CLIENT_SECRET: ${{ secrets.ARGUS_GITHUB_CLIENT_SECRET }}
+          ARGUS_PUBLIC_URL: ${{ vars.ARGUS_PUBLIC_URL }}
+        run: go run ./tools/gen-build-config
 
       - name: Install Task
         uses: arduino/setup-task@v2
@@ -340,14 +346,6 @@ jobs:
     name: Windows (${{ matrix.label }})
     runs-on: windows-latest
     env:
-      BUILD_LDFLAGS: >-
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildGoogleOAuthClientID=${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildGoogleOAuthClientSecret=${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildArgusGoogleClientID=${{ secrets.ARGUS_GOOGLE_CLIENT_ID }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildArgusGoogleClientSecret=${{ secrets.ARGUS_GOOGLE_CLIENT_SECRET }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildGithubClientID=${{ secrets.ARGUS_GITHUB_CLIENT_ID }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildGithubClientSecret=${{ secrets.ARGUS_GITHUB_CLIENT_SECRET }}
-        -X github.com/anyscapelabs/argus/Services/Shared.BuildPublicURL=${{ vars.ARGUS_PUBLIC_URL }}
       VITE_ANYSCAPE_GATEWAY_URL: ${{ vars.ANYSCAPE_GATEWAY_URL }}
       VITE_ANYSCAPE_CONSOLE_URL: ${{ vars.ANYSCAPE_CONSOLE_URL }}
       WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
@@ -375,6 +373,17 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+
+      - name: Generate build configuration
+        env:
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          ARGUS_GOOGLE_CLIENT_ID: ${{ secrets.ARGUS_GOOGLE_CLIENT_ID }}
+          ARGUS_GOOGLE_CLIENT_SECRET: ${{ secrets.ARGUS_GOOGLE_CLIENT_SECRET }}
+          ARGUS_GITHUB_CLIENT_ID: ${{ secrets.ARGUS_GITHUB_CLIENT_ID }}
+          ARGUS_GITHUB_CLIENT_SECRET: ${{ secrets.ARGUS_GITHUB_CLIENT_SECRET }}
+          ARGUS_PUBLIC_URL: ${{ vars.ARGUS_PUBLIC_URL }}
+        run: go run ./tools/gen-build-config
 
       - name: Install Task
         uses: arduino/setup-task@v2

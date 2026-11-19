@@ -182,9 +182,10 @@ func (s *Service) ListServerIDs() []string {
 // loadDotEnv reads a repo-root .env so OAuth client ids work during
 // development. It is OFF by default: a packaged app must never pick up a
 // developer's secrets from the directory it happens to be launched in.
-// Developers opt in with ARGUS_LOAD_DOTENV=1 in their shell.
+// Source builds load .env automatically; production builds require an explicit
+// ARGUS_LOAD_DOTENV=1 so a shipped app never reads a stray developer .env.
 func loadDotEnv() {
-	if os.Getenv("ARGUS_LOAD_DOTENV") != "1" {
+	if !devDotEnvEnabled() {
 		return
 	}
 	for _, p := range []string{".env", ".env.local", "config/.env", "../.env"} {
