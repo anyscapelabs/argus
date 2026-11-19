@@ -1,6 +1,5 @@
 ---
-name: google-drive
-description: Search, read, and organize files in Google Drive.
+{"id": "google-drive", "name": "Google Drive", "description": "Search, list, organize, move, and inspect files and folders in Google Drive.", "version": "1.0.0", "connectors": ["google-drive"], "allowed_tools": [], "auto_enable": true, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Google Drive Workflow

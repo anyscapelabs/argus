@@ -1,6 +1,5 @@
 ---
-name: google-tasks
-description: List, create, and complete Google Tasks.
+{"id": "google-tasks", "name": "Google Tasks", "description": "List task lists, create, update, and complete Google Tasks.", "version": "1.0.0", "connectors": ["google-tasks"], "allowed_tools": [], "auto_enable": true, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Google Tasks Workflow

@@ -1,0 +1,16 @@
+{
+  "id": "performance-review-assistant",
+  "name": "performance-review-assistant",
+  "description": "TRIGGER THIS when conducting performance reviews, writing manager feedback, creating self-assessments, building peer feedback, developing PIPs, creating development plans, or handling difficult performance conversations. Helps write constructive, specific, actionable feedback that develops performance and documents performance management appropriately.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Custom",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/03-human-resources/performance-review-assistant",
+  "verbatim": true
+}

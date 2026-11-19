@@ -1,6 +1,5 @@
 ---
-name: linear
-description: Find, create, and update Linear issues and projects.
+{"id": "linear", "name": "Linear", "description": "Find, triage, create, and update Linear issues, cycles, and projects.", "version": "1.0.0", "connectors": ["linear"], "allowed_tools": [], "auto_enable": true, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Linear Workflow

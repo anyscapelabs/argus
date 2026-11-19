@@ -18,7 +18,7 @@ const (
 
 // firstRunGreeting is the only app-authored onboarding message. Every later
 // question and acknowledgement comes from a real model turn.
-const firstRunGreeting = "Hi, I'm Argus, your AI teammate."
+const firstRunGreeting = "Hi, I'm Argus — your teammate."
 
 const firstRunModelPrompt = `
 

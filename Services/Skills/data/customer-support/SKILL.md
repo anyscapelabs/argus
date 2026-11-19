@@ -1,6 +1,5 @@
 ---
-name: customer-support
-description: Investigate customer issues and prepare accurate, useful responses.
+{"id": "customer-support", "name": "Customer Support", "description": "Investigate customer issues, draft accurate replies, summarize cases, and escalate with a complete handoff.", "version": "1.0.0", "connectors": [], "allowed_tools": [], "auto_enable": false, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Customer support workflow

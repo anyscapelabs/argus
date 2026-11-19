@@ -1,6 +1,5 @@
 ---
-name: marketing
-description: Build positioning, campaigns, and channel-ready copy from evidence.
+{"id": "marketing", "name": "Marketing", "description": "Turn a product brief into positioning, campaign plans, channel-ready copy, and measurable experiments.", "version": "1.0.0", "connectors": [], "allowed_tools": [], "auto_enable": false, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Marketing workflow

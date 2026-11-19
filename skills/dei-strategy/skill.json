@@ -1,0 +1,16 @@
+{
+  "id": "dei-strategy",
+  "name": "dei-strategy",
+  "description": "TRIGGER THIS when building DEI strategy, creating diversity goals, designing inclusive programs, building equity analyses, developing training, addressing inclusion issues, or tracking DEI metrics. Develops comprehensive diversity, equity, and inclusion strategies aligned to business goals with measurable outcomes, training programs, metrics frameworks, and accountability systems.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Custom",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/03-human-resources/dei-strategy",
+  "verbatim": true
+}

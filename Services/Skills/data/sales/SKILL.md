@@ -1,6 +1,5 @@
 ---
-name: sales
-description: Research, qualify, and advance sales opportunities without inventing personalization.
+{"id": "sales", "name": "Sales", "description": "Research accounts, qualify opportunities, prepare calls, draft outreach, and keep pipeline records accurate.", "version": "1.0.0", "connectors": [], "allowed_tools": [], "auto_enable": false, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Sales workflow

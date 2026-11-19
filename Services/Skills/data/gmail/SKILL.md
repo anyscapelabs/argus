@@ -1,6 +1,5 @@
 ---
-name: gmail
-description: Search, read, draft, reply, and label email in Gmail. Sending mail is a separate Argus action that requires explicit user approval.
+{"id": "gmail", "name": "Gmail", "description": "Search, read threads, draft, reply, send, and label email in Gmail. Use whenever user mentions email, inbox, messages, threads, or replying.", "version": "1.0.0", "connectors": ["gmail"], "allowed_tools": [], "auto_enable": true, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Gmail Workflow

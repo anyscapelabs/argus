@@ -1,6 +1,5 @@
 ---
-name: google-calendar
-description: Read, schedule, update, and delete Google Calendar events.
+{"id": "google-calendar", "name": "Google Calendar", "description": "List calendars, check availability, create, update, or cancel calendar events and meetings.", "version": "1.0.0", "connectors": ["google-calendar"], "allowed_tools": [], "auto_enable": true, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Google Calendar Workflow

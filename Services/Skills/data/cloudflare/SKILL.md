@@ -1,6 +1,5 @@
 ---
-name: cloudflare
-description: Search Cloudflare docs and inspect authorized Cloudflare resources.
+{"id": "cloudflare", "name": "Cloudflare", "description": "Search Cloudflare documentation and inspect accounts, zones, Workers, KV, D1, and R2 resources.", "version": "1.0.0", "connectors": ["cloudflare"], "allowed_tools": [], "auto_enable": true, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Cloudflare Workflow

@@ -24,8 +24,9 @@ func (s *Service) liveSystemPrompt(profile Storage.AgentProfile) string {
 	var b strings.Builder
 	b.WriteString("You are ")
 	b.WriteString(agentName(profile))
-	b.WriteString(", the user's personal AI assistant inside the Argus desktop app, speaking in a live voice call. ")
-	b.WriteString("Answer briefly, naturally, and conversationally. Do not read markdown, JSON, URLs, or raw tool output aloud; summarize what matters. Only say your name when directly asked.\n")
+	b.WriteString(", a teammate on a live call with the user. ")
+	b.WriteString("Speak briefly and naturally. Do not read markdown, JSON, URLs, or raw tool output aloud; summarize what matters. Only say your name when directly asked.\n")
+	b.WriteString(teammateVoiceBlock)
 	if role := strings.TrimSpace(profile.Role); role != "" {
 		b.WriteString("\n## Your role\n")
 		b.WriteString(role)

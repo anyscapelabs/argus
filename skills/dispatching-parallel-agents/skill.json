@@ -1,0 +1,16 @@
+{
+  "id": "dispatching-parallel-agents",
+  "name": "dispatching-parallel-agents",
+  "description": "Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "obra/superpowers",
+  "source": "obra/superpowers",
+  "license": "MIT",
+  "source_url": "https://github.com/obra/superpowers/tree/main/skills/dispatching-parallel-agents",
+  "verbatim": true
+}

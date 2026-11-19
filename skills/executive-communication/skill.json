@@ -1,0 +1,16 @@
+{
+  "id": "executive-communication",
+  "name": "executive-communication",
+  "description": "ACTIVATE when drafting all-hands speeches, investor updates, quarterly letters to stakeholders, press statements, CEO announcements, crisis communications, customer updates, or any mission-critical communication to employees, investors, customers, or media. Executive communications require persuasion, clarity, emotional intelligence, and alignment with company values and strategy.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Custom",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/01-executive-leadership/executive-communication",
+  "verbatim": true
+}

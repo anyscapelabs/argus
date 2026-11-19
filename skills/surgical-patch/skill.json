@@ -1,0 +1,16 @@
+{
+  "id": "surgical-patch",
+  "name": "surgical-patch",
+  "description": "Fix bugs and small behavior changes at the narrowest responsible layer. Use when regression proof, preserved surrounding behavior, and task-relevant tests matter.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "JuliusBrussee/caveman",
+  "source": "JuliusBrussee/caveman",
+  "license": "Apache-2.0 / MIT",
+  "source_url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/surgical-patch",
+  "verbatim": true
+}

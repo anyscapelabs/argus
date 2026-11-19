@@ -1,0 +1,16 @@
+{
+  "id": "answer-first",
+  "name": "i-have-adhd",
+  "description": "Shape output for a reader with ADHD: lead with the next action, number multi-step work, restate state across turns, suppress tangents, give specific time estimates, make wins visible. Invoke with /i-have-adhd; stays on until \"stop adhd mode\".",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "ayghri/i-have-adhd",
+  "source": "ayghri/i-have-adhd",
+  "license": "MIT",
+  "source_url": "https://github.com/ayghri/i-have-adhd/tree/main/skills/i-have-adhd",
+  "verbatim": true
+}

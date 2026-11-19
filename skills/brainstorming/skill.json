@@ -1,0 +1,16 @@
+{
+  "id": "brainstorming",
+  "name": "brainstorming",
+  "description": "You MUST use this before any creative work - creating features, building components, adding functionality, modifying behavior, or planning anything new, in software or out of it (a talk, a business, a renovation).",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "obra/superpowers",
+  "source": "obra/superpowers",
+  "license": "MIT",
+  "source_url": "https://github.com/obra/superpowers/tree/main/skills/brainstorming",
+  "verbatim": true
+}

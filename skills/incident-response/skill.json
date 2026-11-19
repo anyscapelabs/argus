@@ -1,0 +1,16 @@
+{
+  "id": "incident-response",
+  "name": "incident-response",
+  "description": "Triage and manage production incidents. Trigger with \"we have an incident\", \"production is down\", \"something is broken\", \"there's an outage\", \"SEV1\", or when the user describes a production issue needing immediate response.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Anthropic KWP",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/08-it-engineering/incident-response",
+  "verbatim": true
+}

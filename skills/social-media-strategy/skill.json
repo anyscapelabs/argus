@@ -1,0 +1,16 @@
+{
+  "id": "social-media-strategy",
+  "name": "social-media-strategy",
+  "description": "Develop comprehensive social media strategies across multiple platforms. Create content calendars, establish posting schedules, design engagement tactics, plan influencer outreach, and structure paid social campaigns with ROI measurement.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Custom",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/04-marketing/social-media-strategy",
+  "verbatim": true
+}

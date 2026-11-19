@@ -1,6 +1,5 @@
 ---
-name: data-analysis
-description: Clean, analyze, validate, and explain structured data.
+{"id": "data-analysis", "name": "Data Analysis", "description": "Inspect datasets, define metrics, clean and analyze data, validate calculations, and communicate findings clearly.", "version": "1.0.0", "connectors": [], "allowed_tools": [], "auto_enable": false, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Data analysis workflow

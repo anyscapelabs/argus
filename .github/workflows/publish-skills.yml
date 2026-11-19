@@ -1,0 +1,77 @@
+name: Publish skills registry
+
+on:
+  push:
+    branches: [main, 0.1.0]
+    paths:
+      - 'skills/**'
+      - 'tools/gen-skills/**'
+      - 'tools/publish-skills/**'
+      - '.github/workflows/publish-skills.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-skills
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: '1.26.x'
+  NODE_VERSION: '24'
+
+jobs:
+  publish:
+    name: Build, sign and publish
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: eu-north-1
+
+      # The embedded baseline must be regenerated in the same change as skills/.
+      - name: Check embedded baseline is in sync
+        run: |
+          go run ./tools/gen-skills
+          git diff --exit-code -- Services/Skills/data
+
+      - name: Build and sign registry
+        env:
+          SKILLS_SIGNING_KEY: ${{ secrets.SKILLS_SIGNING_KEY }}
+        run: node tools/publish-skills/index.mjs
+
+      - name: Upload immutable bundles
+        run: |
+          aws s3 sync dist-skills/bundles "s3://${{ vars.SKILLS_BUCKET }}/bundles" \
+            --content-type application/json \
+            --cache-control "public,max-age=31536000,immutable"
+
+      - name: Upload signed index
+        run: |
+          aws s3 cp dist-skills/index.json "s3://${{ vars.SKILLS_BUCKET }}/index.json" \
+            --content-type application/json --cache-control "no-cache,max-age=0"
+          aws s3 cp dist-skills/index.json.sig "s3://${{ vars.SKILLS_BUCKET }}/index.json.sig" \
+            --content-type application/octet-stream --cache-control "no-cache,max-age=0"
+
+      - name: Invalidate CDN index
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.SKILLS_DISTRIBUTION_ID }}" \
+            --paths "/index.json" "/index.json.sig"
