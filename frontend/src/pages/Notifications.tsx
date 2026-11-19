@@ -1,4 +1,12 @@
 import { useEffect, useState } from 'react'
+import {
+  isPreferenceDirty,
+  loadPreferences,
+  markPreferenceDirty,
+  savePreference,
+} from '../domains/preferences/api'
+
+const NOTIFICATIONS_KEY = 'argus-notifications'
 
 type NotificationSettings = {
   desktop: boolean
@@ -14,12 +22,18 @@ const DEFAULTS: NotificationSettings = {
   sounds: false,
 }
 
+function parseSettings(raw: string | undefined): NotificationSettings {
+  if (!raw) return DEFAULTS
+  try {
+    return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<NotificationSettings>) }
+  } catch {
+    return DEFAULTS
+  }
+}
+
 function loadSettings(): NotificationSettings {
   try {
-    const stored = localStorage.getItem('argus-notifications')
-    if (!stored) return DEFAULTS
-    const parsed = JSON.parse(stored) as Partial<NotificationSettings>
-    return { ...DEFAULTS, ...parsed }
+    return parseSettings(localStorage.getItem(NOTIFICATIONS_KEY) ?? undefined)
   } catch {
     return DEFAULTS
   }
@@ -58,10 +72,34 @@ export default function Notifications() {
   const [settings, setSettings] = useState<NotificationSettings>(loadSettings)
 
   useEffect(() => {
-    localStorage.setItem('argus-notifications', JSON.stringify(settings))
+    let live = true
+    loadPreferences()
+      .then((all) => {
+        if (live && !isPreferenceDirty(NOTIFICATIONS_KEY)) {
+          setSettings(parseSettings(all[NOTIFICATIONS_KEY]))
+        }
+      })
+      .catch((err) => console.warn('could not load notification preferences', err))
+    return () => {
+      live = false
+    }
+  }, [])
+
+  useEffect(() => {
+    const raw = JSON.stringify(settings)
+    try {
+      localStorage.setItem(NOTIFICATIONS_KEY, raw)
+    } catch {
+      // localStorage is only the paint cache; SQLite is the source of truth.
+    }
+    if (!isPreferenceDirty(NOTIFICATIONS_KEY)) return
+    savePreference(NOTIFICATIONS_KEY, raw).catch((err) =>
+      console.warn('could not save notification preferences', err),
+    )
   }, [settings])
 
   const update = <K extends keyof NotificationSettings>(key: K, value: NotificationSettings[K]) => {
+    markPreferenceDirty(NOTIFICATIONS_KEY)
     setSettings((prev) => ({ ...prev, [key]: value }))
   }
 
