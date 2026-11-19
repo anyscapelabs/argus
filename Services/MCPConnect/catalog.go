@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/anyscapelabs/argus/Services/MCP"
@@ -394,11 +393,11 @@ func (s *Service) BuildProviderAuthURL(serverID, state, expectedEmail string) (s
 	if !ok {
 		return "", fmt.Errorf("unknown integration provider %q", serverID)
 	}
-	cid := strings.TrimSpace(os.Getenv(meta.ClientIDEnv))
+	cid := strings.TrimSpace(Shared.ConfigValue(meta.ClientIDEnv))
 	if cid == "" {
 		return "", fmt.Errorf("missing %s", meta.ClientIDEnv)
 	}
-	redir := strings.TrimRight(os.Getenv("ARGUS_PUBLIC_URL"), "/") + callbackPath
+	redir := strings.TrimRight(Shared.ConfigValue("ARGUS_PUBLIC_URL"), "/") + callbackPath
 	return MCP.BuildAuthURL(meta.AuthURL, MCP.OAuthStartOptions{
 		ClientID:      cid,
 		RedirectURI:   redir,
@@ -417,11 +416,11 @@ func (s *Service) ExchangeProviderCode(ctx context.Context, serverID, code strin
 	if !ok {
 		return "", "", "", fmt.Errorf("unknown integration provider %q", serverID)
 	}
-	redir := strings.TrimRight(os.Getenv("ARGUS_PUBLIC_URL"), "/") + callbackPath
+	redir := strings.TrimRight(Shared.ConfigValue("ARGUS_PUBLIC_URL"), "/") + callbackPath
 	form := url.Values{
 		"code":          {code},
-		"client_id":     {os.Getenv(meta.ClientIDEnv)},
-		"client_secret": {os.Getenv(meta.SecretEnv)},
+		"client_id":     {Shared.ConfigValue(meta.ClientIDEnv)},
+		"client_secret": {Shared.ConfigValue(meta.SecretEnv)},
 		"redirect_uri":  {redir},
 		"grant_type":    {"authorization_code"},
 	}

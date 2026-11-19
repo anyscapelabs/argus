@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 
@@ -116,7 +115,7 @@ func (s *Service) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := MCP.SaveOAuthSession(
-		pending.ServerID, connID, os.Getenv(meta.ClientIDEnv), os.Getenv(meta.SecretEnv),
+		pending.ServerID, connID, Shared.ConfigValue(meta.ClientIDEnv), Shared.ConfigValue(meta.SecretEnv),
 		meta.AuthURL, meta.TokenURL, meta.Scopes, tokRaw,
 	); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

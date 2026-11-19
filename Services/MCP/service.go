@@ -20,11 +20,6 @@ import (
 	"github.com/anyscapelabs/argus/Storage"
 )
 
-var (
-	googleClientID     string
-	googleClientSecret string
-)
-
 // Service exposes MCP management to the frontend.
 type Service struct {
 	Core *Shared.Core
@@ -218,11 +213,8 @@ func loadDotEnv() {
 
 func readGoogleCreds() (string, string) {
 	loadDotEnv()
-	if id := os.Getenv("ARGUS_GOOGLE_CLIENT_ID"); id != "" {
-		return id, os.Getenv("ARGUS_GOOGLE_CLIENT_SECRET")
-	}
-	if googleClientID != "" {
-		return googleClientID, googleClientSecret
+	if id := Shared.ConfigValue("ARGUS_GOOGLE_CLIENT_ID"); id != "" {
+		return id, Shared.ConfigValue("ARGUS_GOOGLE_CLIENT_SECRET")
 	}
 	return readCredsFile("google")
 }
@@ -265,8 +257,8 @@ func clientCreds(name string) (*oauthex.ClientCredentials, error) {
 	var id, sec string
 	if name == "github" {
 		loadDotEnv()
-		id = os.Getenv("ARGUS_GITHUB_CLIENT_ID")
-		sec = os.Getenv("ARGUS_GITHUB_CLIENT_SECRET")
+		id = Shared.ConfigValue("ARGUS_GITHUB_CLIENT_ID")
+		sec = Shared.ConfigValue("ARGUS_GITHUB_CLIENT_SECRET")
 		if id == "" {
 			id, sec = readCredsFile("github")
 		}
