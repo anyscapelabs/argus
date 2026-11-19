@@ -141,7 +141,7 @@ These are build-time values. At runtime, model traffic follows the gateway/backe
 
 ### Backend/development environment
 
-- `ARGUS_LOAD_DOTENV=1` — opt-in. Allows loading `.env` files for local OAuth client IDs/secrets during development (for MCP connectors). Keep this off in packaged builds.
+- `ARGUS_LOAD_DOTENV=1` — opt-in. Allows loading `.env` files for local OAuth client IDs/secrets during development (for MCP connectors). `task dev` sets it for you; copy `.env.example` to `.env` and fill in the GitHub/Google client IDs. If you launch the app another way, export it yourself. Keep this off in packaged builds.
 - `ARGUS_BROWSER_PROFILE_DIR` — optional base directory override for the Argus browser profile (the app uses a `browser` subdirectory under it).
 
 ## Local data locations

@@ -67,8 +67,12 @@ baked value, so a runtime override always wins.
 `build.yml` runs `go run ./tools/gen-build-config` in every platform job before
 the build. That command reads the GitHub secrets/variables and writes the
 git-ignored `Services/Shared/build_config_generated.go`, which assigns those
-values at init time. To change a shipped value, update the GitHub secret or
-variable and make a new release — no source change is needed.
+values at init time. Each platform job starts with a "Verify OAuth build config
+is present" step that fails the release if `ARGUS_GITHUB_CLIENT_ID` or
+`ARGUS_GITHUB_CLIENT_SECRET` is empty (an unset secret would otherwise be baked
+in as an empty string and the shipped app would report "github sign-in is not
+configured in this build"). To change a shipped value, update the GitHub secret
+or variable and make a new release — no source change is needed.
 
 Local dotenv loading happens **only at startup**: `main.go` (and
 `cmd/server/main.go`) call `Env.Load()` before constructing any service, and

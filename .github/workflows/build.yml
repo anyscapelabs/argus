@@ -49,6 +49,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify OAuth build config is present
+        shell: bash
+        env:
+          ARGUS_GITHUB_CLIENT_ID: ${{ secrets.ARGUS_GITHUB_CLIENT_ID }}
+          ARGUS_GITHUB_CLIENT_SECRET: ${{ secrets.ARGUS_GITHUB_CLIENT_SECRET }}
+          ARGUS_GOOGLE_CLIENT_ID: ${{ secrets.ARGUS_GOOGLE_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          ARGUS_PUBLIC_URL: ${{ vars.ARGUS_PUBLIC_URL }}
+        run: |
+          # An unset secret expands to "" and `-ldflags -X` happily bakes that in,
+          # shipping an app that says "github sign-in is not configured in this
+          # build". Fail the release instead. Values are never printed.
+          fail=0
+          for v in ARGUS_GITHUB_CLIENT_ID ARGUS_GITHUB_CLIENT_SECRET; do
+            if [ -z "${!v}" ]; then
+              echo "::error::$v is empty - GitHub sign-in would be missing from this build (set it under Settings > Secrets and variables > Actions)"
+              fail=1
+            fi
+          done
+          for v in ARGUS_GOOGLE_CLIENT_ID GOOGLE_OAUTH_CLIENT_ID ARGUS_PUBLIC_URL; do
+            if [ -z "${!v}" ]; then
+              echo "::warning::$v is empty - the matching feature will be unavailable in this build"
+            fi
+          done
+          exit $fail
+
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
@@ -214,6 +240,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify OAuth build config is present
+        shell: bash
+        env:
+          ARGUS_GITHUB_CLIENT_ID: ${{ secrets.ARGUS_GITHUB_CLIENT_ID }}
+          ARGUS_GITHUB_CLIENT_SECRET: ${{ secrets.ARGUS_GITHUB_CLIENT_SECRET }}
+          ARGUS_GOOGLE_CLIENT_ID: ${{ secrets.ARGUS_GOOGLE_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          ARGUS_PUBLIC_URL: ${{ vars.ARGUS_PUBLIC_URL }}
+        run: |
+          # An unset secret expands to "" and `-ldflags -X` happily bakes that in,
+          # shipping an app that says "github sign-in is not configured in this
+          # build". Fail the release instead. Values are never printed.
+          fail=0
+          for v in ARGUS_GITHUB_CLIENT_ID ARGUS_GITHUB_CLIENT_SECRET; do
+            if [ -z "${!v}" ]; then
+              echo "::error::$v is empty - GitHub sign-in would be missing from this build (set it under Settings > Secrets and variables > Actions)"
+              fail=1
+            fi
+          done
+          for v in ARGUS_GOOGLE_CLIENT_ID GOOGLE_OAUTH_CLIENT_ID ARGUS_PUBLIC_URL; do
+            if [ -z "${!v}" ]; then
+              echo "::warning::$v is empty - the matching feature will be unavailable in this build"
+            fi
+          done
+          exit $fail
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -361,6 +413,32 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Verify OAuth build config is present
+        shell: bash
+        env:
+          ARGUS_GITHUB_CLIENT_ID: ${{ secrets.ARGUS_GITHUB_CLIENT_ID }}
+          ARGUS_GITHUB_CLIENT_SECRET: ${{ secrets.ARGUS_GITHUB_CLIENT_SECRET }}
+          ARGUS_GOOGLE_CLIENT_ID: ${{ secrets.ARGUS_GOOGLE_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          ARGUS_PUBLIC_URL: ${{ vars.ARGUS_PUBLIC_URL }}
+        run: |
+          # An unset secret expands to "" and `-ldflags -X` happily bakes that in,
+          # shipping an app that says "github sign-in is not configured in this
+          # build". Fail the release instead. Values are never printed.
+          fail=0
+          for v in ARGUS_GITHUB_CLIENT_ID ARGUS_GITHUB_CLIENT_SECRET; do
+            if [ -z "${!v}" ]; then
+              echo "::error::$v is empty - GitHub sign-in would be missing from this build (set it under Settings > Secrets and variables > Actions)"
+              fail=1
+            fi
+          done
+          for v in ARGUS_GOOGLE_CLIENT_ID GOOGLE_OAUTH_CLIENT_ID ARGUS_PUBLIC_URL; do
+            if [ -z "${!v}" ]; then
+              echo "::warning::$v is empty - the matching feature will be unavailable in this build"
+            fi
+          done
+          exit $fail
 
       - name: Setup Go
         uses: actions/setup-go@v5

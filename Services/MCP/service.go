@@ -178,7 +178,14 @@ func (s *Service) ListServerIDs() []string {
 	return m.ListServerIDs()
 }
 
+// loadDotEnv loads a development .env (opt-in via ARGUS_LOAD_DOTENV=1) so OAuth
+// client ids work locally. The logic lives in Shared.LoadDotEnv so every
+// Shared.ConfigValue lookup sees the same values; a packaged app never reads
+// a .env from the directory it happens to be launched in.
+func loadDotEnv() { Shared.LoadDotEnv() }
+
 func readGoogleCreds() (string, string) {
+	loadDotEnv()
 	if id := Shared.ConfigValue("ARGUS_GOOGLE_CLIENT_ID"); id != "" {
 		return id, Shared.ConfigValue("ARGUS_GOOGLE_CLIENT_SECRET")
 	}
@@ -222,6 +229,7 @@ func readCredsFile(name string) (string, string) {
 func clientCreds(name string) (*oauthex.ClientCredentials, error) {
 	var id, sec string
 	if name == "github" {
+		loadDotEnv()
 		id = Shared.ConfigValue("ARGUS_GITHUB_CLIENT_ID")
 		sec = Shared.ConfigValue("ARGUS_GITHUB_CLIENT_SECRET")
 		if id == "" {
