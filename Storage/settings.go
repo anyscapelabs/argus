@@ -45,3 +45,23 @@ func (db *DB) GetAppSetting(key string) (string, bool, error) {
 	}
 	return value, true, nil
 }
+
+// AllAppSettings returns every persisted preference in one read. The frontend
+// loads this once at startup so appearance choices no longer depend on the
+// webview's localStorage surviving a restart.
+func (db *DB) AllAppSettings() (map[string]string, error) {
+	rows, err := db.conn.Query(`SELECT key, value FROM app_settings`)
+	if err != nil {
+		return nil, fmt.Errorf("storage: app settings list failed: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
+			return nil, fmt.Errorf("storage: app settings scan failed: %w", err)
+		}
+		out[key] = value
+	}
+	return out, rows.Err()
+}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { isPreferenceDirty, loadPreferences, savePreference } from '../domains/preferences/api'
 
 export type ThemeMode = 'system' | 'light' | 'dark'
 export type AccentID = 'white' | 'blue' | 'amber' | 'purple'
@@ -43,10 +44,72 @@ export const ACCENTS: Accent[] = [
 
 const MODE_KEY = 'argus-theme'
 const ACCENT_KEY = 'argus-accent'
+const FONT_SIZE_KEY = 'argus-font-size'
+const FONT_TYPE_KEY = 'argus-font-type'
+const MOTION_KEY = 'argus-motion'
+
+const THEME_MODES = ['system', 'light', 'dark'] as const
+const ACCENT_IDS: AccentID[] = ACCENTS.map((a) => a.id)
+const FONT_SIZE_IDS = ['small', 'default', 'large'] as const
+const FONT_TYPE_IDS = ['default', 'system', 'mono'] as const
+const MOTION_IDS = ['system', 'reduced'] as const
 
 function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
-  const stored = localStorage.getItem(key) as T | null
-  return stored && allowed.includes(stored) ? stored : fallback
+  try {
+    const stored = localStorage.getItem(key) as T | null
+    return stored && allowed.includes(stored) ? stored : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function writeCache(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    // localStorage is only the paint cache; SQLite is the source of truth.
+  }
+}
+
+// useStoredPreference paints from localStorage immediately, then reconciles
+// with the durable value from SQLite. Updates write both: the cache for an
+// instant response and the backend so the choice survives a restart.
+function useStoredPreference<T extends string>(
+  key: string,
+  allowed: readonly T[],
+  fallback: T,
+): readonly [T, (next: T) => void] {
+  const [value, setValue] = useState<T>(() => readStored(key, allowed, fallback))
+
+  useEffect(() => {
+    let live = true
+    loadPreferences()
+      .then((all) => {
+        if (!live || isPreferenceDirty(key)) return
+        const stored = all[key]
+        if (stored === undefined) return
+        const next = allowed.includes(stored as T) ? (stored as T) : fallback
+        writeCache(key, next)
+        setValue(next)
+      })
+      .catch((err) => console.warn(`could not load preference ${key}`, err))
+    return () => {
+      live = false
+    }
+  }, [key, allowed, fallback])
+
+  const update = useCallback(
+    (next: T) => {
+      writeCache(key, next)
+      setValue(next)
+      savePreference(key, next).catch((err) =>
+        console.warn(`could not save preference ${key}`, err),
+      )
+    },
+    [key],
+  )
+
+  return [value, update] as const
 }
 
 // applyAccent writes the accent palette onto the document root. Every accent
@@ -75,9 +138,7 @@ function applyMode(mode: ThemeMode) {
 }
 
 export function useThemeMode() {
-  const [mode, setMode] = useState<ThemeMode>(() =>
-    readStored(MODE_KEY, ['system', 'light', 'dark'] as const, 'system'),
-  )
+  const [mode, setMode] = useStoredPreference(MODE_KEY, THEME_MODES, 'system')
 
   useEffect(() => {
     applyMode(mode)
@@ -88,29 +149,17 @@ export function useThemeMode() {
     return () => mq.removeEventListener('change', handler)
   }, [mode])
 
-  const update = useCallback((next: ThemeMode) => {
-    localStorage.setItem(MODE_KEY, next)
-    setMode(next)
-  }, [])
-
-  return [mode, update] as const
+  return [mode, setMode] as const
 }
 
 export function useAccent() {
-  const [accent, setAccent] = useState<AccentID>(() =>
-    readStored(ACCENT_KEY, ACCENTS.map((a) => a.id), 'white'),
-  )
+  const [accent, setAccent] = useStoredPreference(ACCENT_KEY, ACCENT_IDS, 'white')
 
   useEffect(() => {
     applyAccent(accent)
   }, [accent])
 
-  const update = useCallback((next: AccentID) => {
-    localStorage.setItem(ACCENT_KEY, next)
-    setAccent(next)
-  }, [])
-
-  return [accent, update] as const
+  return [accent, setAccent] as const
 }
 
 export function useAccentSwatch(id: AccentID): string {
@@ -124,10 +173,6 @@ export function accentById(id: AccentID): Accent {
 export type FontSizeID = 'small' | 'default' | 'large'
 export type FontTypeID = 'default' | 'system' | 'mono'
 export type MotionID = 'system' | 'reduced'
-
-const FONT_SIZE_KEY = 'argus-font-size'
-const FONT_TYPE_KEY = 'argus-font-type'
-const MOTION_KEY = 'argus-motion'
 
 const FONT_SIZE_PX: Record<FontSizeID, string> = {
   small: '14px',
@@ -143,34 +188,23 @@ const FONT_TYPE_STACK: Record<FontTypeID, string> = {
 
 // useInterfaceSettings owns the Advanced section of the Appearance page. The
 // settings are applied straight onto the root element (rem-based sizing and
-// the body font stack follow automatically) and re-applied on launch.
+// the body font stack follow automatically) and re-applied on launch from the
+// value stored in SQLite.
 export function useInterfaceSettings() {
-  const [fontSize, setFontSize] = useState<FontSizeID>(() =>
-    readStored(FONT_SIZE_KEY, ['small', 'default', 'large'] as const, 'default'),
-  )
-  const [fontType, setFontType] = useState<FontTypeID>(() =>
-    readStored(FONT_TYPE_KEY, ['default', 'system', 'mono'] as const, 'default'),
-  )
-  const [motion, setMotion] = useState<MotionID>(() =>
-    readStored(MOTION_KEY, ['system', 'reduced'] as const, 'system'),
-  )
+  const [fontSize, setFontSize] = useStoredPreference(FONT_SIZE_KEY, FONT_SIZE_IDS, 'default')
+  const [fontType, setFontType] = useStoredPreference(FONT_TYPE_KEY, FONT_TYPE_IDS, 'default')
+  const [motion, setMotion] = useStoredPreference(MOTION_KEY, MOTION_IDS, 'system')
 
   useEffect(() => {
-    const root = document.documentElement
-    root.style.fontSize = FONT_SIZE_PX[fontSize]
-    localStorage.setItem(FONT_SIZE_KEY, fontSize)
+    document.documentElement.style.fontSize = FONT_SIZE_PX[fontSize]
   }, [fontSize])
 
   useEffect(() => {
-    const root = document.documentElement
-    root.style.fontFamily = FONT_TYPE_STACK[fontType]
-    localStorage.setItem(FONT_TYPE_KEY, fontType)
+    document.documentElement.style.fontFamily = FONT_TYPE_STACK[fontType]
   }, [fontType])
 
   useEffect(() => {
-    const root = document.documentElement
-    root.classList.toggle('reduce-motion', motion === 'reduced')
-    localStorage.setItem(MOTION_KEY, motion)
+    document.documentElement.classList.toggle('reduce-motion', motion === 'reduced')
   }, [motion])
 
   return { fontSize, setFontSize, fontType, setFontType, motion, setMotion }

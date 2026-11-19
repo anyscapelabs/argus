@@ -22,6 +22,7 @@ import (
 	servicemcpconnect "github.com/anyscapelabs/argus/Services/MCPConnect"
 	servicemodels "github.com/anyscapelabs/argus/Services/Models"
 	servicepermission "github.com/anyscapelabs/argus/Services/Permission"
+	servicepreferences "github.com/anyscapelabs/argus/Services/Preferences"
 	serviceprovider "github.com/anyscapelabs/argus/Services/Provider"
 	servicescheduler "github.com/anyscapelabs/argus/Services/Scheduler"
 	"github.com/anyscapelabs/argus/Services/Shared"
@@ -123,6 +124,7 @@ func main() {
 			application.NewService(providers),
 			application.NewService(models),
 			application.NewService(catalog),
+			application.NewService(&servicepreferences.Service{Core: core}),
 			application.NewService(permissions),
 			application.NewService(mcp),
 			application.NewService(mcpConnect),

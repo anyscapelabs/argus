@@ -56,6 +56,8 @@ export type {
     Picker,
     PickerOptions,
     PickerResult,
+    PreferenceResult,
+    PreferencesResult,
     ProviderView,
     Recommendations,
     RefreshResult,

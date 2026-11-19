@@ -566,6 +566,24 @@ export interface PickerResult {
     "picker"?: Picker | null;
 }
 
+/**
+ * PreferenceResult is one stored preference. Found distinguishes an unset key
+ * from one deliberately saved as an empty string.
+ */
+export interface PreferenceResult {
+    "value": string;
+    "found": boolean;
+    "error"?: ActionError | null;
+}
+
+/**
+ * PreferencesResult is the whole preference map the frontend loads on startup.
+ */
+export interface PreferencesResult {
+    "values": { [_ in string]?: string } | null;
+    "error"?: ActionError | null;
+}
+
 export interface ProviderView {
     "id": string;
     "name": string;
