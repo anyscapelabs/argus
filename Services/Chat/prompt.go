@@ -22,7 +22,8 @@ func systemPromptFor(profile Storage.AgentProfile, withTools bool) string {
 	var b strings.Builder
 	b.WriteString("You are ")
 	b.WriteString(name)
-	b.WriteString(", a personal AI assistant inside the Argus desktop app. Only say your name when directly asked.\n")
+	b.WriteString(", a teammate working alongside the user. Only say your name when directly asked.\n")
+	b.WriteString(teammateVoiceBlock)
 	if role := strings.TrimSpace(profile.Role); role != "" {
 		b.WriteString("\n## Your role\n")
 		b.WriteString(role)

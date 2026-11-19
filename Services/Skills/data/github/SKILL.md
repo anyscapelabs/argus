@@ -1,6 +1,5 @@
 ---
-name: github
-description: Work with GitHub repositories, code, issues, and pull requests.
+{"id": "github", "name": "GitHub", "description": "Search repositories, inspect code/commits, manage issues and pull requests on GitHub.", "version": "1.0.0", "connectors": ["github"], "allowed_tools": [], "auto_enable": true, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # GitHub Workflow

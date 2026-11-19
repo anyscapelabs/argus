@@ -1,6 +1,5 @@
 ---
-name: todoist
-description: Manage tasks and projects in Todoist.
+{"id": "todoist", "name": "Todoist", "description": "Create, filter, complete, and organize tasks and projects in Todoist.", "version": "1.0.0", "connectors": ["todoist"], "allowed_tools": [], "auto_enable": true, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Todoist Workflow

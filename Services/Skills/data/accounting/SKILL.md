@@ -1,6 +1,5 @@
 ---
-name: accounting
-description: Prepare reconciliations, close work, and accounting drafts with an audit trail.
+{"id": "accounting", "name": "Accounting", "description": "Prepare reconciliations, journal-entry drafts, close checklists, variance reviews, and audit-ready accounting workpapers.", "version": "1.0.0", "connectors": [], "allowed_tools": [], "auto_enable": false, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Accounting workflow

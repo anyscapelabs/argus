@@ -1,0 +1,16 @@
+{
+  "id": "prd-writer",
+  "name": "prd-writer",
+  "description": "Write comprehensive Product Requirements Documents with user stories, acceptance criteria, technical specifications, wireframe descriptions, and prioritization frameworks (RICE, MoSCoW). Create clear specifications for product teams.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Custom",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/09-product-management/prd-writer",
+  "verbatim": true
+}

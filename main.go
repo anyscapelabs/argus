@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"fmt"
 
@@ -97,7 +98,15 @@ func main() {
 	artifacts := &serviceartifacts.Service{Core: core}
 	uploads := &serviceuploads.Service{Core: core}
 	browser := &servicebrowser.Service{}
-	skills := &serviceskills.Service{Core: core}
+	skillsCacheDir, err := Shared.CacheDir()
+	if err != nil {
+		log.Printf("skills: cache directory unavailable: %v", err)
+	}
+	skills, err := serviceskills.New(core, skillsCacheDir, skillsIndexURL(), serviceupdater.Version)
+	if err != nil {
+		log.Printf("skills: registry starting from embedded baseline: %v", err)
+		skills = &serviceskills.Service{Core: core}
+	}
 	chat := &servicechat.Service{Core: core, Permissions: permissions, MCP: mcp, MCPConnect: mcpConnect, Skills: skills, Artifacts: artifacts, Browser: browser}
 	// When a sign-in settles, the connector hands the turn back to the agent
 	// instead of waiting for the user to say "I connected". Chat is set here
@@ -191,11 +200,24 @@ func main() {
 		lifecycle.handleEvent(name)
 	})
 
-	err := app.Run()
+	skillsCtx, skillsCancel := context.WithCancel(context.Background())
+	skills.Start(skillsCtx)
+	defer skillsCancel()
+
+	err = app.Run()
 
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+// skillsIndexURL is the signed registry manifest; the env override is for
+// staging against a different bucket without rebuilding the app.
+func skillsIndexURL() string {
+	if url := strings.TrimSpace(os.Getenv("ARGUS_SKILLS_INDEX_URL")); url != "" {
+		return url
+	}
+	return serviceskills.DefaultIndexURL
 }
 
 // launchedInBackground reports whether this process was started by the login

@@ -1,0 +1,16 @@
+{
+  "id": "code-review",
+  "name": "code-review",
+  "description": "Review code for bugs, security vulnerabilities, performance issues, and maintainability. Trigger with \"review this code\", \"check this PR\", \"look at this diff\", \"is this code safe?\", or when the user shares code and asks for feedback.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Anthropic KWP",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/08-it-engineering/code-review",
+  "verbatim": true
+}

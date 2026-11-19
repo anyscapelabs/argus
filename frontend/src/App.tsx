@@ -106,6 +106,7 @@ export default function App() {
       Events.On('selections:changed', invalidateAll),
       Events.On('slots:changed', invalidateAll),
       Events.On('catalog:updated', invalidateAll),
+      Events.On('skills:updated', invalidateAll),
     ]
     return () => unsubs.forEach((u) => u())
   }, [qc])

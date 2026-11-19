@@ -1,0 +1,16 @@
+{
+  "id": "competitive-analysis",
+  "name": "competitive-analysis",
+  "description": "Framework for competitive landscape analysis across any industry. Use when creating competitor analysis, market positioning assessments, investment memos, strategic reviews, or any analysis requiring systematic evaluation of competitive dynamics. Triggers include requests for competitive landscape decks, peer comparisons, market structure analysis, strategic positioning assessments, and investment recommendations.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Anthropic FSP",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/01-executive-leadership/competitive-analysis",
+  "verbatim": true
+}

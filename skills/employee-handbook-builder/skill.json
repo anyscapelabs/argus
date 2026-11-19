@@ -1,0 +1,16 @@
+{
+  "id": "employee-handbook-builder",
+  "name": "employee-handbook-builder",
+  "description": "TRIGGER THIS when creating or updating employee handbooks, documenting HR policies, developing code of conduct, building benefits guides, or creating leave/PTO policies. Creates comprehensive, legally compliant, accessible employee handbooks covering company policies, culture, benefits, code of conduct, and all required disclosures.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Custom",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/03-human-resources/employee-handbook-builder",
+  "verbatim": true
+}

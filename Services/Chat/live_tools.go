@@ -70,6 +70,20 @@ var liveReadSkillDef = Protocol.ToolDef{
 	}`),
 }
 
+var liveSearchSkillsDef = Protocol.ToolDef{
+	Name: "search_skills",
+	Description: "Find available agent skills by task or keyword. Returns skill ids, one-line descriptions, " +
+		"versions and install state. Call install_skill then read_skill to load a match.",
+	Schema: json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"query": {"type": "string", "description": "What the skill should help with, e.g. 'draft outreach' or 'gmail thread'"},
+			"limit": {"type": "integer", "description": "Maximum number of matches to return (default 8)"}
+		},
+		"required": ["query"]
+	}`),
+}
+
 var liveInstallSkillDef = Protocol.ToolDef{
 	Name: "install_skill",
 	Description: "Enable an available skill for this agent so its workflow instructions can be read. " +
@@ -91,6 +105,7 @@ func liveFunctionDeclarations() []Shared.LiveFunctionDeclaration {
 		liveInvokeToolDef,
 		liveReadSkillDef,
 		liveInstallSkillDef,
+		liveSearchSkillsDef,
 	}
 	out := make([]Shared.LiveFunctionDeclaration, 0, len(defs))
 	for _, def := range defs {
@@ -213,6 +228,8 @@ func (s *Service) RunLiveTool(sessionID, callID, name, argsJSON string) Shared.L
 		return s.searchLiveTools(session, argsJSON)
 	case "invoke_tool":
 		return s.invokeLiveTool(session, callID, argsJSON)
+	case "search_skills":
+		return s.searchSkillsGateway(session.agentID, argsJSON)
 	case "read_skill":
 		return s.readSkillGateway(session.agentID, session.discovered, argsJSON)
 	case "install_skill":

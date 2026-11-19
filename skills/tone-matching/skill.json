@@ -1,0 +1,15 @@
+{
+  "id": "tone-matching",
+  "name": "Tone Matching",
+  "description": "Adapt writing to the user's register and formality without copying their errors or slipping into mimicry. Use when asked to match a style, sound more formal or casual, fit an audience, or keep a consistent register across a conversation.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "argus",
+  "source": "argus-original",
+  "license": "MIT",
+  "verbatim": false
+}

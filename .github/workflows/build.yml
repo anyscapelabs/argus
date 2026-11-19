@@ -26,6 +26,23 @@ jobs:
   macos:
     name: macOS (${{ matrix.label }})
     runs-on: ${{ matrix.runner }}
+    env:
+      BUILD_LDFLAGS: >-
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildGoogleOAuthClientID=${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildGoogleOAuthClientSecret=${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildArgusGoogleClientID=${{ secrets.ARGUS_GOOGLE_CLIENT_ID }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildArgusGoogleClientSecret=${{ secrets.ARGUS_GOOGLE_CLIENT_SECRET }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildGithubClientID=${{ secrets.ARGUS_GITHUB_CLIENT_ID }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildGithubClientSecret=${{ secrets.ARGUS_GITHUB_CLIENT_SECRET }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildPublicURL=${{ vars.ARGUS_PUBLIC_URL }}
+      VITE_ANYSCAPE_GATEWAY_URL: ${{ vars.ANYSCAPE_GATEWAY_URL }}
+      VITE_ANYSCAPE_CONSOLE_URL: ${{ vars.ANYSCAPE_CONSOLE_URL }}
+      MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+      MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+      MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+      MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
     strategy:
       fail-fast: false
       matrix:
@@ -78,7 +95,7 @@ jobs:
         run: task darwin:package ARCH=${ARCH}
 
       - name: Import Developer ID certificate
-        if: ${{ secrets.MACOS_CERTIFICATE_BASE64 != '' }}
+        if: ${{ env.MACOS_CERTIFICATE_BASE64 != '' }}
         env:
           CERT_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
           CERT_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
@@ -97,7 +114,7 @@ jobs:
           rm -f "$RUNNER_TEMP/cert.p12"
 
       - name: Sign the .app bundle
-        if: ${{ secrets.MACOS_SIGNING_IDENTITY != '' }}
+        if: ${{ env.MACOS_SIGNING_IDENTITY != '' }}
         env:
           IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
         run: |
@@ -115,7 +132,7 @@ jobs:
         run: task darwin:create:dmg ARCH=${ARCH}
 
       - name: Sign the DMG
-        if: ${{ secrets.MACOS_SIGNING_IDENTITY != '' }}
+        if: ${{ env.MACOS_SIGNING_IDENTITY != '' }}
         shell: bash
         env:
           IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
@@ -127,7 +144,7 @@ jobs:
           done
 
       - name: Notarize and staple
-        if: ${{ secrets.MACOS_NOTARY_APPLE_ID != '' }}
+        if: ${{ env.MACOS_NOTARY_APPLE_ID != '' }}
         shell: bash
         env:
           APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
@@ -177,6 +194,17 @@ jobs:
   linux:
     name: Linux (${{ matrix.label }})
     runs-on: ${{ matrix.runner }}
+    env:
+      BUILD_LDFLAGS: >-
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildGoogleOAuthClientID=${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildGoogleOAuthClientSecret=${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildArgusGoogleClientID=${{ secrets.ARGUS_GOOGLE_CLIENT_ID }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildArgusGoogleClientSecret=${{ secrets.ARGUS_GOOGLE_CLIENT_SECRET }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildGithubClientID=${{ secrets.ARGUS_GITHUB_CLIENT_ID }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildGithubClientSecret=${{ secrets.ARGUS_GITHUB_CLIENT_SECRET }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildPublicURL=${{ vars.ARGUS_PUBLIC_URL }}
+      VITE_ANYSCAPE_GATEWAY_URL: ${{ vars.ANYSCAPE_GATEWAY_URL }}
+      VITE_ANYSCAPE_CONSOLE_URL: ${{ vars.ANYSCAPE_CONSOLE_URL }}
     strategy:
       fail-fast: false
       matrix:
@@ -311,6 +339,19 @@ jobs:
   windows:
     name: Windows (${{ matrix.label }})
     runs-on: windows-latest
+    env:
+      BUILD_LDFLAGS: >-
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildGoogleOAuthClientID=${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildGoogleOAuthClientSecret=${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildArgusGoogleClientID=${{ secrets.ARGUS_GOOGLE_CLIENT_ID }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildArgusGoogleClientSecret=${{ secrets.ARGUS_GOOGLE_CLIENT_SECRET }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildGithubClientID=${{ secrets.ARGUS_GITHUB_CLIENT_ID }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildGithubClientSecret=${{ secrets.ARGUS_GITHUB_CLIENT_SECRET }}
+        -X github.com/anyscapelabs/argus/Services/Shared.BuildPublicURL=${{ vars.ARGUS_PUBLIC_URL }}
+      VITE_ANYSCAPE_GATEWAY_URL: ${{ vars.ANYSCAPE_GATEWAY_URL }}
+      VITE_ANYSCAPE_CONSOLE_URL: ${{ vars.ANYSCAPE_CONSOLE_URL }}
+      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
     strategy:
       fail-fast: false
       matrix:
@@ -367,7 +408,7 @@ jobs:
         run: task windows:build ARCH=${ARCH}
 
       - name: Import the Authenticode certificate
-        if: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 != '' }}
+        if: ${{ env.WINDOWS_CERTIFICATE_BASE64 != '' }}
         shell: pwsh
         env:
           CERT_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
@@ -377,7 +418,7 @@ jobs:
           "SIGN_CERT_PATH=$pfx" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Sign the executable
-        if: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 != '' }}
+        if: ${{ env.WINDOWS_CERTIFICATE_BASE64 != '' }}
         shell: pwsh
         env:
           CERT_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
@@ -397,7 +438,7 @@ jobs:
         run: task windows:create:nsis:installer ARCH=${ARCH}
 
       - name: Sign the installer
-        if: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 != '' }}
+        if: ${{ env.WINDOWS_CERTIFICATE_BASE64 != '' }}
         shell: pwsh
         env:
           CERT_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
@@ -412,7 +453,7 @@ jobs:
           }
 
       - name: Remove the signing certificate
-        if: always() && secrets.WINDOWS_CERTIFICATE_BASE64 != ''
+        if: always() && env.WINDOWS_CERTIFICATE_BASE64 != ''
         shell: pwsh
         run: Remove-Item -Force $env:SIGN_CERT_PATH -ErrorAction SilentlyContinue
 

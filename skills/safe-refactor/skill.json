@@ -1,0 +1,16 @@
+{
+  "id": "safe-refactor",
+  "name": "safe-refactor",
+  "description": "Restructure code while preserving behavior. Use for extraction, consolidation, ownership moves, or cleanup where verification must bracket structural edits.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "JuliusBrussee/caveman",
+  "source": "JuliusBrussee/caveman",
+  "license": "Apache-2.0 / MIT",
+  "source_url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/safe-refactor",
+  "verbatim": true
+}

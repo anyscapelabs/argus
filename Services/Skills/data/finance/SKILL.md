@@ -1,6 +1,5 @@
 ---
-name: finance
-description: Analyze business finances, forecasts, and performance.
+{"id": "finance", "name": "Finance", "description": "Analyze budgets, forecasts, financial statements, cash flow, unit economics, and business performance with explicit assumptions.", "version": "1.0.0", "connectors": [], "allowed_tools": [], "auto_enable": false, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Finance workflow

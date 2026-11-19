@@ -1,0 +1,16 @@
+{
+  "id": "email-marketing",
+  "name": "email-marketing",
+  "description": "Create and optimize email marketing campaigns including sequences, newsletters, drip campaigns. Design subject line strategies, develop segmentation approaches, implement A/B testing, and establish analytics tracking for email performance.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Custom",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/04-marketing/email-marketing",
+  "verbatim": true
+}

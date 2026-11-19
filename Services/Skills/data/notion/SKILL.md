@@ -1,6 +1,5 @@
 ---
-name: notion
-description: Search, read, create, and update Notion pages, databases, and comments.
+{"id": "notion", "name": "Notion", "description": "Search pages/databases, read content, create or update Notion pages and comments.", "version": "1.0.0", "connectors": ["notion"], "allowed_tools": [], "auto_enable": true, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Notion Workflow

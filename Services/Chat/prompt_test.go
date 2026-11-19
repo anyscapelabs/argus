@@ -48,6 +48,28 @@ func TestPromptMakesTheAgentTakeTheStepItself(t *testing.T) {
 	}
 }
 
+// A reply to "Good day" used to be "How can I help you today?", which reads as
+// a support bot rather than a colleague. The persona and the explicit anti-
+// service-desk rules are behaviour corrections, not style preferences.
+func TestPromptMakesTheAgentTalkLikeATeammate(t *testing.T) {
+	prompt := systemPromptFor(Storage.AgentProfile{AgentName: "Argus"}, true)
+	for _, must := range []string{
+		"a teammate working alongside the user",
+		"Treat a greeting as a greeting",
+		"Never open a reply with",
+		"How can I help?",
+		"Never call yourself",
+		"Stop when the work is done",
+	} {
+		if !strings.Contains(prompt, must) {
+			t.Errorf("the teammate voice rules never say %q", must)
+		}
+	}
+	if strings.Contains(prompt, "a personal AI assistant inside the Argus desktop app") {
+		t.Error("the prompt still frames the agent as an app assistant")
+	}
+}
+
 // A reply that opens with a table or a heading is legitimate, and the display
 // no longer strips it, so the prompt must not forbid it either.
 func TestPromptLetsAReplyOpenWithATableOrHeading(t *testing.T) {

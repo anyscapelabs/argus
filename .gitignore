@@ -26,3 +26,14 @@ Services/Updater/version_stamped.go
 
 # Local build output of the app binary (never commit it)
 /argus
+
+# Generated skills registry artifacts (published to S3 by CI, not committed)
+dist-skills/
+
+# Local signing keys and credentials — never commit these
+*.pem.key
+*.private.pem
+*private_key*
+*secret_key*
+skills-signing.pem
+signing.pem

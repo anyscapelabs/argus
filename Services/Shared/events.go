@@ -11,6 +11,7 @@ const (
 
 const (
 	EventCatalogUpdated      = "catalog:updated"
+	EventSkillsUpdated       = "skills:updated"
 	EventProvidersChanged    = "providers:changed"
 	EventSlotsChanged        = "slots:changed"
 	EventSelectionsChanged   = "selections:changed"

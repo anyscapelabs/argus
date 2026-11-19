@@ -1,0 +1,16 @@
+{
+  "id": "sop-builder",
+  "name": "sop-builder",
+  "description": "Create Standard Operating Procedures with step-by-step workflows, RACI matrices, process maps, approval chains, and version control",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Custom",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/07-operations/sop-builder",
+  "verbatim": true
+}

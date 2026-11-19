@@ -1,0 +1,16 @@
+{
+  "id": "executing-plans",
+  "name": "executing-plans",
+  "description": "Use when executing an implementation plan in the current session as the implementer yourself — your human partner chose inline execution, or no subagent tool is available",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "obra/superpowers",
+  "source": "obra/superpowers",
+  "license": "MIT",
+  "source_url": "https://github.com/obra/superpowers/tree/main/skills/executing-plans",
+  "verbatim": true
+}

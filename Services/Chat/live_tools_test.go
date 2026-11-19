@@ -21,8 +21,8 @@ func TestEveryAdvertisedBaseToolHasRunner(t *testing.T) {
 
 func TestLiveDeclarationsStayCompactAndUseGeminiTypes(t *testing.T) {
 	defs := liveFunctionDeclarations()
-	if len(defs) != 6 {
-		t.Fatalf("live setup has %d declarations, want 6", len(defs))
+	if len(defs) != 7 {
+		t.Fatalf("live setup has %d declarations, want 7", len(defs))
 	}
 	want := map[string]bool{
 		"conversation_read": true,
@@ -31,6 +31,7 @@ func TestLiveDeclarationsStayCompactAndUseGeminiTypes(t *testing.T) {
 		"invoke_tool":       true,
 		"read_skill":        true,
 		"install_skill":     true,
+		"search_skills":     true,
 	}
 	for _, def := range defs {
 		if !want[def.Name] {
@@ -95,6 +96,23 @@ func TestLivePromptUsesProfileWithoutToolDump(t *testing.T) {
 	}
 	if strings.Contains(prompt, "### create_slides") || strings.Contains(prompt, "### execute_command") {
 		t.Fatal("live prompt dumped individual tool guidance")
+	}
+}
+
+func TestLivePromptTalksLikeATeammate(t *testing.T) {
+	s, _ := newVoiceTestService(t)
+	prompt := s.liveSystemPrompt(Storage.AgentProfile{ID: "default", AgentName: "Nova"})
+	for _, must := range []string{
+		"a teammate on a live call",
+		"Treat a greeting as a greeting",
+		"Never open a reply with",
+	} {
+		if !strings.Contains(prompt, must) {
+			t.Errorf("the live prompt never says %q", must)
+		}
+	}
+	if strings.Contains(prompt, "personal AI assistant") {
+		t.Error("the live prompt still frames the agent as an AI assistant")
 	}
 }
 
