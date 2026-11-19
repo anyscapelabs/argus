@@ -28,6 +28,7 @@ type Item struct {
 	Type        string   `json:"type,omitempty"`
 	ConfigPath  string   `json:"configPath,omitempty"`
 	Enabled     bool     `json:"enabled,omitempty"`
+	Category    string   `json:"category,omitempty"`
 	Tools       []string `json:"tools,omitempty"`
 }
 

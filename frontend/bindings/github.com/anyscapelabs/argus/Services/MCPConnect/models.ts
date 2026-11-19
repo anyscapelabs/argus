@@ -31,7 +31,9 @@ export interface ConnectionView {
 export interface ConnectorCatalogView {
     "server_id": string;
     "display_name": string;
+    "category"?: string;
     "multi_account": boolean;
+    "custom"?: boolean;
     "connections": ConnectionView[] | null;
 }
 

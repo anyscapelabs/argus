@@ -19,7 +19,7 @@ import (
 var browserActions = []string{
 	"open", "read", "find", "click", "fill", "press", "select", "scroll", "back",
 	"wait", "tabs", "tab_new", "tab_select", "tab_close", "text", "screenshot",
-	"js", "hide", "show", "reset", "request_takeover",
+	"js", "hide", "show", "reset", "import_profile", "request_takeover",
 }
 
 func newToolService(browser *Browser.Service) *Service {

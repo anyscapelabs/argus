@@ -9,6 +9,8 @@ import { GoPencil } from 'react-icons/go'
 import { BsLayoutSidebarInset } from 'react-icons/bs'
 import { FiMoreHorizontal } from 'react-icons/fi'
 import { TiDocumentText } from 'react-icons/ti'
+import AgentAvatar from '../AgentAvatar'
+import EditAgentCard from '../EditAgentCard'
 
 type RightPanelProps = {
   agentID?: string
@@ -28,6 +30,7 @@ export default function RightPanel({ agentID = 'default', onClose, onOpenArtifac
   const setTaskPaused = useSetTaskPaused()
   const [agentName, setAgentName] = useState('Argus')
   const [active, setActive] = useState(TABS[0])
+  const [editOpen, setEditOpen] = useState(false)
 
   useEffect(() => {
     if (profile?.agent_name) {
@@ -41,7 +44,7 @@ export default function RightPanel({ agentID = 'default', onClose, onOpenArtifac
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: '100%', opacity: 0 }}
       transition={{ type: 'tween', duration: 0.2, ease: 'easeOut' }}
-      className="flex w-72 shrink-0 flex-col border-l border-primary bg-primary self-stretch"
+      className="flex w-72 max-w-[40vw] shrink-0 flex-col border-l border-primary bg-primary self-stretch"
     >
       <div className="flex items-center p-2">
         <button
@@ -55,12 +58,27 @@ export default function RightPanel({ agentID = 'default', onClose, onOpenArtifac
       <div className="flex items-center justify-center py-2">
         <button
           type="button"
+          onClick={() => profile && setEditOpen(true)}
           className="group relative grid h-24 w-24 cursor-pointer place-items-center rounded-full border border-primary bg-transparent transition-opacity hover:opacity-80"
+          aria-label="Edit agent"
         >
-          <img src="/argus-logo.svg" alt="Argus" className="h-20 w-20 rounded-full transition-opacity group-hover:opacity-0" />
+          <span className="transition-opacity group-hover:opacity-0">
+            <AgentAvatar avatar={profile?.avatar} name={profile?.agent_name ?? agentName} size={80} />
+          </span>
           <GoPencil size={28} className="absolute opacity-0 transition-opacity group-hover:opacity-100" />
         </button>
       </div>
+
+      {editOpen && profile && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4"
+          onMouseDown={() => setEditOpen(false)}
+        >
+          <div role="presentation" onMouseDown={(e) => e.stopPropagation()}>
+            <EditAgentCard profile={profile} onClose={() => setEditOpen(false)} />
+          </div>
+        </div>
+      )}
       <div className="flex justify-center px-4">
         <div className="w-fit rounded-lg px-3 py-1.5 text-center transition-colors hover:bg-secondary">
           <input

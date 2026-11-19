@@ -201,6 +201,9 @@ func (s *Service) installSkillGateway(ctx context.Context, agentID, agentName, a
 		if decision == Permission.Deny {
 			return Shared.LiveToolResult{Output: "user denied installing skill " + meta.ID, IsError: true}
 		}
+		if decision == Permission.Deferred {
+			return Shared.LiveToolResult{Output: Permission.DeferralNoticeText(Permission.SkillInstallTool, meta.ID+" ("+meta.Name+")"), IsError: true}
+		}
 	}
 	if err := reg.Enable(agentID, meta.ID); err != nil {
 		return Shared.LiveToolResult{Output: "could not enable skill: " + err.Error(), IsError: true}

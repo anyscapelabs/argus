@@ -16,9 +16,10 @@
     "tools": [
       "Search emails",
       "Read emails",
-      "Draft and send emails",
+      "Draft emails (sending requires explicit approval via the email_send action)",
       "Manage labels"
-    ]
+    ],
+    "category": "Google Workspace"
   },
   {
     "id": "google-calendar",
@@ -38,7 +39,8 @@
       "View events",
       "Create events",
       "Update events"
-    ]
+    ],
+    "category": "Google Workspace"
   },
   {
     "id": "google-drive",
@@ -57,7 +59,8 @@
       "Search files",
       "Read files",
       "Organize files"
-    ]
+    ],
+    "category": "Google Workspace"
   },
   {
     "id": "google-docs",
@@ -76,7 +79,8 @@
     "tools": [
       "Read documents",
       "Edit documents"
-    ]
+    ],
+    "category": "Google Workspace"
   },
   {
     "id": "google-sheets",
@@ -95,7 +99,8 @@
     "tools": [
       "Read spreadsheets",
       "Update spreadsheets"
-    ]
+    ],
+    "category": "Google Workspace"
   },
   {
     "id": "google-tasks",
@@ -114,7 +119,8 @@
       "View task lists",
       "Create tasks",
       "Complete tasks"
-    ]
+    ],
+    "category": "Google Workspace"
   },
   {
     "id": "cloudflare",
@@ -132,7 +138,8 @@
     "tools": [
       "Search Cloudflare docs",
       "Inspect resources"
-    ]
+    ],
+    "category": "Developer Tools"
   },
   {
     "id": "context7",
@@ -150,7 +157,8 @@
     "tools": [
       "Fetch library docs",
       "Get code examples"
-    ]
+    ],
+    "category": "Developer Tools"
   },
   {
     "id": "google-slides",
@@ -168,7 +176,8 @@
     "tools": [
       "Read presentations",
       "Summarize slides"
-    ]
+    ],
+    "category": "Google Workspace"
   },
   {
     "id": "linear",
@@ -187,7 +196,8 @@
       "Find issues and projects",
       "Create issues",
       "Update issues and projects"
-    ]
+    ],
+    "category": "Productivity"
   },
   {
     "id": "notion",
@@ -205,7 +215,8 @@
       "Read pages and databases",
       "Write pages and databases",
       "Manage comments"
-    ]
+    ],
+    "category": "Productivity"
   },
   {
     "id": "github",
@@ -230,7 +241,8 @@
       "Browse repositories",
       "Manage issues",
       "Manage pull requests"
-    ]
+    ],
+    "category": "Developer Tools"
   },
   {
     "id": "todoist",
@@ -245,7 +257,8 @@
     "tools": [
       "Manage tasks",
       "Manage projects"
-    ]
+    ],
+    "category": "Productivity"
   },
   {
     "id": "atlassian",
@@ -267,7 +280,8 @@
     "tools": [
       "Search Jira work",
       "Search Confluence pages"
-    ]
+    ],
+    "category": "Productivity"
   },
   {
     "id": "sentry",
@@ -284,6 +298,7 @@
     "tools": [
       "Monitor errors",
       "Review app health"
-    ]
+    ],
+    "category": "Developer Tools"
   }
 ]

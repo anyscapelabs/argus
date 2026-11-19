@@ -82,34 +82,21 @@ function AgentBubble({
 
   const reactionBadge = <ReactionBadge reaction={reaction} />
 
-  if (failed && !text.trim() && !error) {
-    return (
-      <div className={`group flex w-fit max-w-full items-center gap-2 ${className}`}>
-        <div className="relative max-w-xl rounded-xl border border-danger/40 bg-secondary px-2 py-1 text-sm text-danger">
-          The model call failed
-          {reactionBadge}
-        </div>
-        {actions}
-      </div>
-    )
-  }
   if (failed && !text.trim()) {
     return (
-      <div className={`group flex w-fit max-w-full items-center gap-2 ${className}`}>
-        <div className="relative max-w-xl rounded-xl border border-danger/40 bg-secondary px-2 py-1 text-sm text-danger">
-          <Markdown>{error ?? ''}</Markdown>
+      <div className={`group flex w-fit max-w-[70%] items-center gap-2 ${className}`}>
+        <div className="relative w-fit max-w-full rounded-xl border border-danger/40 bg-secondary px-2 py-1 text-sm text-danger">
+          {error ? <Markdown>{error}</Markdown> : 'The model call failed'}
           {reactionBadge}
         </div>
         {actions}
       </div>
     )
   }
-  // A bubble holding a table gets a fixed measure instead of shrink-to-fit.
-  // The table frame owns horizontal overflow so wide tables scroll within the bubble.
   const wide = hasMarkdownTable(text)
   return (
-    <div className={`group flex ${wide ? 'w-full max-w-3xl' : 'w-fit max-w-full'} items-center gap-2 ${className}`}>
-      <div className={`markdown relative ${wide ? 'w-full min-w-0' : 'max-w-3xl'} select-text break-words rounded-xl border border-primary bg-secondary px-3 py-2 text-sm`}>
+    <div className={`group flex w-fit max-w-[70%] items-center gap-2 ${className}`}>
+      <div className={`markdown relative ${wide ? 'w-full min-w-0' : 'w-fit max-w-full'} select-text break-words rounded-xl border border-primary bg-secondary px-3 py-2 text-sm`}>
         <Markdown
           remarkPlugins={[remarkGfm]}
           urlTransform={(url) => (url.startsWith(MENTION_SCHEME) ? url : defaultUrlTransform(url))}

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
-import { sendMessage, sendMessageWithAttachments, getChat, getUsage, setMessageReaction } from './api'
+import { sendMessage, sendMessageWithAttachments, getChat, getUsage, setMessageReaction, stopRun } from './api'
 import type { GetChatResult, ChatMessage } from '../../../bindings/github.com/anyscapelabs/argus/Services/Shared/models'
 import { dataOf, mediaTypeOf, type PendingAttachment } from '../uploads/api'
 import { messageReaction, patchMessageReaction, rollbackMessageReaction } from './reactions'
@@ -107,6 +107,16 @@ export function useSendMessage(agentID: string) {
       qc.invalidateQueries({ queryKey: usageKey })
       qc.invalidateQueries({ queryKey: ['usage'] })
       qc.invalidateQueries({ queryKey: ['models', 'agents'] })
+    },
+  })
+}
+
+export function useStopRun() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (runID: string) => stopRun(runID),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['chat'] })
     },
   })
 }

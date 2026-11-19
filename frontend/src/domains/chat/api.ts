@@ -23,6 +23,11 @@ export async function sendMessageWithAttachments(
   return res
 }
 
+export async function beginFirstRun(agentID: string): Promise<void> {
+  const res = await ChatService.BeginFirstRun(agentID)
+  if (res?.error) throw new Error(res.error.message)
+}
+
 export async function getChat(agentID: string, beforeSeq = 0, limit = 100): Promise<GetChatResult> {
   const res = await ChatService.GetChat(agentID, beforeSeq, limit)
   if (res?.error) throw new Error(res.error.message)
@@ -37,6 +42,12 @@ export async function getUsage(agentID: string): Promise<UsageResult> {
 
 export async function listRequests(agentID: string, limit = 100): Promise<ListRequestsResult> {
   const res = await ChatService.ListRequests(agentID, limit)
+  if (res?.error) throw new Error(res.error.message)
+  return res
+}
+
+export async function stopRun(runID: string) {
+  const res = await ChatService.Stop(runID)
   if (res?.error) throw new Error(res.error.message)
   return res
 }

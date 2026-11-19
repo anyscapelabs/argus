@@ -22,6 +22,9 @@ func (s *Service) runBrowser(
 	if s.Browser == nil {
 		return result("browser: this build has no browser support", true)
 	}
+	if s.Permissions != nil && !s.Permissions.IsBrowserAllowed(agentID) {
+		return result("browser: browser use is turned off for this agent in Settings", true)
+	}
 	var input Browser.Call
 	if err := json.Unmarshal([]byte(call.Input), &input); err != nil {
 		return result("invalid tool input: could not parse the browser arguments", true)
@@ -79,6 +82,9 @@ func (s *Service) runBrowser(
 		}
 		if decision == Permission.Deny {
 			return false, why
+		}
+		if decision == Permission.Deferred {
+			return false, Permission.DeferralNoticeText(Permission.BrowserHostTool(host), why)
 		}
 		return true, ""
 	}

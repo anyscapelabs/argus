@@ -20,3 +20,9 @@ google.json
 
 # Node tooling caches at the repo root
 node_modules/
+
+# Release version stamp written by build/stamp-version.sh
+Services/Updater/version_stamped.go
+
+# Local build output of the app binary (never commit it)
+/argus

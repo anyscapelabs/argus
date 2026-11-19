@@ -7,8 +7,8 @@ through the MCP gateway (see [MCP and integrations](../guides/mcp-integrations.m
 
 Tool access is checked against [permissions](../concepts/security.md) before
 side effects occur. Sensitive tools require a permission grant or interactive
-approval; unattended runs (scheduled wakes) refuse interactive approval instead
-of waiting.
+approval; unattended runs (scheduled wakes) hold the action and leave an
+actionable message instead of waiting for approval nobody can give.
 
 ## Files and terminal
 
@@ -57,6 +57,7 @@ of waiting.
 | Tool | What it does |
 |---|---|
 | `ask_user` | Pauses the run to ask the user a question; refused in unattended contexts. |
+| `set_agent_name` | Saves the display name the user chose for the agent; refused in unattended contexts. |
 | `conversation_read` | Reads conversation history (search/list with pagination). |
 | `list_messages` | Lists messages, including other threads where permitted. |
 | `delete_message` | Deletes a message. |

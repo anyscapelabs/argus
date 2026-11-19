@@ -10,7 +10,7 @@ import (
 func TestFileWriteRoundProjectsSanitizedCard(t *testing.T) {
 	s, _ := newVoiceTestService(t)
 	s.persistRound(
-		"default", "router/model", "",
+		"default", "router/model",
 		Protocol.Message{Role: Protocol.RoleAssistant, Blocks: []Protocol.Block{{
 			Type:     Protocol.BlockToolUse,
 			ToolCall: &Protocol.ToolCall{ID: "c1", Name: "write_file", Input: `{"path":"/tmp/app.ts","content":"secret body"}`, Valid: true},

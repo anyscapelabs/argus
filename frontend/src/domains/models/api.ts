@@ -1,39 +1,11 @@
 import * as ModelsService from '../../../bindings/github.com/anyscapelabs/argus/Services/Models/service.js'
 import type {
-  PickerResult,
-  PickerOptions,
-  SelectionsResult,
   ActionResult,
   AgentProfile,
   AgentProfileResult,
   AgentSummary,
   CreateAgentResult,
 } from '../../../bindings/github.com/anyscapelabs/argus/Services/Shared/models.js'
-
-export const defaultPickerOptions: PickerOptions = {
-  search: '',
-  include_beta: false,
-  tools_only: false,
-  refresh_live: false,
-}
-
-export async function getPicker(providerID: string, options: PickerOptions = defaultPickerOptions): Promise<PickerResult> {
-  const res = await ModelsService.Picker(providerID, options)
-  if (res?.error) throw new Error(res.error.message)
-  return res
-}
-
-export async function setProviderSelection(providerID: string, refs: string[] | null): Promise<ActionResult> {
-  const res = await ModelsService.SetProviderSelection(providerID, refs ?? [])
-  if (res?.error) throw new Error(res.error.message)
-  return res
-}
-
-export async function getProviderSelection(providerID: string): Promise<SelectionsResult> {
-  const res = await ModelsService.GetProviderSelection(providerID)
-  if (res?.error) throw new Error(res.error.message)
-  return res
-}
 
 export async function getChatModels() {
   const res = await ModelsService.ChatModels()
@@ -63,8 +35,30 @@ export async function listAgents(): Promise<AgentSummary[]> {
   return res ?? []
 }
 
-export async function setAgentModel(id: string, modelRef: string): Promise<ActionResult> {
-  const res = await ModelsService.SetAgentModel(id, modelRef)
+export async function deleteAgent(id: string): Promise<ActionResult> {
+  const res = await ModelsService.DeleteAgent(id)
+  if (res?.error) throw new Error(res.error.message)
+  return res
+}
+
+export async function listMutedAgents(): Promise<string[]> {
+  const res = await ModelsService.ListMutedAgents()
+  return (res ?? []) as string[]
+}
+
+export async function setAgentMuted(id: string, muted: boolean): Promise<ActionResult> {
+  const res = await ModelsService.SetAgentMuted(id, muted)
+  if (res?.error) throw new Error(res.error.message)
+  return res
+}
+
+export async function listPinnedAgents(): Promise<string[]> {
+  const res = await ModelsService.ListPinnedAgents()
+  return (res ?? []) as string[]
+}
+
+export async function setAgentPinned(id: string, pinned: boolean): Promise<ActionResult> {
+  const res = await ModelsService.SetAgentPinned(id, pinned)
   if (res?.error) throw new Error(res.error.message)
   return res
 }

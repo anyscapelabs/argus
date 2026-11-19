@@ -50,10 +50,10 @@ scope-aware rules narrow what a grant covers. See
 
 ## Why did my scheduled task not do what I asked?
 
-Scheduled runs are **unattended**: permission requests and `ask_user` are
-refused rather than awaited, and a notice is recorded instead. If the routine
-needed an interactive approval, it will have failed with a recorded reason. See
-the [scheduler guide](guides/scheduler.md).
+Scheduled runs are **unattended**: permission requests are held rather than
+awaited — the action is not taken, a message explaining what was needed appears
+in the chat, and replying lets the agent ask permission and try again. `ask_user`
+is still refused. See the [scheduler guide](guides/scheduler.md).
 
 ## Why is the document I asked for in the artifacts panel?
 

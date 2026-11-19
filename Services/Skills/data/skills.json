@@ -103,5 +103,54 @@
     "description": "Resolve library IDs and fetch up-to-date API documentation and code examples.",
     "connectors": ["context7"],
     "auto_enable": true
+  },
+  {
+    "id": "humanizer",
+    "name": "Humanizer",
+    "description": "Edit AI-sounding prose into direct, natural writing while preserving every supported fact and the writer's voice.",
+    "connectors": [],
+    "auto_enable": false
+  },
+  {
+    "id": "finance",
+    "name": "Finance",
+    "description": "Analyze budgets, forecasts, financial statements, cash flow, unit economics, and business performance with explicit assumptions.",
+    "connectors": [],
+    "auto_enable": false
+  },
+  {
+    "id": "accounting",
+    "name": "Accounting",
+    "description": "Prepare reconciliations, journal-entry drafts, close checklists, variance reviews, and audit-ready accounting workpapers.",
+    "connectors": [],
+    "auto_enable": false
+  },
+  {
+    "id": "sales",
+    "name": "Sales",
+    "description": "Research accounts, qualify opportunities, prepare calls, draft outreach, and keep pipeline records accurate.",
+    "connectors": [],
+    "auto_enable": false
+  },
+  {
+    "id": "marketing",
+    "name": "Marketing",
+    "description": "Turn a product brief into positioning, campaign plans, channel-ready copy, and measurable experiments.",
+    "connectors": [],
+    "auto_enable": false
+  },
+  {
+    "id": "customer-support",
+    "name": "Customer Support",
+    "description": "Investigate customer issues, draft accurate replies, summarize cases, and escalate with a complete handoff.",
+    "connectors": [],
+    "auto_enable": false
+  },
+  {
+    "id": "data-analysis",
+    "name": "Data Analysis",
+    "description": "Inspect datasets, define metrics, clean and analyze data, validate calculations, and communicate findings clearly.",
+    "connectors": [],
+    "auto_enable": false
   }
 ]

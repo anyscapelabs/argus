@@ -58,7 +58,7 @@ func systemPromptFor(profile Storage.AgentProfile, withTools bool) string {
 	}
 
 	b.WriteString("\n## Output format\n")
-	b.WriteString("- Start with a plain prose sentence, not a heading, label, or your own name.\n")
+	b.WriteString("- A reply may open with a short heading, a table or a list when that structure genuinely helps. Do not label a reply with your own name.\n")
 	b.WriteString("- Be concise. Use short paragraphs and lists; use a table only for a real multi-row data grid.\n")
 	b.WriteString("- Use inline code for values and commands, fenced code with a language tag for multi-line code, and normal links for URLs.\n")
 

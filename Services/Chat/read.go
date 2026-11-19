@@ -12,11 +12,7 @@ func (s *Service) GetChat(agentID string, beforeSeq, limit int) Shared.GetChatRe
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.GetChatResult{Error: aerr}
 	}
-	agentID = strings.TrimSpace(agentID)
-	if agentID == "" {
-		agentID = "default"
-	}
-	agentName := agentDisplayName(s, agentID)
+	agentID = normalizeAgentID(agentID)
 	// The page comes back visibility-filtered from SQL, so `limit` counts real
 	// messages, not the tool-carrier rows between them. With no limit, ask for
 	// the default window.
@@ -51,8 +47,10 @@ func (s *Service) GetChat(agentID string, beforeSeq, limit int) Shared.GetChatRe
 		// them here would put words in the user's mouth that they never typed.
 		// Voice-call rows are the one app-authored kind the chat draws: they
 		// carry the transcript of a finished voice session as a JSON record,
-		// which the frontend renders as a collapsible transcript card.
-		if m.Kind != "" && m.Kind != "voice" && m.Kind != Storage.MessageKindFileWrite {
+		// which the frontend renders as a collapsible transcript card. A
+		// settled question card rides the same way.
+		if m.Kind != "" && m.Kind != "voice" && m.Kind != Storage.MessageKindFileWrite &&
+			m.Kind != Storage.MessageKindAskUser {
 			continue
 		}
 		if m.Kind == Storage.MessageKindFileWrite {
@@ -86,19 +84,15 @@ func (s *Service) GetChat(agentID string, beforeSeq, limit int) Shared.GetChatRe
 			strings.TrimSpace(m.Text) == "" && strings.TrimSpace(m.ErrorMessage) == "" {
 			continue
 		}
-		text := m.Text
-		if m.Role == "assistant" && text != "" {
-			text = StripLeadingTitle(text, agentName, "display")
-		}
 		out = append(out, Shared.ChatMessage{
 			ID:           m.ID,
 			AgentID:      m.AgentID,
 			Seq:          m.Seq,
 			Role:         m.Role,
 			Kind:         m.Kind,
-			Text:         text,
+			Text:         m.Text,
 			Status:       m.Status,
-			ErrorMessage: m.ErrorMessage,
+			ErrorMessage: publicErrorMessage(m.ErrorCode, m.ErrorMessage),
 			ErrorCode:    m.ErrorCode,
 			StopReason:   m.StopReason,
 			ModelRef:     m.ModelRef,
@@ -113,21 +107,27 @@ func (s *Service) GetChat(agentID string, beforeSeq, limit int) Shared.GetChatRe
 
 const chatPageLimit = 100
 
-func agentDisplayName(s *Service, agentID string) string {
-	if profile, found, err := s.Core.DB.GetAgentProfile(agentID); err == nil && found && strings.TrimSpace(profile.AgentName) != "" {
-		return strings.TrimSpace(profile.AgentName)
+// requestTokens totals what one model request consumed: cache reads and writes
+// count as input, reasoning counts as output.
+func requestTokens(r Storage.ModelRequest) (in, out int64) {
+	add := func(total *int64, n *int64) {
+		if n != nil {
+			*total += *n
+		}
 	}
-	return defaultAgentName
+	add(&in, r.InputTokens)
+	add(&in, r.CacheReadTokens)
+	add(&in, r.CacheWriteTokens)
+	add(&out, r.OutputTokens)
+	add(&out, r.ReasoningTokens)
+	return in, out
 }
 
 func (s *Service) Usage(agentID string) Shared.UsageResult {
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.UsageResult{Error: aerr}
 	}
-	agentID = strings.TrimSpace(agentID)
-	if agentID == "" {
-		agentID = "default"
-	}
+	agentID = normalizeAgentID(agentID)
 	reqs, err := s.Core.DB.ListModelRequests(agentID, 1000)
 	if err != nil {
 		return Shared.UsageResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
@@ -140,21 +140,9 @@ func (s *Service) Usage(agentID string) Shared.UsageResult {
 	for _, r := range reqs {
 		if r.Status == "success" {
 			success++
-			if r.InputTokens != nil {
-				in += *r.InputTokens
-			}
-			if r.OutputTokens != nil {
-				out += *r.OutputTokens
-			}
-			if r.CacheReadTokens != nil {
-				in += *r.CacheReadTokens
-			}
-			if r.CacheWriteTokens != nil {
-				in += *r.CacheWriteTokens
-			}
-			if r.ReasoningTokens != nil {
-				out += *r.ReasoningTokens
-			}
+			reqIn, reqOut := requestTokens(r)
+			in += reqIn
+			out += reqOut
 			if r.CostUSD != nil {
 				cost += *r.CostUSD
 				hasCost = true
@@ -174,33 +162,14 @@ func (s *Service) ListRequests(agentID string, limit int) Shared.ListRequestsRes
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.ListRequestsResult{Error: aerr}
 	}
-	agentID = strings.TrimSpace(agentID)
-	if agentID == "" {
-		agentID = "default"
-	}
+	agentID = normalizeAgentID(agentID)
 	reqs, err := s.Core.DB.ListModelRequests(agentID, limit)
 	if err != nil {
 		return Shared.ListRequestsResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
 	out := make([]Shared.ModelRequestView, 0, len(reqs))
 	for _, r := range reqs {
-		in := int64(0)
-		outTok := int64(0)
-		if r.InputTokens != nil {
-			in += *r.InputTokens
-		}
-		if r.CacheReadTokens != nil {
-			in += *r.CacheReadTokens
-		}
-		if r.CacheWriteTokens != nil {
-			in += *r.CacheWriteTokens
-		}
-		if r.OutputTokens != nil {
-			outTok += *r.OutputTokens
-		}
-		if r.ReasoningTokens != nil {
-			outTok += *r.ReasoningTokens
-		}
+		in, outTok := requestTokens(r)
 		cost := float64(0)
 		if r.CostUSD != nil {
 			cost = *r.CostUSD
@@ -218,5 +187,3 @@ func (s *Service) ListRequests(agentID string, limit int) Shared.ListRequestsRes
 	}
 	return Shared.ListRequestsResult{Requests: out}
 }
-
-var _ = Storage.ModelRequest{}

@@ -141,6 +141,23 @@ Tool execution is routed through chat dispatch with activity events, result hand
 - React Query-based data fetching/caching with event-driven invalidation from backend runtime events.
 - Theme/accent support and desktop-oriented layout (sidebar, toolbar, overlays).
 
+## App updates
+
+**Primary areas:** `Services/Updater/*`, `main.go`, `frontend/src/pages/Updates.tsx`, `frontend/src/domains/updater/*`
+
+- Self-update from GitHub Releases: the running build reports its version, a background checker polls shortly after startup and every six hours, and the Settings → This App page offers "Check for update" and "Update".
+- The Wails v3 updater (`app.Updater`) with its GitHub provider does the network work: release lookup, download, digest verification, the atomic binary (or `.app` bundle / AppImage) swap, and relaunch. `Services/Updater` supplies the running version, the check schedule, the asset selection for this repository's release artifact names, and the JSON shape the page renders (the framework's own update window stays closed).
+- Releases publish a `SHA256SUMS` sidecar that the download is verified against. Configuring a public key makes release signatures mandatory.
+- `ARGUS_UPDATE_REPO` points the checker at a staging repo or fork.
+
+## Startup, tray, and background work
+
+**Primary areas:** `Services/Startup/*`, `background_lifecycle.go`, `main.go`
+
+- The app registers itself to launch at the user's login on every start (`app.Autostart`): SMAppService or a LaunchAgent on macOS, the per-user Run key on Windows, an XDG autostart entry on Linux. Re-registering each launch keeps the entry pointing at the current executable after an update.
+- A login launch passes `--background`, so the window starts hidden and Argus waits in the system tray; routines, reminders, and an in-flight agent run keep going.
+- Closing the window hides it instead of quitting. The tray menu offers Open and Quit, and the tray identifies itself as "Argus Agent".
+
 ## Cross-cutting concerns
 
 - **Eventing:** backend emits domain events bridged to the frontend and in-process listeners.

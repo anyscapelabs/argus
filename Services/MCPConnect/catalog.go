@@ -44,7 +44,9 @@ type DisconnectImpactView struct {
 type ConnectorCatalogView struct {
 	ServerID     string           `json:"server_id"`
 	DisplayName  string           `json:"display_name"`
+	Category     string           `json:"category,omitempty"`
 	MultiAccount bool             `json:"multi_account"`
+	Custom       bool             `json:"custom,omitempty"`
 	Connections  []ConnectionView `json:"connections"`
 }
 
@@ -113,6 +115,23 @@ func (s *Service) ListCatalog(_ context.Context) ([]ConnectorCatalogView, error)
 		catalog[i].Connections = byServer[catalog[i].ServerID]
 		if catalog[i].Connections == nil {
 			catalog[i].Connections = []ConnectionView{}
+		}
+	}
+	// User-added servers ride the same view so the detail page can manage
+	// them. They hold no OAuth accounts, so their connection list stays empty.
+	if s.MCP != nil {
+		for _, custom := range s.MCP.ListCustomServers() {
+			if _, seen := byServer[custom.ID]; seen {
+				continue
+			}
+			catalog = append(catalog, ConnectorCatalogView{
+				ServerID:     custom.ID,
+				DisplayName:  custom.Name,
+				Category:     "Custom",
+				MultiAccount: false,
+				Custom:       true,
+				Connections:  []ConnectionView{},
+			})
 		}
 	}
 	return catalog, nil
@@ -304,6 +323,7 @@ func (s *Service) connectorCatalog() []ConnectorCatalogView {
 		out = append(out, ConnectorCatalogView{
 			ServerID:     item.ID,
 			DisplayName:  item.Name,
+			Category:     item.Category,
 			MultiAccount: true,
 			Connections:  []ConnectionView{},
 		})

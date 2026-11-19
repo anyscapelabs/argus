@@ -323,6 +323,23 @@ export interface IntegrationView {
     "description": string;
     "icon": string;
     "connected": boolean;
+
+    /**
+     * Category groups the Discover grid; custom servers use their own group.
+     */
+    "category"?: string;
+
+    /**
+     * Custom marks a user-added server rather than a bundled connector.
+     */
+    "custom"?: boolean;
+
+    /**
+     * OAuthMode mirrors the catalog entry (google | github | dynamic) so the
+     * connect form knows whether an account email can be captured. Custom
+     * servers leave it empty.
+     */
+    "oauth_mode"?: string;
     "tools"?: string[] | null;
 }
 
@@ -494,6 +511,23 @@ export interface PermissionNoticeView {
     "kind": string;
     "text": string;
     "created_at": number;
+}
+
+export interface PermissionPoliciesResult {
+    "policies": PermissionPolicyView[] | null;
+    "error"?: ActionError | null;
+}
+
+/**
+ * PermissionPolicyView is one configurable capability. GlobalMode is the
+ * fallback for every agent, AgentMode is this agent's override (or inherit),
+ * and EffectiveMode is the decision the permission gate currently applies.
+ */
+export interface PermissionPolicyView {
+    "tool": string;
+    "global_mode": string;
+    "agent_mode": string;
+    "effective_mode": string;
 }
 
 export interface PermissionState {

@@ -10,6 +10,10 @@ export const ARGUS_API_URL: string =
   import.meta.env.VITE_ARGUS_API_URL ??
   'https://api.anyscapelabs.com'
 
+// The web console (dashboard) origin, where billing and settings live.
+export const CONSOLE_URL: string =
+  import.meta.env.VITE_ANYSCAPE_CONSOLE_URL ?? 'https://console.anyscapelabs.com'
+
 export async function getKeyStatus(): Promise<KeyStatusResult> {
   return AccountService.GetKeyStatus()
 }
@@ -27,7 +31,7 @@ export async function entitlements(): Promise<EntitlementsView> {
 }
 
 export async function openDashboard(path: string): Promise<void> {
-  const url = `${ARGUS_API_URL}${path}`.replace(/([^:])\/{2,}/g, '$1/')
+  const url = `${CONSOLE_URL}${path}`.replace(/([^:])\/{2,}/g, '$1/')
   try {
     await Browser.OpenURL(url)
   } catch {

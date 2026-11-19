@@ -28,6 +28,9 @@ func (s *Service) runFileTool(
 		if decision == Permission.Deny {
 			return true, result("The user declined file access. Do not retry this call; continue without reading, writing or searching files.", true)
 		}
+		if decision == Permission.Deferred {
+			return true, result(Permission.DeferralNoticeText(Permission.FileAccessTool, summary), true)
+		}
 		return false, Protocol.Block{}
 	}
 

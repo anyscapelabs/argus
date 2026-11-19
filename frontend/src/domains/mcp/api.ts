@@ -1,5 +1,8 @@
 import * as MCPConnectService from '../../../bindings/github.com/anyscapelabs/argus/Services/MCPConnect/service.js'
+import * as MCPService from '../../../bindings/github.com/anyscapelabs/argus/Services/MCP/service.js'
 import type { ActionResult } from '../../../bindings/github.com/anyscapelabs/argus/Services/Shared/models.js'
+import type { CustomMCPServer } from '../../../bindings/github.com/anyscapelabs/argus/Storage/models.js'
+import type { CustomServerInput } from '../../../bindings/github.com/anyscapelabs/argus/Services/MCP/models.js'
 
 export type MCPConnectDecision = 'connect' | 'deny' | 'cancel'
 
@@ -64,6 +67,21 @@ export type IntegrationView = {
   connection_id?: string
   connection_count: number
   tools?: string[]
+  category?: string
+  custom?: boolean
+  oauth_mode?: string
+}
+
+export async function addCustomServer(input: CustomServerInput): Promise<CustomMCPServer> {
+  return (await MCPService.AddCustomServer(input)) as CustomMCPServer
+}
+
+export async function removeCustomServer(id: string): Promise<void> {
+  await MCPService.RemoveCustomServer(id)
+}
+
+export async function listCustomServers(): Promise<CustomMCPServer[]> {
+  return ((await MCPService.ListCustomServers()) as CustomMCPServer[] | null) ?? []
 }
 
 export async function listIntegrations(): Promise<IntegrationView[]> {
@@ -74,10 +92,18 @@ export async function listIntegrations(): Promise<IntegrationView[]> {
   const byServer = new Map(catalog.map((item) => [item.server_id, item]))
   return (integrations ?? []).map((item: any) => {
     const accounts = byServer.get(item.id)?.connections ?? []
+    // Custom servers hold no OAuth accounts: the backend's live session state
+    // is the truth. Catalog connectors derive it from their account list.
+    const connected = item.custom
+      ? !!item.connected
+      : accounts.some((account) => account.status === 'connected')
     return {
       ...item,
       tools: item.tools ?? [],
-      connected: accounts.some((account) => account.status === 'connected'),
+      connected,
+      category: item.category ?? '',
+      custom: !!item.custom,
+      oauth_mode: item.oauth_mode ?? '',
       connection_id: accounts.length === 1 ? accounts[0].connection_id : undefined,
       connection_count: accounts.length,
     }
@@ -120,6 +146,8 @@ export type ConnectorCatalogItem = {
   server_id: string
   display_name: string
   multi_account: boolean
+  category?: string
+  custom?: boolean
   connections: IntegrationConnection[]
 }
 
@@ -129,6 +157,8 @@ export async function listIntegrationCatalog(): Promise<ConnectorCatalogItem[]> 
     server_id: item?.server_id ?? '',
     display_name: item?.display_name ?? '',
     multi_account: !!item?.multi_account,
+    category: item?.category ?? '',
+    custom: !!item?.custom,
     connections: (item?.connections ?? []).map(normalizeIntegrationConnection),
   }))
 }

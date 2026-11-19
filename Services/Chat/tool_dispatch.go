@@ -30,6 +30,7 @@ type toolRunner func(
 var toolRunners = map[string]toolRunner{
 	"get_time_and_location": runTimeLocationTool,
 	"ask_user":              runAskUserTool,
+	"set_agent_name":        runAgentNameTool,
 	"read_file":             runFileToolDispatch,
 	"write_file":            runFileToolDispatch,
 	"edit_file":             runFileToolDispatch,
@@ -48,6 +49,7 @@ var toolRunners = map[string]toolRunner{
 	"create_slides":         runCreateSlidesToolDispatch,
 	"browser":               runBrowserTool,
 	Permission.TerminalTool: runTerminalTool,
+	Permission.EmailSendTool: runEmailSendTool,
 }
 
 // The shared permission gate must run before any of the three file operations.

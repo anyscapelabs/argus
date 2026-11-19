@@ -85,6 +85,12 @@ agent can react to newly available tools.
 |---|---|
 | `schedule:updated` | `scheduled_tasks` changes — the agent creates or cancels one, or the engine advances, retires, or pauses it — so the routines panel redraws from the database. |
 
+## App updates
+
+| Event | Fired when |
+|---|---|
+| `updates:available` | The background update checker finds a build newer than the running one. The payload is the updater `Status` (`Services/Updater`): running and latest versions, release notes, and the release page. The "This App" page refetches on it, so the Update button appears without the user pressing "Check for update". |
+
 ## Conventions
 
 - Event payloads are DTOs from `Services/Shared/views_*.go`; changing a payload

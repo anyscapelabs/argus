@@ -49,6 +49,8 @@ export type {
     ModelView,
     NoticesResult,
     PermissionNoticeView,
+    PermissionPoliciesResult,
+    PermissionPolicyView,
     PermissionState,
     PermissionStateResult,
     Picker,

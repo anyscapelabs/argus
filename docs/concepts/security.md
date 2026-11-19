@@ -84,7 +84,7 @@ The built-in tools and their permission families are cataloged in the
 - Durable grants are stored in `permission_grants`; decisions/notices are recorded in `permission_notices`.
 - `Request(...)` checks stored grants first. If no grant applies:
   - **Interactive runs** emit `permission:requested`, wait for a user response, and can persist allow-always decisions.
-  - **Unattended runs** (for example scheduled/background execution) refuse interactive approval, deny the action, and persist a notice instead of blocking indefinitely.
+  - **Unattended runs** (for example scheduled/background execution) hold the action, persist an actionable notice shown in the chat, and return a `deferred` decision instead of blocking indefinitely. The agent reports what it needed; replying lets it ask permission and retry on the next interactive turn.
 - Browser actions support host-specific and family/global resolution rules, so approvals can be scoped appropriately.
 
 ## MCP and integration safety

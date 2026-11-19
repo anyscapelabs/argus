@@ -47,3 +47,18 @@ func TestPromptMakesTheAgentTakeTheStepItself(t *testing.T) {
 		t.Error("the compact prompt still dumps individual tool sections")
 	}
 }
+
+// A reply that opens with a table or a heading is legitimate, and the display
+// no longer strips it, so the prompt must not forbid it either.
+func TestPromptLetsAReplyOpenWithATableOrHeading(t *testing.T) {
+	prompt := systemPromptFor(Storage.AgentProfile{AgentName: "Argus"}, true)
+	if strings.Contains(prompt, "not a heading") {
+		t.Error("the prompt still forbids opening a reply with a heading")
+	}
+	if !strings.Contains(prompt, "may open with a short heading, a table or a list") {
+		t.Error("the output rules never allow a reply to open with a heading, table or list")
+	}
+	if !strings.Contains(prompt, "Do not label a reply with your own name") {
+		t.Error("the output rules lost the rule against labelling a reply with the agent's name")
+	}
+}

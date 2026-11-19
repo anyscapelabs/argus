@@ -7,9 +7,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.anyscapelabs.argus.dev</string>
     <key>CFBundleName</key>
-    <string>My Product (Dev)</string>
+    <string>Argus Agent (Dev)</string>
     <key>CFBundleDisplayName</key>
-    <string>My Product (Dev)</string>
+    <string>Argus Agent (Dev)</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -51,11 +51,11 @@
     <true/>
     
     <key>NSHumanReadableCopyright</key>
-    <string>© 2026, Anyscape Labs</string>
+    <string>© 2026, Anyscape Labs PLC</string>
     
     
     <key>CFBundleGetInfoString</key>
-    <string>This is a comment</string>
+    <string>Your AI Pro Active Teammate</string>
     
 </dict>
 </plist>

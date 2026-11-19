@@ -35,10 +35,18 @@ type MCPConnectDecisionView struct {
 // IntegrationView is a connector offered by Argus, plus its local connection
 // state for the Integrations page.
 type IntegrationView struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Icon        string   `json:"icon"`
-	Connected   bool     `json:"connected"`
-	Tools       []string `json:"tools,omitempty"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Icon        string `json:"icon"`
+	Connected   bool   `json:"connected"`
+	// Category groups the Discover grid; custom servers use their own group.
+	Category string `json:"category,omitempty"`
+	// Custom marks a user-added server rather than a bundled connector.
+	Custom bool `json:"custom,omitempty"`
+	// OAuthMode mirrors the catalog entry (google | github | dynamic) so the
+	// connect form knows whether an account email can be captured. Custom
+	// servers leave it empty.
+	OAuthMode string   `json:"oauth_mode,omitempty"`
+	Tools     []string `json:"tools,omitempty"`
 }
