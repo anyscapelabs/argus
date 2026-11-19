@@ -32,9 +32,10 @@ or offline periods.
 Scheduled wakes run without a user watching, so interactive flows behave
 differently:
 
-- Permission requests are **refused**, not awaited: the action is denied and a
-  notice is recorded in `permission_notices` (see
-  [security](../concepts/security.md)).
+- Permission requests are **held**, not awaited: the action is not performed,
+  an actionable notice is recorded in `permission_notices` and shown in the chat,
+  and the agent reports what it needed. Replying lets it ask permission and try
+  again (see [security](../concepts/security.md)).
 - The `ask_user` tool is likewise refused.
 
 This is deliberate: an unattended run must never hang waiting for input nobody

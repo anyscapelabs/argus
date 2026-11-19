@@ -17,16 +17,13 @@ Unicode true
 ## For a installer with both architectures:
 ## > makensis -DARG_WAILS_AMD64_BINARY=..\..\bin\app-amd64.exe -DARG_WAILS_ARM64_BINARY=..\..\bin\app-arm64.exe
 ####
-## The following information is taken from the wails_tools.nsh file, but they can be overwritten here.
-####
-## !define INFO_PROJECTNAME    "my-project" # Default "argus"
-## !define INFO_COMPANYNAME    "My Company" # Default "Anyscape Labs PLC"
-## !define INFO_PRODUCTNAME    "My Product Name" # Default "My Product"
-## !define INFO_PRODUCTVERSION "1.0.0"     # Default "0.1.0"
-## !define INFO_COPYRIGHT      "(c) Now, My Company" # Default "© 2026, Anyscape Labs PLC"
-###
-## !define PRODUCT_EXECUTABLE  "Application.exe"      # Default "${INFO_PROJECTNAME}.exe"
-## !define UNINST_KEY_NAME     "UninstKeyInRegistry"  # Default "${INFO_COMPANYNAME}${INFO_PRODUCTNAME}"
+## Installer metadata. These mirror build/config.yml; defining them here makes
+## the uninstall entry and Add/Remove Programs text explicit. INFO_PRODUCTVERSION
+## stays undefined so wails_tools.nsh fills it from the build configuration.
+!define INFO_PROJECTNAME    "argus"
+!define INFO_COMPANYNAME    "Anyscape Labs PLC"
+!define INFO_PRODUCTNAME    "Argus Agent"
+!define INFO_COPYRIGHT      "© 2026, Anyscape Labs PLC"
 ####
 ## !define REQUEST_EXECUTION_LEVEL "admin"            # Default "admin"  see also https://nsis.sourceforge.io/Docs/Chapter4.html
 ## !define WAILS_INSTALL_SCOPE     "user"             # Default "machine" - set to "user" for per-user install ($LOCALAPPDATA) without UAC prompt

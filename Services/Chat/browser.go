@@ -83,6 +83,9 @@ func (s *Service) runBrowser(
 		if decision == Permission.Deny {
 			return false, why
 		}
+		if decision == Permission.Deferred {
+			return false, Permission.DeferralNoticeText(Permission.BrowserHostTool(host), why)
+		}
 		return true, ""
 	}
 

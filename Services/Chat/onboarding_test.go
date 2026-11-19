@@ -120,10 +120,12 @@ func TestFirstRunPromptMovesOnboardingToTheModel(t *testing.T) {
 	prompt := s.firstRunPrompt("default", true)
 	for _, want := range []string{
 		`What would you like to call me?`,
-		"Do not call any tool in that turn",
+		"call ask_user",
+		"exactly four short, distinct assistant-name suggestions",
+		"Do not ask the question as plain text",
 		"call set_agent_name",
 		"do not call it again",
-		"Do not use ask_user",
+		"Keep the naming question separate from responsibilities",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("first-run prompt does not contain %q", want)
@@ -137,6 +139,22 @@ func TestFirstRunPromptMovesOnboardingToTheModel(t *testing.T) {
 	}
 	if prompt := s.firstRunPrompt("default", true); prompt != "" {
 		t.Fatalf("completed onboarding still changed the prompt: %q", prompt)
+	}
+}
+
+func TestFirstRunToolsAreDirectlyAvailable(t *testing.T) {
+	req := Protocol.Request{Tools: gatewayToolDefs()}
+	attachFirstRunTools(&req)
+	want := map[string]bool{"ask_user": false, "set_agent_name": false}
+	for _, tool := range req.Tools {
+		if _, ok := want[tool.Name]; ok {
+			want[tool.Name] = true
+		}
+	}
+	for name, found := range want {
+		if !found {
+			t.Errorf("first-run request did not expose %s directly", name)
+		}
 	}
 }
 

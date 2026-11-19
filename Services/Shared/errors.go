@@ -33,6 +33,9 @@ const (
 	// is fine and stored, but a converter (browser, LibreOffice) refused to turn
 	// it into the format that was asked for.
 	CodeExport Code = "export"
+	// CodeUpdate marks a failure inside the app self-update flow: the release
+	// could not be fetched, downloaded, verified, or installed.
+	CodeUpdate Code = "update"
 )
 
 func NewError(code Code, message string) *ActionError {

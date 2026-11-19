@@ -1,6 +1,7 @@
 package main
 
 import (
+	"runtime"
 	"sync/atomic"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -25,6 +26,13 @@ func newBackgroundLifecycle(app *application.App, window *application.WebviewWin
 	lifecycle := &backgroundLifecycle{app: app, window: window}
 	tray := app.SystemTray.New()
 	tray.SetIcon(icon)
+	// Linux trays display the StatusNotifierItem title as the app's name, and
+	// the framework falls back to "Wails" when no label is set. macOS renders
+	// the label as text beside the menu-bar icon, so only name it where the
+	// name is actually shown.
+	if runtime.GOOS == "linux" {
+		tray.SetLabel("Argus Agent")
+	}
 	tray.SetTooltip("Argus is ready in the background")
 	lifecycle.tray = tray
 

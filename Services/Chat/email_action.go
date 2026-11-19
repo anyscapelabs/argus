@@ -190,7 +190,8 @@ func runEmailSendTool(
 	}
 
 	// Duplicate detection: a retry of the same content must never send twice.
-	if prior, found, _ := Storage.FindActionByOpID(db, opID, action.Kind, action.Provider); found && prior.ID != actionID {		switch prior.Status {
+	if prior, found, _ := Storage.FindActionByOpID(db, opID, action.Kind, action.Provider); found && prior.ID != actionID {
+		switch prior.Status {
 		case "succeeded":
 			r, _, _ := Storage.GetActionReceipt(db, prior.ID)
 			return result(alreadySentResult(prior, r), false)
@@ -206,12 +207,18 @@ func runEmailSendTool(
 
 	s.Core.EmitEvent(Shared.EventActionRequested, emailView(action, to, cc, input.Subject, input.Body, conn))
 
+	summary := emailSendSummary(to, cc, input.Subject)
 	decision, err := Permission.Request(ctx, s.Permissions, agentID, agentName,
-		Permission.EmailSendTool, emailSendSummary(to, cc, input.Subject))
+		Permission.EmailSendTool, summary)
 	if err != nil {
 		_ = Storage.SetActionStatus(db, actionID, "failed")
 		emitActionStatus(s, actionID, "failed", "the permission request was cancelled")
 		return result("the permission request was cancelled, so the email was not sent", true)
+	}
+	if decision == Permission.Deferred {
+		_ = Storage.SetActionStatus(db, actionID, "failed")
+		emitActionStatus(s, actionID, "failed", "held: no one was present to approve this send")
+		return result(Permission.DeferralNoticeText(Permission.EmailSendTool, summary), true)
 	}
 	if decision == Permission.Deny {
 		_ = Storage.SetActionStatus(db, actionID, "denied")

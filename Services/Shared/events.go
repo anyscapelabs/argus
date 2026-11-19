@@ -49,6 +49,10 @@ const (
 	// transition of that action's life.
 	EventActionRequested = "action:requested"
 	EventActionStatus    = "action:status"
+	// EventUpdatesAvailable fires when the background update checker finds a
+	// build newer than the running one, so an open "This App" page offers the
+	// Update button without the user pressing "Check for update" first.
+	EventUpdatesAvailable = "updates:available"
 )
 
 const (

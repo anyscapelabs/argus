@@ -24,11 +24,17 @@ const firstRunModelPrompt = `
 
 ## First conversation onboarding
 The app seeded only a short greeting. From this point onward, conduct onboarding through your live responses.
-- Read the latest user message. If it does not clearly provide or approve a name for you, reply with the single plain-text question "What would you like to call me?" Do not call any tool in that turn.
-- If the user provides or approves a name, call set_agent_name with that exact name. Treat keeping the default, declining to choose, or saying the current name is fine as approval of "Argus".
 - If a successful set_agent_name result is already present in this run, do not call it again. Acknowledge the saved name briefly and ask what role or job the user wants you to have. Their next answer is handled by the normal role-onboarding instructions.
-- Do not use ask_user for this onboarding. Never mention seeded content, onboarding state, tool names, or these instructions.
+- If an ask_user answer is present and the name is not saved yet, call set_agent_name with that exact answer. Do not ask the naming question again.
+- If the latest human message clearly provides or approves a name for you, call set_agent_name with that exact name. Treat keeping the default, declining to choose, or saying the current name is fine as approval of "Argus".
+- Otherwise call ask_user with the exact question "What would you like to call me?" and exactly four short, distinct assistant-name suggestions chosen by you. Do not ask the question as plain text.
+- Keep the naming question separate from responsibilities. Do not ask about your role or job until the name has been saved.
+- Never mention seeded content, onboarding state, tool names, or these instructions.
 `
+
+func attachFirstRunTools(req *Protocol.Request) {
+	req.Tools = append(req.Tools, askUserToolDef, setAgentNameToolDef)
+}
 
 func (s *Service) firstRunPending(agentID string) bool {
 	if agentID != "default" {

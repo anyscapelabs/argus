@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react'
 import { FaArrowLeft, FaBell } from 'react-icons/fa'
 import { IoCardOutline, IoGlobeOutline, IoPersonCircleOutline, IoSearch, IoShieldCheckmarkOutline, IoSunnyOutline } from 'react-icons/io5'
 import { LuCircleGauge } from 'react-icons/lu'
+import { SlScreenDesktop } from 'react-icons/sl'
 import type { ComponentType } from 'react'
+import { useAppVersion } from '../../domains/updater/hooks'
 
-export type SettingsTab = 'usage' | 'billing' | 'appearance' | 'profile' | 'notifications' | 'browser' | 'permissions'
+export type SettingsTab = 'usage' | 'billing' | 'appearance' | 'profile' | 'notifications' | 'browser' | 'permissions' | 'updates'
 
 type SettingsItem = {
   tab: SettingsTab
@@ -35,6 +37,12 @@ const SECTIONS: { title: string; items: SettingsItem[] }[] = [
       { tab: 'billing', label: 'Billing', icon: IoCardOutline },
     ],
   },
+  {
+    title: '',
+    items: [
+      { tab: 'updates', label: 'This App', icon: SlScreenDesktop },
+    ],
+  },
 ]
 
 export default function SettingsSidebar({
@@ -47,6 +55,7 @@ export default function SettingsSidebar({
   onSelectTab?: (tab: SettingsTab) => void
 }) {
   const [query, setQuery] = useState('')
+  const version = useAppVersion()
   const trimmed = query.trim().toLowerCase()
   const sections = useMemo(() => {
     if (!trimmed) return SECTIONS
@@ -88,9 +97,12 @@ export default function SettingsSidebar({
       ) : (
         sections.map((section) => (
           <div key={section.title} className="flex flex-col gap-1 px-2 pt-4">
-            <span className="px-2 text-xs font-medium uppercase tracking-wide text-secondary">{section.title}</span>
+            {section.title ? (
+              <span className="px-2 text-xs font-medium uppercase tracking-wide text-secondary">{section.title}</span>
+            ) : null}
             {section.items.map((item) => {
               const Icon = item.icon
+              const isUpdates = item.tab === 'updates'
               return (
                 <button
                   key={item.tab}
@@ -101,7 +113,10 @@ export default function SettingsSidebar({
                   }`}
                 >
                   <Icon size={14} />
-                  {item.label}
+                  <span className="flex flex-col leading-tight">
+                    <span>{item.label}</span>
+                    {isUpdates && <span className="text-xs text-secondary">v{version}</span>}
+                  </span>
                 </button>
               )
             })}
@@ -110,7 +125,7 @@ export default function SettingsSidebar({
       )}
       <div className="mt-auto p-3">
         <span className="inline-flex rounded-full border border-primary px-2 py-0.5 text-xs text-secondary">
-          v0.1.0
+          v{version}
         </span>
       </div>
     </aside>

@@ -40,6 +40,9 @@ func runTerminalTool(
 	if decision == Permission.Deny {
 		return result("The user declined terminal access for this command. Do not retry it; continue without running commands.", true)
 	}
+	if decision == Permission.Deferred {
+		return result(Permission.DeferralNoticeText(Permission.TerminalTool, command), true)
+	}
 
 	activity("tool_started", command)
 	res := Terminal.Run(ctx, command, input.TimeoutSeconds)

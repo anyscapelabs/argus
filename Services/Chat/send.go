@@ -258,10 +258,9 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	withTools := s.attachTools(&req, &target, mcpServersReferenced(history, s.connectedServerIDs()))
 	firstRunPending := s.firstRunPending(agentID)
 	if firstRunPending && withTools {
-		// Naming is the one first-run capability exposed directly. The model can
-		// ask naturally on one turn and save the answer on the next without an
-		// extra search_tools/invoke_tool round-trip.
-		req.Tools = append(req.Tools, setAgentNameToolDef)
+		// Naming tools are direct during first-run so the model can open the card
+		// and save its answer without search_tools/invoke_tool discovery rounds.
+		attachFirstRunTools(&req)
 	}
 	scheduledFire := kind == Storage.MessageKindScheduled
 	if scheduledFire {

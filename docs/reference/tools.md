@@ -7,8 +7,8 @@ through the MCP gateway (see [MCP and integrations](../guides/mcp-integrations.m
 
 Tool access is checked against [permissions](../concepts/security.md) before
 side effects occur. Sensitive tools require a permission grant or interactive
-approval; unattended runs (scheduled wakes) refuse interactive approval instead
-of waiting.
+approval; unattended runs (scheduled wakes) hold the action and leave an
+actionable message instead of waiting for approval nobody can give.
 
 ## Files and terminal
 

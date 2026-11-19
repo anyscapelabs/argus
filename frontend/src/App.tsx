@@ -9,6 +9,7 @@ import Sidebar from './components/layout/Sidebar'
 import { NewAgentCard } from './components/NewAgentCard'
 import SettingsSidebar from './components/settings/SettingsSidebar'
 import type { SettingsTab } from './components/settings/SettingsSidebar'
+import Updates from './pages/Updates'
 import Spinner from './components/Spinner'
 import { usePairing, useAccount } from './domains/account/hooks'
 import { useThemeMode, useAccent } from './lib/theme'
@@ -285,6 +286,7 @@ export default function App() {
                 {settingsTab === 'browser' && <BrowserSettings />}
                 {settingsTab === 'permissions' && <Permissions />}
                 {settingsTab === 'billing' && <Billing />}
+                {settingsTab === 'updates' && <Updates />}
               </div>
             </div>
           ) : (

@@ -2,6 +2,7 @@ package Permission
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -62,7 +63,39 @@ const (
 	AllowOnce   = "allow_once"
 	AllowAlways = "allow_always"
 	Deny        = "deny"
+	// Deferred is returned instead of Deny when an unattended run asks for a
+	// permission nobody is present to grant. The action was held, not refused
+	// by the user: callers tell the model to report it and expect to be asked
+	// again on the next interactive turn.
+	Deferred = "deferred"
 )
+
+// DeferralNoticeText is both the notice the user sees woven into the chat and
+// the tool result the model reads. It names the held action and says plainly
+// that replying is what lets the agent ask permission and finish the work —
+// an unattended gate must never look like a user refusal or fail silently.
+func DeferralNoticeText(tool, command string) string {
+	family := tool
+	switch {
+	case tool == TerminalTool:
+		family = "a terminal command"
+	case tool == FileAccessTool:
+		family = "file access"
+	case tool == EmailSendTool:
+		family = "an email send"
+	case tool == SkillInstallTool:
+		family = "installing an agent skill"
+	case IsBrowserGrant(tool):
+		family = "a browser action"
+		if host := strings.TrimPrefix(tool, BrowserTool+":"); host != tool {
+			family += " on " + host
+		}
+	}
+	if detail := strings.TrimSpace(command); detail != "" {
+		family += ": " + detail
+	}
+	return fmt.Sprintf("I held %s because this background run has nobody to ask for permission, so nothing was changed. Reply to me and I'll ask permission, then try again. (Do not retry within this run — nobody can approve here.)", family)
+}
 
 type waitingRequest struct {
 	ch chan string
@@ -323,9 +356,10 @@ func Request(ctx context.Context, svc *Service, agentID, agentName, tool, comman
 	}
 
 	// Nobody is watching an unattended run, so an interactive ask would hang
-	// the agent until the timeout. Refuse it instead and leave a notice the
-	// user can read afterwards; anything the routine needs has to be granted
-	// ahead of time.
+	// the agent until the timeout. Hold the action and leave a notice the user
+	// can read in the chat afterwards: it names what was held and says that
+	// replying is what lets the agent ask permission and finish the work. The
+	// routine must not fail silently, and it must not look like a user refusal.
 	if Shared.IsUnattended(ctx) {
 		if nid, uerr := uuid.NewV7(); uerr == nil {
 			if serr := svc.Core.DB.InsertPermissionNotice(Storage.PermissionNotice{
@@ -334,15 +368,15 @@ func Request(ctx context.Context, svc *Service, agentID, agentName, tool, comman
 				AgentName: agentName,
 				Tool:      tool,
 				Command:   command,
-				Decision:  Deny,
+				Decision:  Deferred,
 				Kind:      "permission",
-				Body:      "Refused while unattended: the routine asked for a permission nobody was there to grant.",
+				Body:      DeferralNoticeText(tool, command),
 				CreatedAt: time.Now().UnixMilli(),
 			}); serr != nil {
-				log.Printf("permission: could not persist unattended denial: %v", serr)
+				log.Printf("permission: could not persist unattended deferral: %v", serr)
 			}
 		}
-		return Deny, nil
+		return Deferred, nil
 	}
 
 	// One pending ask per agent: if one is already on screen the caller

@@ -6,9 +6,12 @@ import (
 
 	"log"
 	"os"
+	"strings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	notifications "github.com/wailsapp/wails/v3/pkg/services/notifications"
+	"github.com/wailsapp/wails/v3/pkg/updater"
+	"github.com/wailsapp/wails/v3/pkg/updater/providers/github"
 
 	serviceaccount "github.com/anyscapelabs/argus/Services/Account"
 	serviceartifacts "github.com/anyscapelabs/argus/Services/Artifacts"
@@ -23,6 +26,8 @@ import (
 	servicescheduler "github.com/anyscapelabs/argus/Services/Scheduler"
 	"github.com/anyscapelabs/argus/Services/Shared"
 	serviceskills "github.com/anyscapelabs/argus/Services/Skills"
+	servicestartup "github.com/anyscapelabs/argus/Services/Startup"
+	serviceupdater "github.com/anyscapelabs/argus/Services/Updater"
 	serviceuploads "github.com/anyscapelabs/argus/Services/Uploads"
 )
 
@@ -105,10 +110,13 @@ func main() {
 	}
 	notifier := notifications.New()
 	scheduler := &servicescheduler.Service{Core: core, Chat: chat, Notifier: systemNotifier{service: notifier}}
+	// Updater is constructed before the application so it can be bound as a
+	// service; its Updater field is app.Updater, assigned once the app exists.
+	updates := &serviceupdater.Service{Core: core}
 
 	app := application.New(application.Options{
-		Name:        "argus",
-		Description: "Argus desktop app",
+		Name:        "Argus Agent",
+		Description: "Your AI Pro Active Teammate",
 		Icon:        appIcon,
 		Services: []application.Service{
 			application.NewService(account),
@@ -123,6 +131,7 @@ func main() {
 			application.NewService(chat),
 			application.NewService(notifier),
 			application.NewService(scheduler),
+			application.NewService(updates),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -130,8 +139,24 @@ func main() {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
+		// Name the GTK application so Wayland/GNOME group the window and its
+		// tray icon under Argus instead of the framework's default
+		// "org.wails.argus" identity.
+		Linux: application.LinuxOptions{
+			ProgramName:                   "argus",
+			ApplicationID:                 "com.anyscapelabs.argus",
+			DisableQuitOnLastWindowClosed: true,
+		},
 	})
 	core.PickerHook = models.Picker
+	updates.Updater = app.Updater
+	configureUpdater(app)
+	// Argus lives in the system tray. Registering the login item on every start
+	// keeps it pointing at this executable, so the app comes back by itself
+	// after a sign-in (and after an update moved the binary).
+	if err := servicestartup.Enable(app.Autostart); err != nil {
+		log.Printf("startup: could not register launch at login: %v", err)
+	}
 
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title: "Argus",
@@ -141,10 +166,13 @@ func main() {
 		// active only while the `frameless` flag is set), so resize survives the
 		// removal of the WM-drawn frame. Dragging the window uses the
 		// `--wails-draggable: drag` property already set on <body>.
-		Frameless: true,
+		Frameless:  true,
 		Width:      1000,
 		Height:     618,
 		StartState: application.WindowStateMaximised,
+		// A login launch (the autostart item passes --background) starts in
+		// the system tray instead of dropping a window on the desktop.
+		Hidden: launchedInBackground(),
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 50,
 			Backdrop:                application.MacBackdropTranslucent,
@@ -165,5 +193,48 @@ func main() {
 
 	if err != nil {
 		log.Fatal(err)
+	}
+}
+
+// launchedInBackground reports whether this process was started by the login
+// item, which opens the window hidden so the app waits in the system tray.
+func launchedInBackground() bool {
+	for _, arg := range os.Args[1:] {
+		if arg == servicestartup.LaunchAtLoginFlag {
+			return true
+		}
+	}
+	return false
+}
+
+// updateRepo is the GitHub repository the release workflow publishes to.
+// ARGUS_UPDATE_REPO overrides it for staging or for testing against a fork.
+func updateRepo() string {
+	if repo := strings.TrimSpace(os.Getenv("ARGUS_UPDATE_REPO")); repo != "" {
+		return repo
+	}
+	return "anyscapelabs/argus"
+}
+
+// configureUpdater points the framework's self-updater at the app's GitHub
+// releases. WindowNone keeps its own update window closed: the "This App"
+// settings page is the UI, and Services/Updater drives the flow through
+// app.Updater.
+func configureUpdater(app *application.App) {
+	provider, err := github.New(github.Config{
+		Repository:    updateRepo(),
+		AssetMatcher:  serviceupdater.AssetMatcher,
+		ChecksumAsset: "SHA256SUMS",
+	})
+	if err != nil {
+		log.Printf("updater: provider unavailable: %v", err)
+		return
+	}
+	if err := app.Updater.Init(updater.Config{
+		CurrentVersion: serviceupdater.Version,
+		Providers:      []updater.Provider{provider},
+		Window:         updater.WindowNone,
+	}); err != nil {
+		log.Printf("updater: init failed: %v", err)
 	}
 }

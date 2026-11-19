@@ -21,7 +21,6 @@
         PackageDescription="Your AI Pro Active Teammate">
         <Capabilities>
             <Capability Name="runFullTrust" />
-            
         </Capabilities>
         <Applications>
             <Application
@@ -30,7 +29,6 @@
                 DisplayName="Argus Agent"
                 ExecutableName="argus"
                 EntryPoint="Windows.FullTrustApplication">
-                
             </Application>
         </Applications>
         <Resources>
@@ -49,6 +47,9 @@
     </PackageInformation>
     <SaveLocation PackagePath="argus.msix" />
     <PackageIntegrity>
+        <!-- Filled by `wails3 tool msix` when a certificate path is supplied.
+             Leave empty to build an unsigned package for local testing; a
+             certificate's publisher CN must match PublisherName above. -->
         <CertificatePath></CertificatePath>
     </PackageIntegrity>
 </MsixPackagingToolTemplate>
