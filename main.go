@@ -29,8 +29,10 @@ import (
 	"github.com/anyscapelabs/argus/Services/Shared"
 	serviceskills "github.com/anyscapelabs/argus/Services/Skills"
 	servicestartup "github.com/anyscapelabs/argus/Services/Startup"
-	serviceupdater "github.com/anyscapelabs/argus/Services/Updater"
+	serviceupdater 	"github.com/anyscapelabs/argus/Services/Updater"
 	serviceuploads "github.com/anyscapelabs/argus/Services/Uploads"
+
+	"github.com/anyscapelabs/argus/Env"
 )
 
 //go:embed all:frontend/dist
@@ -79,6 +81,9 @@ func (n systemNotifier) Notify(id, title, body string) {
 }
 
 func main() {
+	// Load local configuration once, before any service reads the environment.
+	Env.Load()
+
 	// Force the Linux build onto the X11 backend instead of Wayland. GTK/webkit
 	// honour these before the first window is created, so set them up front.
 	if os.Getenv("GDK_BACKEND") == "" {

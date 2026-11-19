@@ -1,7 +1,6 @@
 package MCP
 
 import (
-	"bufio"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -179,41 +178,7 @@ func (s *Service) ListServerIDs() []string {
 	return m.ListServerIDs()
 }
 
-// loadDotEnv reads a repo-root .env so OAuth client ids work during
-// development. It is OFF by default: a packaged app must never pick up a
-// developer's secrets from the directory it happens to be launched in.
-// Source builds load .env automatically; production builds require an explicit
-// ARGUS_LOAD_DOTENV=1 so a shipped app never reads a stray developer .env.
-func loadDotEnv() {
-	if !devDotEnvEnabled() {
-		return
-	}
-	for _, p := range []string{".env", ".env.local", "config/.env", "../.env"} {
-		f, err := os.Open(p)
-		if err != nil {
-			continue
-		}
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-			if line == "" || strings.HasPrefix(line, "#") {
-				continue
-			}
-			if i := strings.Index(line, "="); i > 0 {
-				k := strings.TrimSpace(line[:i])
-				v := strings.TrimSpace(line[i+1:])
-				v = strings.Trim(v, `"'`)
-				if os.Getenv(k) == "" {
-					os.Setenv(k, v)
-				}
-			}
-		}
-		f.Close()
-	}
-}
-
 func readGoogleCreds() (string, string) {
-	loadDotEnv()
 	if id := Shared.ConfigValue("ARGUS_GOOGLE_CLIENT_ID"); id != "" {
 		return id, Shared.ConfigValue("ARGUS_GOOGLE_CLIENT_SECRET")
 	}
@@ -257,7 +222,6 @@ func readCredsFile(name string) (string, string) {
 func clientCreds(name string) (*oauthex.ClientCredentials, error) {
 	var id, sec string
 	if name == "github" {
-		loadDotEnv()
 		id = Shared.ConfigValue("ARGUS_GITHUB_CLIENT_ID")
 		sec = Shared.ConfigValue("ARGUS_GITHUB_CLIENT_SECRET")
 		if id == "" {

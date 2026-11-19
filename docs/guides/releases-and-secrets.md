@@ -70,11 +70,16 @@ git-ignored `Services/Shared/build_config_generated.go`, which assigns those
 values at init time. To change a shipped value, update the GitHub secret or
 variable and make a new release — no source change is needed.
 
-In a **source checkout**, `.env` is loaded automatically (see
-`Services/MCP/dotenv_dev.go`), so `go run .` and `task dev` find the same OAuth
-credentials. **Production builds** (`-tags production`) deliberately ignore a
-stray `.env` in the launch directory; set `ARGUS_LOAD_DOTENV=1` explicitly if a
-staging build needs to read one.
+Local dotenv loading happens **only at startup**: `main.go` (and
+`cmd/server/main.go`) call `Env.Load()` before constructing any service, and
+`Env/load.go` parses the file. Services never read or parse `.env` themselves —
+they only call `Shared.ConfigValue`, which prefers the process environment and
+falls back to the generated build config.
+
+In a **source checkout**, `.env` is loaded automatically, so `go run .` and
+`task dev` find the same OAuth credentials. **Production builds**
+(`-tags production`) deliberately ignore a stray `.env` in the launch directory;
+set `ARGUS_LOAD_DOTENV=1` explicitly if a staging build needs to read one.
 
 
 Frontend URLs use Vite's `import.meta.env`: `VITE_ANYSCAPE_GATEWAY_URL` and
