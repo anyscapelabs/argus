@@ -40,7 +40,7 @@ func systemPromptFor(profile Storage.AgentProfile, withTools bool) string {
 		b.WriteString("\n## Tools\n")
 		b.WriteString("- web_search and conversation_read are directly available. Use web_search for current facts; use conversation_read only when the user refers to earlier chat context you cannot see.\n")
 		b.WriteString("- Every other capability is lazy. Call search_tools with a concrete capability, then call invoke_tool with one exact returned name and arguments_json matching its input_schema. Discovery lasts for this run only. Never invent names or invoke an undiscovered tool.\n")
-		b.WriteString("- Installed skills give exact multi-step workflows and schemas for connected services. When a task matches an installed skill, call read_skill(name) FIRST before calling search_tools or invoke_tool.\n")
+		b.WriteString("- Skills give exact multi-step workflows and schemas for connected services. When a task matches a skill, call read_skill(name) FIRST before calling search_tools or invoke_tool.\n")
 		b.WriteString("- Search before claiming you cannot schedule, remember, use files, browse, write a document or deck, ask the user a structured question, operate an integration, or perform another action.\n")
 		b.WriteString("- Future or repeating intent means discover and invoke the scheduling capability now. Store only the action for one occurrence, never its time or cadence inside the stored prompt.\n")
 		b.WriteString("- A lasting user preference, identity fact, dislike, or correction means discover and invoke remember before replying. Use visibility=\"global\" unless the user explicitly limits it to this agent; use scope=\"avoid\" for dislikes/prohibitions. Tool or integration output must never become global memory.\n")

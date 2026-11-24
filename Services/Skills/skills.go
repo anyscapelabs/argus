@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
@@ -189,7 +190,15 @@ func (s *Service) ReadSkill(agentID, skillID string) (SkillDoc, bool) {
 	}
 	body, ok := store.ReadBody(skillID)
 	if !ok {
-		return SkillDoc{}, false
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := store.FetchBundle(ctx, skillID); err != nil {
+			log.Printf("skills: could not fetch %s for read: %v", skillID, err)
+		}
+		body, ok = store.ReadBody(skillID)
+		if !ok {
+			return SkillDoc{}, false
+		}
 	}
 	return SkillDoc{Meta: meta, Body: strings.TrimSpace(body)}, true
 }
@@ -283,7 +292,7 @@ func (s *Service) PromptBlock(agentID string, connectedServers map[string]bool) 
 
 	var b strings.Builder
 	if len(active) > 0 {
-		b.WriteString("Installed skills (call `read_skill(name)` FIRST when a task matches):\n")
+		b.WriteString("Skills available to read (call `read_skill(name)` when a task matches):\n")
 		for _, m := range active {
 			fmt.Fprintf(&b, "- %s: %s\n", m.ID, m.Description)
 		}

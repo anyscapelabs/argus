@@ -140,7 +140,7 @@ func (s *Service) searchSkillsGateway(agentID, argsJSON string) Shared.LiveToolR
 	}
 	connected := s.connectedServerSet(agentID)
 	var b strings.Builder
-	b.WriteString("Matching skills (call install_skill, then read_skill):\n")
+	b.WriteString("Matching skills (call read_skill to load a workflow):\n")
 	for _, m := range matches {
 		state := "available"
 		if reg.IsEnabled(agentID, m.ID, connected) {
@@ -176,7 +176,7 @@ func (s *Service) readSkillGateway(agentID string, discovered map[string]bool, a
 	doc, ok := reg.ReadSkill(agentID, id)
 	if !ok {
 		return Shared.LiveToolResult{
-			Output:  "skill not found or not enabled: " + id + ". Check Installed skills or call install_skill first.",
+			Output:  "skill not found: " + id + ". Use search_skills to find available skills.",
 			IsError: true,
 		}
 	}

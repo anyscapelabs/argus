@@ -59,12 +59,12 @@ var liveInvokeToolDef = Protocol.ToolDef{
 
 var liveReadSkillDef = Protocol.ToolDef{
 	Name: "read_skill",
-	Description: "Load the step-by-step workflow, exact tool names, and live schemas for an installed skill. " +
-		"Call this BEFORE search_tools or invoke_tool whenever a task matches an installed skill.",
+	Description: "Load the step-by-step workflow, exact tool names, and live schemas for any available skill. " +
+		"Call this BEFORE search_tools or invoke_tool whenever a task matches a skill.",
 	Schema: json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"name": {"type": "string", "description": "Exact skill id from Installed skills, e.g. gmail, notion, github"}
+			"name": {"type": "string", "description": "Exact skill id from search_skills or installed skills, e.g. gmail, notion, github"}
 		},
 		"required": ["name"]
 	}`),
@@ -73,7 +73,7 @@ var liveReadSkillDef = Protocol.ToolDef{
 var liveSearchSkillsDef = Protocol.ToolDef{
 	Name: "search_skills",
 	Description: "Find available agent skills by task or keyword. Returns skill ids, one-line descriptions, " +
-		"versions and install state. Call install_skill then read_skill to load a match.",
+		"versions and install state. Call read_skill to load a match.",
 	Schema: json.RawMessage(`{
 		"type": "object",
 		"properties": {
