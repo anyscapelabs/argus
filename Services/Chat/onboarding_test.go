@@ -306,3 +306,29 @@ func TestPersistRoundTagsToolRounds(t *testing.T) {
 		t.Fatalf("the tool call did not replay into history: %+v", history)
 	}
 }
+
+func TestAppDrivenOnboardingRestoresNormalTools(t *testing.T) {
+	s, db := newVoiceTestService(t)
+	if err := db.SetAppSetting(onboardingDrivenKey, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetAppSetting(onboardingStepKey, onboardingStepDone); err != nil {
+		t.Fatal(err)
+	}
+	if s.firstRunPending("default") {
+		t.Fatal("app-driven onboarding still forces model-led first-run tools")
+	}
+	req := Protocol.Request{}
+	if !s.attachTools(&req, &Protocol.Target{Family: Protocol.FamilyOpenAICompat}, nil) {
+		t.Fatal("tools were not attached")
+	}
+	names := toolNames(req.Tools)
+	for _, name := range []string{"search_tools", "invoke_tool", "read_skill", "install_skill"} {
+		if !names[name] {
+			t.Errorf("normal tool %s is missing after onboarding", name)
+		}
+	}
+	if req.ToolChoice.Mode == Protocol.ToolChoiceTool || req.ToolChoice.Mode == Protocol.ToolChoiceNone {
+		t.Fatalf("tool choice = %+v, want auto/default", req.ToolChoice)
+	}
+}
