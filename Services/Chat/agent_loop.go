@@ -183,6 +183,7 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 			if s.firstRunPending(agentID) && s.firstRunNameAnswer(agentID) != "" {
 				req.ToolChoice = Protocol.ToolChoice{Mode: Protocol.ToolChoiceTool, Name: setAgentNameToolDef.Name}
 			} else if !s.firstRunPending(agentID) {
+				req.Tools = gatewayToolDefs()
 				req.ToolChoice = Protocol.ToolChoice{Mode: Protocol.ToolChoiceAuto}
 			}
 		}
