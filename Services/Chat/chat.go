@@ -27,11 +27,11 @@ import (
 )
 
 type Service struct {
-	Core *Shared.Core
+	Core        *Shared.Core
 	Permissions *Permission.Service
-	MCP *MCP.Service
-	MCPConnect *MCPConnect.Service
-	Skills *Skills.Service
+	MCP         *MCP.Service
+	MCPConnect  *MCPConnect.Service
+	Skills      *Skills.Service
 	// Artifacts stores the documents the agent writes. Unattended-safe by
 	// design: unlike the file tools it needs no permission grant, which is what
 	// lets a routine produce a report on a machine nobody is sitting at.
@@ -45,6 +45,9 @@ type Service struct {
 	mu       sync.Mutex
 	cancels  map[string]context.CancelFunc
 	agentRun map[string]string
+
+	onboardingMu      sync.Mutex
+	onboardingRunning map[string]bool
 
 	// liveSessions own the cancellable, serialized execution context behind the
 	// Live API's compact search_tools/invoke_tool gateway.
