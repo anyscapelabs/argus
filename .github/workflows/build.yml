@@ -18,7 +18,7 @@ env:
   APP_DISPLAY_NAME: Argus Agent
   WEBSITE_URL: https://argus-agent.anyscapelabs.com
   SUPPORT_EMAIL: hello@anyscapelabs.com
-  WAILS_VERSION: v3.0.0-alpha.72
+  WAILS_VERSION: v3.1.0
   GO_VERSION: '1.26.x'
   NODE_VERSION: '24'
 
