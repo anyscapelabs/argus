@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { IoChevronDownOutline } from 'react-icons/io5'
 import UsageCalendar from '../components/usage/UsageCalendar'
+import UsageLimits from '../components/usage/UsageLimits'
 import { useUsageOverview } from '../domains/usage/hooks'
 import {
   aggregateUsage,
@@ -56,6 +57,8 @@ export default function Usage() {
           <h1 className="text-xl font-medium text-primary">Usage</h1>
           <p className="text-sm text-secondary">Track your account usage and limits.</p>
         </div>
+        <UsageLimits />
+
         <div className="flex items-center justify-between gap-4">
           <div className="flex flex-col gap-1">
             <p className="text-2xl font-medium text-primary">{streakLabel}</p>

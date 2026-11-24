@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useAccount, usePairing } from '../domains/account/hooks'
 import { useIntegrationCatalog } from '../domains/mcp/hooks'
+import UsageLimits from '../components/usage/UsageLimits'
 import { aggregateUsage } from '../domains/usage/aggregate'
 import { useUsageOverview } from '../domains/usage/hooks'
 
@@ -65,6 +66,8 @@ export default function Profile({ onManageBilling }: { onManageBilling?: () => v
             ))}
           </div>
         </div>
+
+        <UsageLimits />
 
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between gap-4 rounded-xl border border-primary p-4">
