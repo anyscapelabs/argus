@@ -28,6 +28,7 @@ export type {
     EntitlementPlan,
     EntitlementUser,
     Entitlements,
+    EntitlementsUsage,
     EntitlementsView,
     ExportFormatView,
     ExportFormatsResult,
@@ -74,6 +75,7 @@ export type {
     StreamStart,
     TakeoverListResult,
     TakeoverRequestView,
+    UsageLimit,
     UsageResult,
     VoiceCallResult,
     VoiceTurn

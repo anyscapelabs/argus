@@ -68,10 +68,11 @@ func (a *Adapter) MapError(status int, body []byte, retryAfter time.Duration) *P
 
 func ApplyErrorDefaults(e *Protocol.Error, status int, retryAfter time.Duration) {
 	e.Status = status
-	if status == 429 && !Protocol.IsUsageLimit(e.Code) {
-		e.Retryable = true
-	}
-	if e.Code == Protocol.CodeProviderError && status >= 500 {
+	// Retryability follows the HTTP status, not the mapped code: the router can
+	// wrap a 502/503 upstream failure in an "invalid_request_error" body, which
+	// MapErrorInto maps to bad_input. Gating on the code would silently turn
+	// those transient failures into non-retryable ones.
+	if status >= 500 || (status == 429 && !Protocol.IsUsageLimit(e.Code)) {
 		e.Retryable = true
 	}
 	if retryAfter > 0 {

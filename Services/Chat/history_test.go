@@ -2,6 +2,7 @@ package Chat
 
 import (
 	"testing"
+	"time"
 
 	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Storage"
@@ -12,7 +13,14 @@ func opaqueError(msg string) *Protocol.Error {
 }
 
 func TestMessageIsOpaqueProviderError(t *testing.T) {
-	for _, m := range []string{"Provider returned error", "", "provider returned error", "ERROR", "internal error", "An error has occurred. Try again later."} {
+	for _, m := range []string{
+		"Provider returned error", "", "provider returned error", "ERROR", "internal error",
+		"An error has occurred. Try again later.",
+		"Sorry, something went wrong connecting to the model. Please try again.",
+		"The provider had an internal error. Try again shortly",
+		"The provider is overloaded. Try again shortly",
+		`the upstream provider rejected the request: {"error":{"message":"Provider returned error"}}`,
+	} {
 		if !messageIsOpaqueProviderError(opaqueError(m)) {
 			t.Errorf("%q should be treated as opaque", m)
 		}
@@ -48,6 +56,44 @@ func TestFriendlyErrorKeepsRateAndUsageLimits(t *testing.T) {
 		if e.Message != "Your current usage limit has been reached" {
 			t.Errorf("limit error %q was rewritten as %q", code, e.Message)
 		}
+	}
+}
+
+func TestRetryDelayUsesMillisecondRetryAfter(t *testing.T) {
+	if got := retryDelay(&Protocol.Error{RetryAfter: 3000}, 0); got != 3*time.Second {
+		t.Fatalf("retryDelay = %v, want 3s", got)
+	}
+	if got := retryDelay(&Protocol.Error{RetryAfter: 300000}, 0); got != 90*time.Second {
+		t.Fatalf("retryDelay = %v, want the 90s cap", got)
+	}
+	if got := retryDelay(&Protocol.Error{}, 1); got != 4*time.Second {
+		t.Fatalf("retryDelay = %v, want the 4s exponential backoff", got)
+	}
+}
+
+func TestNeedsToolCallRecovery(t *testing.T) {
+	base := Protocol.Result{Stop: Protocol.Stop{Reason: Protocol.StopToolUse}}
+	if !needsToolCallRecovery(base) {
+		t.Fatal("a tool_calls stop with no blocks needs recovery")
+	}
+	cut := base
+	cut.Message = msg(Protocol.RoleAssistant, Protocol.Block{Type: Protocol.BlockToolUse})
+	if !needsToolCallRecovery(cut) {
+		t.Fatal("a nameless tool_use block needs recovery")
+	}
+	complete := base
+	complete.Message = msg(Protocol.RoleAssistant, toolUse("web_search"))
+	if needsToolCallRecovery(complete) {
+		t.Fatal("a usable tool call must not be recovered")
+	}
+	answered := Protocol.Result{Stop: Protocol.Stop{Reason: Protocol.StopEndTurn}}
+	if needsToolCallRecovery(answered) {
+		t.Fatal("a normal stop must not be recovered")
+	}
+	failed := base
+	failed.Error = Protocol.NewError(Protocol.CodeProviderError, "boom")
+	if needsToolCallRecovery(failed) {
+		t.Fatal("an error must not be recovered here")
 	}
 }
 

@@ -21,7 +21,7 @@ import (
 // it into a user identity, the user's plan, and the model allowlist.
 const (
 	keyRef   = "account/key"
-	keyCheck = "argus_pk_"
+	keyCheck = "asp_live"
 	httpWait = 15 * time.Second
 	httpCap  = int64(1 << 20)
 )
@@ -38,7 +38,7 @@ func (s *Service) SaveKey(key string) Shared.SaveAccountKeyResult {
 	key = strings.TrimSpace(key)
 	if !strings.HasPrefix(key, keyCheck) {
 		return Shared.SaveAccountKeyResult{
-			Error: Shared.NewError(Shared.CodeKeyFormat, "This doesn't look like an Argus agent key. Copy the full key from the dashboard."),
+			Error: Shared.NewError(Shared.CodeKeyFormat, "This doesn't look like an Argus agent key. Keys start with 'asp_live' — copy the full key from the dashboard."),
 		}
 	}
 	if err := Keyring.SetSecret(keyRef, key); err != nil {

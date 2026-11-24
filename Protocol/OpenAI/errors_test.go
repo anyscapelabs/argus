@@ -2,6 +2,7 @@ package OpenAI
 
 import (
 	"testing"
+	"time"
 
 	"github.com/anyscapelabs/argus/Protocol"
 )
@@ -28,6 +29,24 @@ func TestMapErrorIntoKeepsGenericRateLimitRetryable(t *testing.T) {
 	}
 	if e.Code != Protocol.CodeRateLimited {
 		t.Fatalf("code = %q, want rate_limited", e.Code)
+	}
+}
+
+func TestMapErrorIntoKeeps502RetryableWhenBodyMasksUpstream(t *testing.T) {
+	body := []byte(`{"error":{"message":"Provider returned error","type":"invalid_request_error","code":null,"param":null}}`)
+	e := MapErrorInto(502, body, 0)
+	if e.Code != Protocol.CodeBadInput {
+		t.Fatalf("code = %q, want bad_input", e.Code)
+	}
+	if !e.Retryable {
+		t.Fatal("a 502 must stay retryable even when its body is mapped to bad_input")
+	}
+}
+
+func TestMapErrorIntoStoresRetryAfterInMilliseconds(t *testing.T) {
+	e := MapErrorInto(429, []byte(`{"error":{"message":"slow down","type":"rate_limit_error"}}`), 3*time.Second)
+	if e.RetryAfter != 3000 {
+		t.Fatalf("RetryAfter = %d, want 3000 milliseconds", e.RetryAfter)
 	}
 }
 

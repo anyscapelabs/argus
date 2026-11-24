@@ -29,6 +29,8 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	reachedEnd := false
 	rounds := 0
 	extraTries := 0
+	opaqueTries := 0
+	toolCallRecoveryTries := 0
 	// wroteArtifact turns on once any round called write_artifact. From then on
 	// the turn's visible text is checked against the stored documents so a model
 	// that pastes the document into the chat as well cannot leak it.
@@ -101,6 +103,26 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 		}
 
 		calls := toolCalls(result.Message)
+		if len(calls) == 0 && needsToolCallRecovery(result) && ctx.Err() == nil && toolCallRecoveryTries < maxToolCallRecovery {
+			// The model asked for a tool but the stream was cut before a usable
+			// call arrived (nameless/empty tool_use block). The stream-end guard
+			// cannot catch this because a finish reason was present, so without
+			// a resend the turn is saved as an empty "complete" reply.
+			toolCallRecoveryTries++
+			if clean := dropUnnamedCalls(result.Message); len(clean.Blocks) > 0 {
+				req.Messages = append(req.Messages, clean)
+			}
+			req.Messages = append(req.Messages, Protocol.Message{
+				Role:   Protocol.RoleUser,
+				Blocks: []Protocol.Block{{Type: Protocol.BlockText, Text: toolCallRecoveryDirective}},
+			})
+			result = runModelTurn()
+			if ctx.Err() != nil || result.Error != nil {
+				reachedEnd = true
+				break
+			}
+			calls = toolCalls(result.Message)
+		}
 		if len(calls) == 0 {
 			reachedEnd = true
 			break
@@ -228,9 +250,11 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	// the error. A bad-input refusal that names a problem we can fix would
 	// repeat identically, so only the generic "provider returned error"
 	// class is considered retryable here — and only once, so a real bug
-	// still surfaces instead of spinning.
-	if result.Error != nil && ctx.Err() == nil && messageIsOpaqueProviderError(result.Error) && extraTries == 0 {
-		extraTries++
+	// still surfaces instead of spinning. This stacks on top of the normal
+	// retryable attempts because the gateway masks upstream 5xx as an opaque
+	// bad_input error over HTTP 200, which the status-based loop cannot see.
+	if result.Error != nil && ctx.Err() == nil && opaqueTries < maxOpaqueRetries && messageIsOpaqueProviderError(result.Error) {
+		opaqueTries++
 		res := s.collectWithTyping(ctx, runID, agentID, &req, target, trace)
 		if res.Error == nil {
 			result = res
@@ -264,6 +288,19 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 		blocks = []Protocol.Block{{Type: Protocol.BlockText, Text: artifactEchoFallback}}
 	}
 	text := flattenText(blocks)
+	// If the run ended in error but produced no visible text (e.g. a 502 that
+	// was masked by the gateway and exhausted all retries), the assistant row
+	// would be finalised with empty blocks — the frontend gets the event but
+	// has nothing to render, so the user sees a silent blank. Surface the
+	// friendly error string so the row is never completely invisible.
+	if result.Error != nil && strings.TrimSpace(text) == "" {
+		errText := publicModelError
+		if result.Error.Code == Protocol.CodeRateLimited || Protocol.IsUsageLimit(result.Error.Code) {
+			errText = result.Error.Message
+		}
+		blocks = []Protocol.Block{{Type: Protocol.BlockText, Text: errText}}
+		text = errText
+	}
 	// The reply row was reserved before any round existed; move it behind
 	// the round pairs so history replays in execution order.
 	if rounds > 0 {
@@ -285,7 +322,7 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	}
 
 	finalMR := mr
-	finalMR.Attempt = 1 + extraTries
+	finalMR.Attempt = 1 + extraTries + opaqueTries
 	finalMR.Status = reqStatus
 	if result.Error != nil {
 		finalMR.ErrorCode = result.Error.Code
@@ -418,6 +455,13 @@ func (s *Service) collectWithTyping(ctx context.Context, runID, agentID string, 
 			}
 		}
 	})
+}
+
+// needsToolCallRecovery reports a stream that stopped on a tool_calls finish
+// reason without leaving a single usable call — the signature of a response
+// cut off before the tool name arrived.
+func needsToolCallRecovery(res Protocol.Result) bool {
+	return res.Error == nil && res.Stop.Reason == Protocol.StopToolUse && len(toolCalls(res.Message)) == 0
 }
 
 func toolCalls(msg Protocol.Message) []Protocol.ToolCall {
