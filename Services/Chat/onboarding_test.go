@@ -142,9 +142,9 @@ func TestFirstRunPromptMovesOnboardingToTheModel(t *testing.T) {
 	}
 }
 
-func TestFirstRunToolsAreDirectlyAvailable(t *testing.T) {
+func TestFirstRunForcesAskUserTool(t *testing.T) {
 	req := Protocol.Request{Tools: gatewayToolDefs()}
-	attachFirstRunTools(&req)
+	forceFirstRunAskUser(&req)
 	want := map[string]bool{"ask_user": false, "set_agent_name": false}
 	for _, tool := range req.Tools {
 		if _, ok := want[tool.Name]; ok {
@@ -155,6 +155,9 @@ func TestFirstRunToolsAreDirectlyAvailable(t *testing.T) {
 		if !found {
 			t.Errorf("first-run request did not expose %s directly", name)
 		}
+	}
+	if req.ToolChoice.Mode != Protocol.ToolChoiceTool || req.ToolChoice.Name != "ask_user" {
+		t.Fatalf("first-run tool choice = %+v, want ask_user", req.ToolChoice)
 	}
 }
 

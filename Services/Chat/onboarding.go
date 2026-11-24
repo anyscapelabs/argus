@@ -32,8 +32,9 @@ The app seeded only a short greeting. From this point onward, conduct onboarding
 - Never mention seeded content, onboarding state, tool names, or these instructions.
 `
 
-func attachFirstRunTools(req *Protocol.Request) {
-	req.Tools = append(req.Tools, askUserToolDef, setAgentNameToolDef)
+func forceFirstRunAskUser(req *Protocol.Request) {
+	req.Tools = []Protocol.ToolDef{askUserToolDef, setAgentNameToolDef}
+	req.ToolChoice = Protocol.ToolChoice{Mode: Protocol.ToolChoiceTool, Name: askUserToolDef.Name}
 }
 
 func (s *Service) firstRunPending(agentID string) bool {

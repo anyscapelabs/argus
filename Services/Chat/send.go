@@ -258,9 +258,8 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	withTools := s.attachTools(&req, &target, mcpServersReferenced(history, s.connectedServerIDs()))
 	firstRunPending := s.firstRunPending(agentID)
 	if firstRunPending && withTools {
-		// Naming tools are direct during first-run so the model can open the card
-		// and save its answer without search_tools/invoke_tool discovery rounds.
-		attachFirstRunTools(&req)
+		forceFirstRunAskUser(&req)
+		log.Printf("chat: first-run forcing ask_user tool choice")
 	}
 	scheduledFire := kind == Storage.MessageKindScheduled
 	if scheduledFire {
