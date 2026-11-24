@@ -1,0 +1,16 @@
+{
+  "id": "board-meeting-prep",
+  "name": "board-meeting-prep",
+  "description": "ACTIVATE when preparing for board meetings, creating board decks, drafting board materials, developing executive summaries for directors, writing talking points, crafting board agendas, addressing governance matters, preparing for investor questions, or managing board communication. Critical for any board-facing materials, shareholder communication, or governance compliance.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Custom",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/01-executive-leadership/board-meeting-prep",
+  "verbatim": true
+}

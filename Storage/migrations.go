@@ -38,6 +38,9 @@ func (db *DB) migrate() error {
 		migration19,
 		migration20,
 		migration21,
+		migration22,
+		migration23,
+		migration24,
 	}
 
 	for i := version; i < len(migrations); i++ {
@@ -704,6 +707,113 @@ func migration21(db *DB) error {
 		if _, err := db.conn.Exec(q); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// migration22 adds the custom MCP server registry: servers the user added
+// themselves (a remote URL or a local stdio command) rather than connectors
+// from the bundled catalog. The rows survive restarts, and service startup
+// re-registers each one with the MCP manager.
+func migration22(db *DB) error {
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS custom_mcp_servers (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			transport TEXT NOT NULL,
+			url TEXT NOT NULL DEFAULT '',
+			command TEXT NOT NULL DEFAULT '',
+			args_json TEXT NOT NULL DEFAULT '[]',
+			env_json TEXT NOT NULL DEFAULT '{}',
+			created_at INTEGER NOT NULL
+		)`,
+	}
+	for _, q := range statements {
+		if _, err := db.conn.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migration23 adds the action ledger: actions, receipts and reconciliations.
+func migration23(db *DB) error {
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS actions (
+			id TEXT PRIMARY KEY,
+			agent_id TEXT NOT NULL,
+			agent_name TEXT NOT NULL DEFAULT '',
+			kind TEXT NOT NULL,
+			provider TEXT NOT NULL,
+			connection_id TEXT NOT NULL DEFAULT '',
+			request_json TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL,
+			op_id TEXT NOT NULL DEFAULT '',
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_actions_op ON actions (op_id, kind, provider)`,
+		`CREATE TABLE IF NOT EXISTS action_receipts (
+			action_id TEXT PRIMARY KEY,
+			message_id TEXT NOT NULL DEFAULT '',
+			thread_id TEXT NOT NULL DEFAULT '',
+			draft_id TEXT NOT NULL DEFAULT '',
+			receipt_json TEXT NOT NULL DEFAULT '',
+			recorded_at INTEGER NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS action_reconciliations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			action_id TEXT NOT NULL,
+			method TEXT NOT NULL,
+			found INTEGER NOT NULL,
+			verdict TEXT NOT NULL,
+			detail TEXT NOT NULL DEFAULT '',
+			recorded_at INTEGER NOT NULL
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_reconciliations_action ON action_reconciliations (action_id)`,
+	}
+	for _, q := range statements {
+		if _, err := db.conn.Exec(q); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// migration24 repairs app_settings on databases created before the table
+// gained its updated_at column. The column was folded into migration7's
+// CREATE TABLE, which never re-runs on existing installs, so every
+// SetAppSetting on those databases failed with "no column named updated_at"
+// and any preference written through it (muted and pinned agents) was lost.
+func migration24(db *DB) error {
+	rows, err := db.conn.Query(`PRAGMA table_info(app_settings)`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	found := false
+	hasUpdatedAt := false
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notNull, pk int
+		var dfltValue any
+		if err := rows.Scan(&cid, &name, &ctype, &notNull, &dfltValue, &pk); err != nil {
+			return err
+		}
+		found = true
+		if name == "updated_at" {
+			hasUpdatedAt = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if !found || hasUpdatedAt {
+		return nil
+	}
+	if _, err := db.conn.Exec(`ALTER TABLE app_settings ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
 	}
 	return nil
 }

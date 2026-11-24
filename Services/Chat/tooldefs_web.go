@@ -36,6 +36,10 @@ var browserToolDef = Protocol.ToolDef{
 		"the user for one tap, which confirms your action rather than handing the task back: do the whole " +
 		"job, including checkout and booking, and press the button. Numbers are only valid for the newest " +
 		"snapshot: act on a number from the tree you were just given, and you will get a fresh tree back. " +
+		"When a site distrusts the session — a hard bot check at checkout, a block on a fresh profile — " +
+		"import_profile copies the user's own Chrome profile (cookies and logins included, with their " +
+		"approval) into the browser, which is usually what makes a returning customer out of an anonymous " +
+		"visitor. " +
 		"request_takeover is the only way the user gets the keyboard, and it is for a step no software may " +
 		"do: a CAPTCHA or human check, the user's password or passkey, a one-time code from their phone. " +
 		"A card with a screenshot lands on their screen, you stop touching the browser, and a new turn " +
@@ -45,13 +49,13 @@ var browserToolDef = Protocol.ToolDef{
 		"properties": {
 			"action": {
 				"type": "string",
-				"enum": ["open","read","find","click","fill","press","select","scroll","back","wait","tabs","tab_new","tab_select","tab_close","text","screenshot","js","hide","show","reset","request_takeover"],
+				"enum": ["open","read","find","click","fill","press","select","scroll","back","wait","tabs","tab_new","tab_select","tab_close","text","screenshot","js","hide","show","reset","import_profile","request_takeover"],
 				"description": "What to do"
 			},
 			"url": { "type": "string", "description": "For open and tab_new: the address, or a plain-text query to search the web for" },
 			"ref": { "type": "integer", "description": "The [n] number from the newest snapshot" },
 			"text": { "type": "string", "description": "For find: words to filter the page by" },
-			"value": { "type": "string", "description": "For fill: the text to type. For select: the option. For scroll: up, down, left or right. For js: the script" },
+			"value": { "type": "string", "description": "For fill: the text to type. For select: the option. For scroll: up, down, left or right. For js: the script. For import_profile: the Chrome profile name, omitted for the default one" },
 			"key": { "type": "string", "description": "For press: enter, tab, escape, backspace, delete, arrows, space, or ctrl+a style combos" },
 			"target": { "type": "string", "description": "Which tab (a number from tabs) to act on; omit for the current one. For scroll: top or bottom" },
 			"offset": { "type": "integer", "description": "For read: start at this element number" },

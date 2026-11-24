@@ -53,6 +53,8 @@ export function ExchangeProviderCode(serverID: string, code: string): $Cancellab
 
 /**
  * Integrations lists the connectors Argus offers, with local connection state.
+ * User-added custom servers follow the catalog entries so the page renders
+ * them in their own group.
  */
 export function Integrations(): $CancellablePromise<Shared$0.IntegrationView[] | null> {
     return $Call.ByID(2712563097);

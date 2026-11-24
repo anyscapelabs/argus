@@ -1,7 +1,14 @@
 import * as PermissionService from '../../../bindings/github.com/anyscapelabs/argus/Services/Permission/service.js'
-import type { ActionResult, NoticesResult } from '../../../bindings/github.com/anyscapelabs/argus/Services/Shared/models.js'
+import type {
+  ActionResult,
+  NoticesResult,
+  PermissionPoliciesResult,
+  PermissionPolicyView,
+} from '../../../bindings/github.com/anyscapelabs/argus/Services/Shared/models.js'
 
 export type PermissionDecision = 'allow_once' | 'allow_always' | 'deny'
+export type PermissionPolicyMode = 'ask' | 'inherit' | 'allow' | 'deny'
+export type { PermissionPolicyView }
 
 // Mirrors Shared.PermissionRequestView (event payload, not in generated models)
 export type PermissionRequestView = {
@@ -51,6 +58,28 @@ export async function getNotices(agentID: string, limit = 20): Promise<NoticesRe
   return res
 }
 
+export async function getPermissionPolicies(agentID: string): Promise<PermissionPoliciesResult> {
+  const res = await PermissionService.Policies(agentID)
+  if (res?.error) throw new Error(res.error.message)
+  return res
+}
+
+export async function setPermissionPolicy(
+  agentID: string,
+  tool: string,
+  mode: PermissionPolicyMode,
+): Promise<ActionResult> {
+  const res = await PermissionService.SetPolicy(agentID, tool, mode)
+  if (res?.error) throw new Error(res.error.message)
+  return res
+}
+
+export async function resetPermissionPolicies(agentID: string): Promise<ActionResult> {
+  const res = await PermissionService.Revoke(agentID)
+  if (res?.error) throw new Error(res.error.message)
+  return res
+}
+
 // Which gate a settled decision came through changes how it reads, and a
 // browsing grant is scoped to one site — so composing every row as "the terminal"
 // has been wrong since file access existed, and is more wrong with three families.
@@ -59,6 +88,7 @@ const FAMILY_LABELS: Record<string, string> = {
   file_access: 'file access',
   browser_action: 'the browser',
   skill_install: 'installing agent skills',
+  email_send: 'sending email',
 }
 
 export function noticeText(

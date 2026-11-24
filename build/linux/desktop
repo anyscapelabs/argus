@@ -1,7 +1,7 @@
 [Desktop Entry]
 Version=1.0
-Name=My Product
-Comment=A argus application
+Name=Argus Agent
+Comment=Your AI Pro Active Teammate
 # The Exec line includes %u to pass the URL to the application
 Exec=/usr/local/bin/argus %u
 Terminal=false

@@ -1,0 +1,16 @@
+{
+  "id": "kpi-dashboard",
+  "name": "kpi-dashboard",
+  "description": "ACTIVATE when building executive dashboards, tracking business metrics, creating executive scorecards, monitoring organizational KPIs, setting up health metrics, building dashboards for real-time monitoring, or establishing systems to track and measure business performance. Critical for any executive who needs to monitor company health, make data-driven decisions, or track progress toward strategic goals.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Custom",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/01-executive-leadership/kpi-dashboard",
+  "verbatim": true
+}

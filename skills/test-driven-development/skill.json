@@ -1,0 +1,16 @@
+{
+  "id": "test-driven-development",
+  "name": "test-driven-development",
+  "description": "Use when implementing any feature or bugfix, before writing implementation code",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "obra/superpowers",
+  "source": "obra/superpowers",
+  "license": "MIT",
+  "source_url": "https://github.com/obra/superpowers/tree/main/skills/test-driven-development",
+  "verbatim": true
+}

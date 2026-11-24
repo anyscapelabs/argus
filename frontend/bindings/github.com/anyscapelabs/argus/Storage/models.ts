@@ -16,6 +16,28 @@ export interface AgentSummary {
     "last_message_at": number;
 }
 
+/**
+ * CustomMCPServer is one server the user added themselves rather than picking
+ * from the bundled catalog: either a remote URL (streamable HTTP) or a local
+ * command (stdio). Unlike catalog connectors these carry no OAuth accounts —
+ * the server is the unit of connection, and its tools surface in chat under
+ * the server's own id.
+ */
+export interface CustomMCPServer {
+    "id": string;
+    "name": string;
+
+    /**
+     * http | stdio
+     */
+    "transport": string;
+    "url"?: string;
+    "command"?: string;
+    "args"?: string[] | null;
+    "env"?: { [_ in string]?: string } | null;
+    "created_at": number;
+}
+
 export interface ProviderConfig {
     "ProviderID": string;
     "SecretRef": string;

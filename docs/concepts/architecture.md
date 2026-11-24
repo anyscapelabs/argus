@@ -108,7 +108,7 @@ Tools include built-in capabilities (file/terminal operations, search, schedulin
 
 Some actions pause for user input or confirmation:
 
-- **Permissions**: `permission:requested` / `permission:resolved` events gate sensitive actions. Unattended runs refuse interactive approvals and record a notice instead of hanging.
+- **Permissions**: `permission:requested` / `permission:resolved` events gate sensitive actions. Unattended runs hold the action and record an actionable notice shown in the chat instead of hanging.
 - **Ask user**: the `ask_user` tool emits a request card and waits for a response (or is refused in unattended contexts).
 - **MCP connect**: connection/auth cards are managed by `MCPConnect`, with settlement notices and optional steering back into chat.
 - **Browser takeover**: when the user needs to take control (or a sensitive browser step requires it), takeover state is tracked and surfaced to the UI.

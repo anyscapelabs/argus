@@ -20,6 +20,7 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
+	"github.com/anyscapelabs/argus/Env"
 	"github.com/anyscapelabs/argus/Services/Chat"
 	"github.com/anyscapelabs/argus/Services/MCP"
 	"github.com/anyscapelabs/argus/Services/MCPConnect"
@@ -38,6 +39,7 @@ func defaultModelCaller(_ context.Context, _ Chat.LoopConfig, _ []Chat.LoopMessa
 }
 
 func main() {
+	Env.Load()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

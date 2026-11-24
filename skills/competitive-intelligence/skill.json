@@ -1,0 +1,16 @@
+{
+  "id": "competitive-intelligence",
+  "name": "competitive-intelligence",
+  "description": "Research your competitors and build an interactive battlecard. Outputs an HTML artifact with clickable competitor cards and a comparison matrix. Trigger with \"competitive intel\", \"research competitors\", \"how do we compare to [competitor]\", \"battlecard for [competitor]\", or \"what's new with [competitor]\".",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Anthropic KWP",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/05-sales/competitive-intelligence",
+  "verbatim": true
+}

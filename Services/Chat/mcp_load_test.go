@@ -43,13 +43,13 @@ func TestAttachToolsShipsCompactGatewayOnly(t *testing.T) {
 	req := Protocol.Request{}
 	s.attachTools(&req, &Protocol.Target{Family: Protocol.FamilyOpenAICompat}, nil)
 	names := toolNames(req.Tools)
-	for _, name := range []string{"conversation_read", "web_search", "search_tools", "invoke_tool", "read_skill", "install_skill"} {
+	for _, name := range []string{"conversation_read", "web_search", "search_tools", "invoke_tool", "read_skill", "install_skill", "search_skills"} {
 		if !names[name] {
 			t.Errorf("gateway is missing %s", name)
 		}
 	}
-	if len(names) != 6 {
-		t.Fatalf("provider received %d tools instead of the six-tool gateway: %v", len(names), names)
+	if len(names) != 7 {
+		t.Fatalf("provider received %d tools instead of the seven-tool gateway: %v", len(names), names)
 	}
 }
 

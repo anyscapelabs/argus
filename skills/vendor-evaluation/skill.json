@@ -1,0 +1,16 @@
+{
+  "id": "vendor-evaluation",
+  "name": "vendor-evaluation",
+  "description": "Evaluate vendors with comparison matrices, TCO analysis, risk assessment, reference check templates, and negotiation strategies",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Custom",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/12-procurement-supply-chain/vendor-evaluation",
+  "verbatim": true
+}

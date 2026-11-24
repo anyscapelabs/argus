@@ -1,0 +1,16 @@
+{
+  "id": "pitch-deck",
+  "name": "pitch-deck",
+  "description": "Populates investment banking pitch deck templates with data from source files. Use when: user provides a PowerPoint template to fill in, user has source data (Excel/CSV) to populate into slides, user mentions populating or filling a pitch deck template, or user needs to transfer data into existing slide layouts. Not for creating presentations from scratch.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Anthropic FSP",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/02-finance-accounting/pitch-deck",
+  "verbatim": true
+}

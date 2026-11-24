@@ -1,7 +1,14 @@
 {
   "name": "react-ts-latest",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "Your AI Pro Active Teammate",
+  "productName": "Argus Agent",
+  "author": "Anyscape Labs PLC <hello@anyscapelabs.com>",
+  "homepage": "https://argus-agent.anyscapelabs.com",
+  "bugs": {
+    "email": "hello@anyscapelabs.com"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

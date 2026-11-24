@@ -55,6 +55,12 @@ const MessageKindToolRound = "tool_round"
 // write_file result. It carries metadata only, never the written content.
 const MessageKindFileWrite = "file_write"
 
+// MessageKindAskUser is the settled question card: the question as it was
+// asked and the answer the user picked. It is visible in the chat and never
+// replayed to a model — its text is the card's payload (like a voice record),
+// not words anyone said.
+const MessageKindAskUser = "ask_user"
+
 func (m Message) Blocks() []Protocol.Block {
 	var blocks []Protocol.Block
 	if m.BlocksJSON == "" {
@@ -294,7 +300,7 @@ func (db *DB) listStmt(agentID string, beforeSeq, limit int, visibleOnly bool) (
 		limit = 100
 	}
 	visible := `
-	  AND (m.kind = '' OR m.kind = 'voice' OR m.kind = 'file_write')
+	  AND (m.kind = '' OR m.kind = 'voice' OR m.kind = 'file_write' OR m.kind = 'ask_user')
 	  AND NOT (m.role = 'user' AND m.kind = '' AND TRIM(m.text) = '')
 	  AND NOT (m.role = 'assistant' AND m.kind = '' AND m.status <> 'streaming'
 	           AND TRIM(COALESCE(m.text, '')) = '' AND TRIM(COALESCE(m.error_message, '')) = '')`

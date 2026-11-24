@@ -1,0 +1,16 @@
+{
+  "id": "employee-engagement-survey",
+  "name": "employee-engagement-survey",
+  "description": "TRIGGER THIS when designing employee engagement surveys, analyzing employee feedback, creating action plans based on survey results, tracking engagement trends, planning pulse surveys, or improving employee experience. Designs comprehensive surveys that measure engagement, belonging, and satisfaction with actionable insights and accountability-driven improvement plans.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Custom",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/03-human-resources/employee-engagement-survey",
+  "verbatim": true
+}

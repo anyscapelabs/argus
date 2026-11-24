@@ -138,6 +138,42 @@ func (m *Manager) ConnectRemote(ctx context.Context, spec RemoteSpec, interactiv
 	return nil
 }
 
+// ConnectPlainRemote dials a remote MCP server that asks for no credentials —
+// a user-added URL from the custom-server form. There is no handler to
+// challenge, so the session exists as soon as the handshake does; a server
+// that answers 401 fails here and the error surfaces on the form that
+// submitted it.
+func (m *Manager) ConnectPlainRemote(ctx context.Context, id, name, url string) error {
+	m.mu.RLock()
+	_, alive := m.servers[id]
+	m.mu.RUnlock()
+	if alive {
+		return nil
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "argus", Version: "0.1.0"}, nil)
+	sess, err := client.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: url}, nil)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.servers[id]; ok {
+		_ = sess.Close()
+		return nil
+	}
+	connCtx, cancel := context.WithCancel(context.Background())
+	_ = connCtx
+	m.servers[id] = &serverConn{
+		cfg:      ServerConfig{ID: id, Name: name, Enabled: true},
+		serverID: id,
+		client:   client,
+		sess:     sess,
+		cancel:   cancel,
+	}
+	m.refreshToolsLocked()
+	return nil
+}
+
 // stopTimer exists because the interactive path deliberately sets no deadline:
 // the user may be sitting in a browser, and the only clock that should stop
 // that is the one on the connection card.

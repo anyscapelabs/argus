@@ -10,13 +10,20 @@ concept docs link here instead of restating them.
 |---|---|---|---|
 | `VITE_ANYSCAPE_GATEWAY_URL` | `frontend/.env`, build time | Gateway origin the desktop app is built to pair with. | dev default varies per checkout |
 | `VITE_ARGUS_API_URL` | `frontend/.env`, build time | Deprecated alias of `VITE_ANYSCAPE_GATEWAY_URL`. | — |
-| `ARGUS_LOAD_DOTENV` | backend, development only | When set to `1`, MCP credential loading may read `.env`-style files to pick up local OAuth client IDs/secrets (`Services/MCP/service.go`). Off by default in packaged builds. | unset |
+| `ARGUS_LOAD_DOTENV` | backend, development only | When set to `1`, `Shared.ConfigValue` reads `.env`-style files (`Services/Shared/build_config.go`) to pick up local OAuth client IDs/secrets. Set automatically by `task dev`; off in packaged builds. | unset |
 | `ARGUS_BROWSER_PROFILE_DIR` | backend | Overrides the base directory for the Argus browser automation profile (the app uses a `browser` subdirectory under it). | unset |
+| `ARGUS_UPDATE_REPO` | backend, desktop builds | `owner/repo` the self-updater checks for releases. Useful for staging or a fork. | `anyscapelabs/argus` |
 
 Note the split between build-time and runtime: `VITE_*` values are compiled into
 the frontend bundle, but model traffic at runtime follows the gateway the key
 paired against (persisted as a provider base URL override), not the build-time
 variable.
+
+## Command-line flags
+
+| Flag | What it does |
+|---|---|
+| `--background` | Start with the window hidden in the system tray. The login item passes it; it is not normally typed by hand. |
 
 ## On-disk locations
 

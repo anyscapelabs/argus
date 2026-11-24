@@ -1,0 +1,16 @@
+{
+  "id": "lean-build",
+  "name": "lean-build",
+  "description": "Build feature work with high overbuilding risk. Use for new behavior, product slices, or integrations where repository reuse, strict scope, and an explicit stop condition matter.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "JuliusBrussee/caveman",
+  "source": "JuliusBrussee/caveman",
+  "license": "Apache-2.0 / MIT",
+  "source_url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/lean-build",
+  "verbatim": true
+}

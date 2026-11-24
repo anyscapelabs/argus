@@ -42,10 +42,15 @@ func (p *Page) rectOf(ctx context.Context, objectID string) (rect, error) {
   var cx=b.left+b.width/2, cy=b.top+b.height/2;
   var tag=(el.tagName||'').toLowerCase();
   var type=(el.getAttribute&&el.getAttribute('type')||'').toLowerCase();
+  var idx=-1;
+  try {
+    var m=window.__argus_idx__;
+    if (m) { var v=m.get(el); if (v!==undefined) idx=v; }
+  } catch (e) {}
   return {
     x: Math.round(cx), y: Math.round(cy),
     w: Math.round(b.width||0), h: Math.round(b.height||0),
-    idx: Number(el.getAttribute('data-af-idx')||'-1'),
+    idx: idx,
     visible: cs.display!=='none' && cs.visibility!=='hidden' && parseFloat(cs.opacity||'1')>0.05,
     inViewport: cx>=0 && cy>=0 && cx<=vw && cy<=vh && b.width>0 && b.height>0,
     disabled: !!el.disabled || el.getAttribute('aria-disabled')==='true',

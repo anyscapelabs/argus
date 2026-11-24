@@ -1,0 +1,16 @@
+{
+  "id": "knowledge-synthesis",
+  "name": "knowledge-synthesis",
+  "description": "Combines search results from multiple sources into coherent, deduplicated answers with source attribution. Handles confidence scoring based on freshness and authority, and summarizes large result sets effectively.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Anthropic KWP",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/01-executive-leadership/knowledge-synthesis",
+  "verbatim": true
+}

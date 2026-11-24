@@ -10,10 +10,26 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as Shared$0 from "../Shared/models.js";
 
 /**
+ * IsBrowserAllowed is the runtime browser kill switch. With no saved policy,
+ * browsing remains available to preserve the existing behavior.
+ */
+export function IsBrowserAllowed(agentID: string): $CancellablePromise<boolean> {
+    return $Call.ByID(2300210345, agentID);
+}
+
+/**
  * Notices lists the persisted permission decisions of an agent, newest first.
  */
 export function Notices(agentID: string, limit: number): $CancellablePromise<Shared$0.NoticesResult> {
     return $Call.ByID(1001831574, agentID, limit);
+}
+
+/**
+ * Policies returns the global defaults and per-agent overrides used by the
+ * settings UI. Browser use defaults on; sensitive actions default to asking.
+ */
+export function Policies(agentID: string): $CancellablePromise<Shared$0.PermissionPoliciesResult> {
+    return $Call.ByID(1375981639, agentID);
 }
 
 /**
@@ -32,6 +48,15 @@ export function Respond(requestID: string, decision: string): $CancellablePromis
  */
 export function Revoke(agentID: string): $CancellablePromise<Shared$0.ActionResult> {
     return $Call.ByID(3779293251, agentID);
+}
+
+/**
+ * SetPolicy writes a global default (agentID="*") or one agent override.
+ * Clearing the browser action family also removes old site-specific grants so
+ * the broad setting shown in the UI is the whole truth.
+ */
+export function SetPolicy(agentID: string, tool: string, mode: string): $CancellablePromise<Shared$0.ActionResult> {
+    return $Call.ByID(3617742133, agentID, tool, mode);
 }
 
 /**

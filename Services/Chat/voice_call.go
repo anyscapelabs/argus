@@ -24,10 +24,7 @@ func (s *Service) SaveVoiceCall(agentID string, turns []Shared.VoiceTurn, second
 	if aerr := s.Core.Ready(); aerr != nil {
 		return Shared.VoiceCallResult{Error: aerr}
 	}
-	agentID = strings.TrimSpace(agentID)
-	if agentID == "" {
-		agentID = "default"
-	}
+	agentID = normalizeAgentID(agentID)
 
 	clean := make([]Shared.VoiceTurn, 0, len(turns))
 	for _, t := range turns {

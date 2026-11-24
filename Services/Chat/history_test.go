@@ -1,7 +1,6 @@
 package Chat
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/anyscapelabs/argus/Protocol"
@@ -13,7 +12,7 @@ func opaqueError(msg string) *Protocol.Error {
 }
 
 func TestMessageIsOpaqueProviderError(t *testing.T) {
-	for _, m := range []string{"Provider returned error", "", "provider returned error", "ERROR", "internal error"} {
+	for _, m := range []string{"Provider returned error", "", "provider returned error", "ERROR", "internal error", "An error has occurred. Try again later."} {
 		if !messageIsOpaqueProviderError(opaqueError(m)) {
 			t.Errorf("%q should be treated as opaque", m)
 		}
@@ -28,19 +27,37 @@ func TestMessageIsOpaqueProviderError(t *testing.T) {
 	}
 }
 
-func TestFriendlyErrorReplacesOpaqueMessage(t *testing.T) {
-	e := opaqueError("Provider returned error")
-	friendlyError(e)
-	if !strings.Contains(e.Message, "something went wrong") || strings.Contains(e.Message, "Provider returned") {
-		t.Errorf("friendly error should replace the opaque one, got %q", e.Message)
+func TestFriendlyErrorMasksEveryNonLimitMessage(t *testing.T) {
+	for _, message := range []string{
+		"Provider returned error",
+		"Invalid JSON payload received",
+		`the upstream provider rejected the request: {"error":{"message":"secret"}}`,
+	} {
+		e := opaqueError(message)
+		friendlyError(e)
+		if e.Message != publicModelError {
+			t.Errorf("error %q was exposed as %q", message, e.Message)
+		}
 	}
 }
 
-func TestFriendlyErrorLeavesSpecificErrorsAlone(t *testing.T) {
-	e := opaqueError("Rate limit exceeded: free-models-per-day")
-	friendlyError(e)
-	if e.Message != "Rate limit exceeded: free-models-per-day" {
-		t.Errorf("a specific error must survive untouched, got %q", e.Message)
+func TestFriendlyErrorKeepsRateAndUsageLimits(t *testing.T) {
+	for _, code := range []string{Protocol.CodeRateLimited, Protocol.CodeDailyLimitReached} {
+		e := &Protocol.Error{Code: code, Message: "Your current usage limit has been reached"}
+		friendlyError(e)
+		if e.Message != "Your current usage limit has been reached" {
+			t.Errorf("limit error %q was rewritten as %q", code, e.Message)
+		}
+	}
+}
+
+func TestPublicErrorMessageMasksPreviouslyStoredProviderDetails(t *testing.T) {
+	raw := `the upstream provider rejected the request: {"error":{"message":"secret"}}`
+	if got := publicErrorMessage(Protocol.CodeBadInput, raw); got != publicModelError {
+		t.Fatalf("stored provider detail was exposed as %q", got)
+	}
+	if got := publicErrorMessage(Protocol.CodeRateLimited, "Try again in 30 seconds"); got != "Try again in 30 seconds" {
+		t.Fatalf("rate limit was hidden as %q", got)
 	}
 }
 

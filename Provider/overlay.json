@@ -24,7 +24,10 @@
       "key_hint": "argus_pk_",
       "key_help_url": "http://localhost:8080/console/settings/service-accounts",
       "doc_url": "http://localhost:8080",
-      "order": 1
+      "order": 1,
+      "quirks": {
+        "gemini_schema_cleanup": true
+      }
     }
   ]
 }

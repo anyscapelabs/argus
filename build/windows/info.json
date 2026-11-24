@@ -5,11 +5,11 @@
 	"info": {
 		"0409": {
 			"ProductVersion": "0.1.0",
-			"CompanyName": "Anyscape Labs",
-			"FileDescription": "A argus application",
-			"LegalCopyright": "© 2026, Anyscape Labs",
-			"ProductName": "My Product",
-			"Comments": "This is a comment"
+			"CompanyName": "Anyscape Labs PLC",
+			"FileDescription": "Your AI Pro Active Teammate",
+			"LegalCopyright": "© 2026, Anyscape Labs PLC",
+			"ProductName": "Argus Agent",
+			"Comments": "Support: hello@anyscapelabs.com"
 		}
 	}
 }

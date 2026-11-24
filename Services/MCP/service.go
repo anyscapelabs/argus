@@ -1,7 +1,6 @@
 package MCP
 
 import (
-	"bufio"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -18,11 +17,6 @@ import (
 	"github.com/anyscapelabs/argus/Services/Integrations"
 	"github.com/anyscapelabs/argus/Services/Shared"
 	"github.com/anyscapelabs/argus/Storage"
-)
-
-var (
-	googleClientID     string
-	googleClientSecret string
 )
 
 // Service exposes MCP management to the frontend.
@@ -43,6 +37,7 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 		s.catalog = cat
 		go s.restoreRemoteSessions(cat)
 	}
+	go s.restoreCustomServers()
 	return nil
 }
 
@@ -183,45 +178,16 @@ func (s *Service) ListServerIDs() []string {
 	return m.ListServerIDs()
 }
 
-// loadDotEnv reads a repo-root .env so OAuth client ids work during
-// development. It is OFF by default: a packaged app must never pick up a
-// developer's secrets from the directory it happens to be launched in.
-// Developers opt in with ARGUS_LOAD_DOTENV=1 in their shell.
-func loadDotEnv() {
-	if os.Getenv("ARGUS_LOAD_DOTENV") != "1" {
-		return
-	}
-	for _, p := range []string{".env", ".env.local", "config/.env", "../.env"} {
-		f, err := os.Open(p)
-		if err != nil {
-			continue
-		}
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			line := strings.TrimSpace(scanner.Text())
-			if line == "" || strings.HasPrefix(line, "#") {
-				continue
-			}
-			if i := strings.Index(line, "="); i > 0 {
-				k := strings.TrimSpace(line[:i])
-				v := strings.TrimSpace(line[i+1:])
-				v = strings.Trim(v, `"'`)
-				if os.Getenv(k) == "" {
-					os.Setenv(k, v)
-				}
-			}
-		}
-		f.Close()
-	}
-}
+// loadDotEnv loads a development .env (opt-in via ARGUS_LOAD_DOTENV=1) so OAuth
+// client ids work locally. The logic lives in Shared.LoadDotEnv so every
+// Shared.ConfigValue lookup sees the same values; a packaged app never reads
+// a .env from the directory it happens to be launched in.
+func loadDotEnv() { Shared.LoadDotEnv() }
 
 func readGoogleCreds() (string, string) {
 	loadDotEnv()
-	if id := os.Getenv("ARGUS_GOOGLE_CLIENT_ID"); id != "" {
-		return id, os.Getenv("ARGUS_GOOGLE_CLIENT_SECRET")
-	}
-	if googleClientID != "" {
-		return googleClientID, googleClientSecret
+	if id := Shared.ConfigValue("ARGUS_GOOGLE_CLIENT_ID"); id != "" {
+		return id, Shared.ConfigValue("ARGUS_GOOGLE_CLIENT_SECRET")
 	}
 	return readCredsFile("google")
 }
@@ -264,8 +230,8 @@ func clientCreds(name string) (*oauthex.ClientCredentials, error) {
 	var id, sec string
 	if name == "github" {
 		loadDotEnv()
-		id = os.Getenv("ARGUS_GITHUB_CLIENT_ID")
-		sec = os.Getenv("ARGUS_GITHUB_CLIENT_SECRET")
+		id = Shared.ConfigValue("ARGUS_GITHUB_CLIENT_ID")
+		sec = Shared.ConfigValue("ARGUS_GITHUB_CLIENT_SECRET")
 		if id == "" {
 			id, sec = readCredsFile("github")
 		}

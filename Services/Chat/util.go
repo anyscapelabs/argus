@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/anyscapelabs/argus/Protocol"
+	"github.com/google/uuid"
 )
 
 func flattenText(blocks []Protocol.Block) string {
@@ -37,4 +38,20 @@ func hostOf(raw string) string {
 
 func nowUnixMs() int64 {
 	return time.Now().UnixMilli()
+}
+
+// normalizeAgentID resolves the agent id every public entry point accepts:
+// surrounding whitespace is dropped and an empty id means the default agent.
+func normalizeAgentID(agentID string) string {
+	if agentID = strings.TrimSpace(agentID); agentID != "" {
+		return agentID
+	}
+	return "default"
+}
+
+// newID returns a time-ordered row or run id. uuid.NewV7 only fails when the
+// system random source does, which the rest of this package already ignores.
+func newID() string {
+	id, _ := uuid.NewV7()
+	return id.String()
 }

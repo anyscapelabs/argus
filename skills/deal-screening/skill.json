@@ -1,0 +1,16 @@
+{
+  "id": "deal-screening",
+  "name": "Deal Screening",
+  "description": "Quickly screen inbound deal flow — CIMs, teasers, and broker materials — against the fund's investment criteria. Extracts key deal metrics, runs a pass/fail framework, and outputs a one-page screening memo. Use when reviewing new deal flow, triaging inbound materials, or deciding whether to take a first call. Triggers on \"screen this deal\", \"review this CIM\", \"should we look at this\", \"triage this teaser\", or \"deal screening\".",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Anthropic FSP",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/02-finance-accounting/deal-screening",
+  "verbatim": true
+}

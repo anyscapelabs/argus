@@ -42,7 +42,6 @@ func TestScheduledToolRoundsStayHidden(t *testing.T) {
 	s.persistRound(
 		"default",
 		"router/model",
-		Storage.MessageKindScheduled,
 		Protocol.Message{Role: Protocol.RoleAssistant, Blocks: []Protocol.Block{{Type: Protocol.BlockText, Text: "working"}}},
 		[]Protocol.Block{{Type: Protocol.BlockToolResult, ToolRefID: "c1", ToolName: "web_search", Text: "result"}},
 	)
@@ -57,7 +56,7 @@ func TestScheduledToolRoundsStayHidden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(all) != 2 || all[0].Kind != Storage.MessageKindScheduled || all[1].Kind != Storage.MessageKindScheduled {
+	if len(all) != 2 || all[0].Kind != Storage.MessageKindToolRound || all[1].Kind != Storage.MessageKindToolRound {
 		t.Fatalf("scheduled tool rows were not retained as hidden context: %+v", all)
 	}
 }

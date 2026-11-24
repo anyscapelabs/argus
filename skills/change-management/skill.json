@@ -1,0 +1,16 @@
+{
+  "id": "change-management",
+  "name": "change-management",
+  "description": "Plan and execute organizational or technical changes. Trigger with \"we're changing\", \"rolling out\", \"migration plan\", \"how do we communicate this change\", \"change management plan\", or when the user is planning a change that affects people, processes, or systems.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Anthropic KWP",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/01-executive-leadership/change-management",
+  "verbatim": true
+}

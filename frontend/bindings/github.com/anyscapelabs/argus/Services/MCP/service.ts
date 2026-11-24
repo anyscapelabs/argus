@@ -12,7 +12,20 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as Storage$0 from "../../Storage/models.js";
+
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as $models from "./models.js";
+
+/**
+ * AddCustomServer validates, persists and connects a user-added MCP server.
+ * The returned row echoes what was stored so the caller can show it without
+ * re-reading the list.
+ */
+export function AddCustomServer($in: $models.CustomServerInput): $CancellablePromise<Storage$0.CustomMCPServer> {
+    return $Call.ByID(386790141, $in);
+}
 
 /**
  * AddServer adds a server configuration.
@@ -80,6 +93,20 @@ export function HasStoredSession(serverID: string): $CancellablePromise<boolean>
 }
 
 /**
+ * IsCustomServerConnected reports whether a user-added server holds a session.
+ */
+export function IsCustomServerConnected(id: string): $CancellablePromise<boolean> {
+    return $Call.ByID(475291745, id);
+}
+
+/**
+ * ListCustomServers returns every user-added server.
+ */
+export function ListCustomServers(): $CancellablePromise<Storage$0.CustomMCPServer[] | null> {
+    return $Call.ByID(1155066715);
+}
+
+/**
  * ListServerIDs lists the servers with a live session.
  */
 export function ListServerIDs(): $CancellablePromise<string[] | null> {
@@ -127,6 +154,14 @@ export function Manager(): $CancellablePromise<$models.Manager | null> {
  */
 export function ReconnectRemoteConnection(serverID: string, connectionID: string, expectedEmail: string): $CancellablePromise<void> {
     return $Call.ByID(893450845, serverID, connectionID, expectedEmail);
+}
+
+/**
+ * RemoveCustomServer forgets a user-added server: the session is closed, the
+ * persisted row is deleted, and its tools leave the chat on the next refresh.
+ */
+export function RemoveCustomServer(id: string): $CancellablePromise<void> {
+    return $Call.ByID(3841372594, id);
 }
 
 /**

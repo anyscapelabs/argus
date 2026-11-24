@@ -8,16 +8,16 @@
     !define INFO_PROJECTNAME "argus"
 !endif
 !ifndef INFO_COMPANYNAME
-    !define INFO_COMPANYNAME "Anyscape Labs"
+    !define INFO_COMPANYNAME "Anyscape Labs PLC"
 !endif
 !ifndef INFO_PRODUCTNAME
-    !define INFO_PRODUCTNAME "My Product"
+    !define INFO_PRODUCTNAME "Argus Agent"
 !endif
 !ifndef INFO_PRODUCTVERSION
     !define INFO_PRODUCTVERSION "0.1.0"
 !endif
 !ifndef INFO_COPYRIGHT
-    !define INFO_COPYRIGHT "© 2026, Anyscape Labs"
+    !define INFO_COPYRIGHT "© 2026, Anyscape Labs PLC"
 !endif
 !ifndef PRODUCT_EXECUTABLE
     !define PRODUCT_EXECUTABLE "${INFO_PROJECTNAME}.exe"

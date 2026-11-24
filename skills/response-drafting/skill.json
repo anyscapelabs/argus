@@ -1,0 +1,16 @@
+{
+  "id": "response-drafting",
+  "name": "response-drafting",
+  "description": "Draft professional, empathetic customer-facing responses adapted to the situation, urgency, and channel. Use when responding to customer tickets, escalations, outage notifications, bug reports, feature requests, or any customer-facing communication.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Anthropic KWP",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/11-customer-success/response-drafting",
+  "verbatim": true
+}

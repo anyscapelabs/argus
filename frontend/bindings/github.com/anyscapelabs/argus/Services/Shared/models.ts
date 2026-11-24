@@ -257,6 +257,25 @@ export interface EntitlementUser {
 }
 
 /**
+ * UsageLimit is one authoritative quota window reported by the router.
+ */
+export interface UsageLimit {
+    "used": number;
+    "limit": number;
+    "reset_at": string;
+}
+
+/**
+ * EntitlementsUsage carries the account's authoritative usage and limits.
+ */
+export interface EntitlementsUsage {
+    "weekly": UsageLimit;
+    "monthly": UsageLimit;
+    "voice": UsageLimit;
+    "search": UsageLimit;
+}
+
+/**
  * Entitlements is the identity + plan + allowlist trio the agent runs on.
  * The allowlist carries the router's catalog id plus display name per entry
  * so the picker shows the display name without any frontend trimming.
@@ -265,6 +284,7 @@ export interface Entitlements {
     "user": EntitlementUser;
     "plan": EntitlementPlan;
     "allowlist": AllowedModel[] | null;
+    "usage"?: EntitlementsUsage | null;
     "offline"?: boolean;
 }
 
@@ -323,6 +343,23 @@ export interface IntegrationView {
     "description": string;
     "icon": string;
     "connected": boolean;
+
+    /**
+     * Category groups the Discover grid; custom servers use their own group.
+     */
+    "category"?: string;
+
+    /**
+     * Custom marks a user-added server rather than a bundled connector.
+     */
+    "custom"?: boolean;
+
+    /**
+     * OAuthMode mirrors the catalog entry (google | github | dynamic) so the
+     * connect form knows whether an account email can be captured. Custom
+     * servers leave it empty.
+     */
+    "oauth_mode"?: string;
     "tools"?: string[] | null;
 }
 
@@ -496,6 +533,23 @@ export interface PermissionNoticeView {
     "created_at": number;
 }
 
+export interface PermissionPoliciesResult {
+    "policies": PermissionPolicyView[] | null;
+    "error"?: ActionError | null;
+}
+
+/**
+ * PermissionPolicyView is one configurable capability. GlobalMode is the
+ * fallback for every agent, AgentMode is this agent's override (or inherit),
+ * and EffectiveMode is the decision the permission gate currently applies.
+ */
+export interface PermissionPolicyView {
+    "tool": string;
+    "global_mode": string;
+    "agent_mode": string;
+    "effective_mode": string;
+}
+
 export interface PermissionState {
     "agent_id": string;
     "tool": string;
@@ -530,6 +584,24 @@ export interface PickerResult {
     "ok": boolean;
     "error"?: ActionError | null;
     "picker"?: Picker | null;
+}
+
+/**
+ * PreferenceResult is one stored preference. Found distinguishes an unset key
+ * from one deliberately saved as an empty string.
+ */
+export interface PreferenceResult {
+    "value": string;
+    "found": boolean;
+    "error"?: ActionError | null;
+}
+
+/**
+ * PreferencesResult is the whole preference map the frontend loads on startup.
+ */
+export interface PreferencesResult {
+    "values": { [_ in string]?: string } | null;
+    "error"?: ActionError | null;
 }
 
 export interface ProviderView {

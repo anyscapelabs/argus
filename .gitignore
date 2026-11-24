@@ -6,6 +6,7 @@ frontend/node_modules
 *.log
 .env
 .env.*
+!.env.example
 build/linux/appimage/build
 build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 # Mobile generated (per-machine; overlays hold absolute paths)
@@ -20,3 +21,23 @@ google.json
 
 # Node tooling caches at the repo root
 node_modules/
+
+# Release version stamp written by build/stamp-version.sh
+Services/Updater/version_stamped.go
+
+# Local build output of the app binary (never commit it)
+/argus
+
+# Generated skills registry artifacts (published to S3 by CI, not committed)
+dist-skills/
+
+# Generated from GitHub secrets at build time — never commit
+Services/Shared/build_config_generated.go
+
+# Local signing keys and credentials — never commit these
+*.pem.key
+*.private.pem
+*private_key*
+*secret_key*
+skills-signing.pem
+signing.pem

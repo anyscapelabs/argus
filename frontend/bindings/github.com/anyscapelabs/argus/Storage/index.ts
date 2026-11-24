@@ -3,6 +3,7 @@
 
 export type {
     AgentSummary,
+    CustomMCPServer,
     ProviderConfig,
     ScheduledTask
 } from "./models.js";

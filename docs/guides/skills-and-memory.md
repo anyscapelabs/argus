@@ -12,34 +12,55 @@ paired (see [storage](../reference/storage.md)).
 
 ## Skills
 
-Skills are packaged instruction bundles: a `SKILL.md` plus supporting content
-under `Services/Skills/data/<id>/`. The catalog (`Services/Skills/data/skills.json`)
-lists each skill's id, name, description, associated connectors, and whether it
-auto-enables when its connector is present.
+Skills are packaged instruction bundles. The source of truth is `skills/<id>/`:
 
-Examples in the repo: `gmail`, `google-calendar`, `google-drive`, `github`,
-`linear`, `notion`, `atlassian`, `cloudflare`, `sentry`, plus business skills
-such as `finance`, `marketing`, `sales`, `accounting`, and `customer-support`.
+- `SKILL.md` — the author's instructions, stored **verbatim** (no rewriting or
+  summarizing). Frontmatter is stripped only when the body is served to the
+  agent.
+- `skill.json` — registry metadata: id, name, trigger description, version,
+  connectors, `allowed_tools`, auto-enable rule, channel, publisher and source
+  attribution.
+
+`Services/Skills/data/` is the generated offline floor, and `skills.json` inside
+it is generated from every `skill.json`. Never edit `Services/Skills/data/` by
+hand: run `go run ./tools/gen-skills` and commit the result. CI verifies the
+baseline matches `skills/`.
+
+The registry is published by `.github/workflows/publish-skills.yml`: it lints
+the bundles, builds immutable `<id>@<version>.json` files plus a signed
+`index.json` (Ed25519), and uploads them to S3 behind CloudFront at
+`https://registry.anyscapelabs.com`. The desktop verifies the index signature
+with an embedded public key and each bundle's sha256 before use. The signed
+index replaces the embedded baseline on startup and every 24h; the app keeps
+the previous copy as a cache for offline use.
+
+The collection includes the original 22 built-ins plus role-based skills
+(executive, finance, marketing, product, legal, engineering, design, data) and
+communication-style skills. Sources and licenses are recorded in
+[`skills/ATTRIBUTION.md`](../../skills/ATTRIBUTION.md).
 
 ### Progressive loading
 
 Skills are **not** injected into every prompt. The agent:
 
-1. Sees which skills are enabled for it (`agent_skills`).
-2. Calls `read_skill` to load a skill's instructions when the task matches.
-3. May call `install_skill` to enable a skill, which is permission-gated by the
-   `skill_install` family ([security](../concepts/security.md)).
+1. Sees installed skills' one-line descriptions in the system prompt.
+2. Calls `search_skills(query)` to discover the rest of the registry.
+3. Calls `read_skill` to load a matched skill's full, original instructions.
+4. May call `install_skill` first, which is permission-gated by the
+   `skill_install` family ([security](../concepts/security.md)) and downloads
+   and verifies the bundle before enabling it.
 
-This keeps the base prompt small and only pays the token cost for the skill a
-turn actually needs. `SKILL.md` files also contain "gotchas" sections that
-record tool-specific pitfalls (for example GitHub's separate `owner`/`repo`
-fields) so the agent avoids them.
+`allowed_tools` only unlocks tool discovery in the session — it never skips a
+permission check. The agent can install a skill mid-conversation; no desktop
+release is needed.
 
 ### Where to change what
 
-- Add a skill → new `Services/Skills/data/<id>/SKILL.md` plus a `skills.json`
-  entry.
+- Add or update a skill → edit `skills/<id>/SKILL.md` (verbatim) and
+  `skills/<id>/skill.json` (bump `version`), then regenerate the baseline.
 - Change enablement rules → `Services/Skills/skills.go` and `agent_skills`.
+- Change the CDN URL → `DefaultIndexURL` in `Services/Skills/skills.go` or
+  `ARGUS_SKILLS_INDEX_URL` for a staging build.
 
 ## Memory
 

@@ -1,0 +1,16 @@
+{
+  "id": "interview-kit-builder",
+  "name": "interview-kit-builder",
+  "description": "TRIGGER THIS when preparing interviews, planning hiring processes, creating interview questions, building evaluation frameworks, developing interviewer guides, or standardizing interview approaches. Builds complete interview kits with competency-based questions, scorecards, rubrics, interviewer training, and structured evaluation protocols.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Custom",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/03-human-resources/interview-kit-builder",
+  "verbatim": true
+}

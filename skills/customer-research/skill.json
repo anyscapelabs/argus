@@ -1,0 +1,16 @@
+{
+  "id": "customer-research",
+  "name": "customer-research",
+  "description": "Research customer questions by searching across documentation, knowledge bases, and connected sources, then synthesize a confidence-scored answer. Use when a customer asks a question you need to investigate, when building background on a customer situation, or when you need account context.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Anthropic KWP",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/11-customer-success/customer-research",
+  "verbatim": true
+}

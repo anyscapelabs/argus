@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/anyscapelabs/argus/Services/MCP"
@@ -44,7 +43,9 @@ type DisconnectImpactView struct {
 type ConnectorCatalogView struct {
 	ServerID     string           `json:"server_id"`
 	DisplayName  string           `json:"display_name"`
+	Category     string           `json:"category,omitempty"`
 	MultiAccount bool             `json:"multi_account"`
+	Custom       bool             `json:"custom,omitempty"`
 	Connections  []ConnectionView `json:"connections"`
 }
 
@@ -113,6 +114,23 @@ func (s *Service) ListCatalog(_ context.Context) ([]ConnectorCatalogView, error)
 		catalog[i].Connections = byServer[catalog[i].ServerID]
 		if catalog[i].Connections == nil {
 			catalog[i].Connections = []ConnectionView{}
+		}
+	}
+	// User-added servers ride the same view so the detail page can manage
+	// them. They hold no OAuth accounts, so their connection list stays empty.
+	if s.MCP != nil {
+		for _, custom := range s.MCP.ListCustomServers() {
+			if _, seen := byServer[custom.ID]; seen {
+				continue
+			}
+			catalog = append(catalog, ConnectorCatalogView{
+				ServerID:     custom.ID,
+				DisplayName:  custom.Name,
+				Category:     "Custom",
+				MultiAccount: false,
+				Custom:       true,
+				Connections:  []ConnectionView{},
+			})
 		}
 	}
 	return catalog, nil
@@ -304,6 +322,7 @@ func (s *Service) connectorCatalog() []ConnectorCatalogView {
 		out = append(out, ConnectorCatalogView{
 			ServerID:     item.ID,
 			DisplayName:  item.Name,
+			Category:     item.Category,
 			MultiAccount: true,
 			Connections:  []ConnectionView{},
 		})
@@ -374,11 +393,11 @@ func (s *Service) BuildProviderAuthURL(serverID, state, expectedEmail string) (s
 	if !ok {
 		return "", fmt.Errorf("unknown integration provider %q", serverID)
 	}
-	cid := strings.TrimSpace(os.Getenv(meta.ClientIDEnv))
+	cid := strings.TrimSpace(Shared.ConfigValue(meta.ClientIDEnv))
 	if cid == "" {
 		return "", fmt.Errorf("missing %s", meta.ClientIDEnv)
 	}
-	redir := strings.TrimRight(os.Getenv("ARGUS_PUBLIC_URL"), "/") + callbackPath
+	redir := strings.TrimRight(Shared.ConfigValue("ARGUS_PUBLIC_URL"), "/") + callbackPath
 	return MCP.BuildAuthURL(meta.AuthURL, MCP.OAuthStartOptions{
 		ClientID:      cid,
 		RedirectURI:   redir,
@@ -397,11 +416,11 @@ func (s *Service) ExchangeProviderCode(ctx context.Context, serverID, code strin
 	if !ok {
 		return "", "", "", fmt.Errorf("unknown integration provider %q", serverID)
 	}
-	redir := strings.TrimRight(os.Getenv("ARGUS_PUBLIC_URL"), "/") + callbackPath
+	redir := strings.TrimRight(Shared.ConfigValue("ARGUS_PUBLIC_URL"), "/") + callbackPath
 	form := url.Values{
 		"code":          {code},
-		"client_id":     {os.Getenv(meta.ClientIDEnv)},
-		"client_secret": {os.Getenv(meta.SecretEnv)},
+		"client_id":     {Shared.ConfigValue(meta.ClientIDEnv)},
+		"client_secret": {Shared.ConfigValue(meta.SecretEnv)},
 		"redirect_uri":  {redir},
 		"grant_type":    {"authorization_code"},
 	}

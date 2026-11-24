@@ -369,7 +369,28 @@ func (s *Service) finishConnection(r *request, ctx context.Context) error {
 		label = email
 	}
 	if label == "" {
-		label = r.view.ServerName + " account"
+		// Servers whose OAuth cannot reveal an identity (Notion, Linear, …)
+		// would otherwise label every account the same, which both breaks the
+		// unique-label index and leaves the detail page unable to tell two
+		// accounts apart. Number the defaults past whatever already exists.
+		base := strings.TrimSpace(r.view.ServerName) + " account"
+		if base == " account" {
+			base = "Account"
+		}
+		for n := 1; ; n++ {
+			candidate := base
+			if n > 1 {
+				candidate = fmt.Sprintf("%s %d", base, n)
+			}
+			exists, err := Storage.ConnectionLabelExists(db, r.view.ServerID, candidate, "")
+			if err != nil {
+				return err
+			}
+			if !exists {
+				label = candidate
+				break
+			}
+		}
 	}
 	if exists, err := Storage.ConnectionLabelExists(db, r.view.ServerID, label, r.view.ConnectionID); err != nil {
 		return err
@@ -605,12 +626,14 @@ func (s *Service) settledFromStore(agentID string) (Shared.MCPConnectRequestView
 }
 
 // Integrations lists the connectors Argus offers, with local connection state.
+// User-added custom servers follow the catalog entries so the page renders
+// them in their own group.
 func (s *Service) Integrations() []Shared.IntegrationView {
 	cat := s.catalog()
 	if cat == nil {
 		return nil
 	}
-	out := make([]Shared.IntegrationView, 0, len(cat.Items()))
+	out := make([]Shared.IntegrationView, 0, len(cat.Items())+4)
 	for _, it := range cat.Items() {
 		if it.URL == "" {
 			continue
@@ -629,10 +652,34 @@ func (s *Service) Integrations() []Shared.IntegrationView {
 			Description: it.Description,
 			Icon:        it.Icon,
 			Connected:   connected,
+			Category:    it.Category,
+			OAuthMode:   it.OAuth.Mode,
 			Tools:       it.Tools,
 		})
 	}
+	if s.MCP != nil {
+		for _, custom := range s.MCP.ListCustomServers() {
+			out = append(out, Shared.IntegrationView{
+				ID:          custom.ID,
+				Name:        custom.Name,
+				Description: customConnectDescription(custom),
+				Icon:        "/icons/custom-server.svg",
+				Connected:   s.MCP.IsCustomServerConnected(custom.ID),
+				Category:    "Custom",
+				Custom:      true,
+			})
+		}
+	}
 	return out
+}
+
+// customConnectDescription spells how a user-added server is wired, in the
+// same slot a catalog connector uses for its marketing line.
+func customConnectDescription(custom Storage.CustomMCPServer) string {
+	if custom.Transport == "stdio" {
+		return "Local command: " + custom.Command
+	}
+	return "Custom server: " + custom.URL
 }
 
 // Pending lets the frontend restore the card after a remount or reload. An

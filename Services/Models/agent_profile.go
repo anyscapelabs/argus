@@ -1,6 +1,7 @@
 package Models
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -187,4 +188,122 @@ func (s *Service) ListAgents() []Shared.AgentSummary {
 		return []Shared.AgentSummary{}
 	}
 	return agents
+}
+
+// DeleteAgent removes a teammate agent and its local data. The default agent
+// cannot be deleted. Deletion cascades through agent-scoped tables via foreign
+// keys and the database schema; callers should ensure no active run depends on
+// the agent.
+func (s *Service) DeleteAgent(id string) Shared.ActionResult {
+	if aerr := s.Core.Ready(); aerr != nil {
+		return Shared.ActionResult{Error: aerr}
+	}
+	id = strings.TrimSpace(id)
+	if id == "" || id == defaultAgentProfileID || id == Storage.GlobalMemoryAgentID {
+		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeBadInput, "This agent cannot be deleted")}
+	}
+	if err := s.Core.DB.DeleteAgentProfile(id); err != nil {
+		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+	}
+	_ = s.setAgentMutedInternal(id, false)
+	_ = s.setAgentPinnedInternal(id, false)
+	s.Core.EmitEvent(Shared.EventSlotsChanged, nil)
+	return Shared.ActionResult{Ok: true}
+}
+
+const (
+	mutedAgentsSettingKey  = "muted_agent_ids"
+	pinnedAgentsSettingKey = "pinned_agent_ids"
+)
+
+func (s *Service) ListMutedAgents() []string {
+	return s.listAgentIDSetting(mutedAgentsSettingKey)
+}
+
+func (s *Service) SetAgentMuted(id string, muted bool) Shared.ActionResult {
+	if aerr := s.Core.Ready(); aerr != nil {
+		return Shared.ActionResult{Error: aerr}
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeBadInput, "Agent id is required")}
+	}
+	if err := s.setAgentMutedInternal(id, muted); err != nil {
+		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+	}
+	return Shared.ActionResult{Ok: true}
+}
+
+func (s *Service) setAgentMutedInternal(id string, muted bool) error {
+	return s.setAgentIDSetting(mutedAgentsSettingKey, id, muted)
+}
+
+func (s *Service) ListPinnedAgents() []string {
+	return s.listAgentIDSetting(pinnedAgentsSettingKey)
+}
+
+func (s *Service) SetAgentPinned(id string, pinned bool) Shared.ActionResult {
+	if aerr := s.Core.Ready(); aerr != nil {
+		return Shared.ActionResult{Error: aerr}
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeBadInput, "Agent id is required")}
+	}
+	if err := s.setAgentPinnedInternal(id, pinned); err != nil {
+		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+	}
+	return Shared.ActionResult{Ok: true}
+}
+
+func (s *Service) setAgentPinnedInternal(id string, pinned bool) error {
+	return s.setAgentIDSetting(pinnedAgentsSettingKey, id, pinned)
+}
+
+func (s *Service) listAgentIDSetting(key string) []string {
+	if aerr := s.Core.Ready(); aerr != nil {
+		return []string{}
+	}
+	raw, _, err := s.Core.DB.GetAppSetting(key)
+	if err != nil || strings.TrimSpace(raw) == "" {
+		return []string{}
+	}
+	var ids []string
+	if err := json.Unmarshal([]byte(raw), &ids); err != nil {
+		return []string{}
+	}
+	return ids
+}
+
+func (s *Service) setAgentIDSetting(key, id string, enabled bool) error {
+	raw, _, err := s.Core.DB.GetAppSetting(key)
+	if err != nil {
+		return err
+	}
+	set := map[string]bool{}
+	if strings.TrimSpace(raw) != "" {
+		var ids []string
+		if err := json.Unmarshal([]byte(raw), &ids); err == nil {
+			for _, v := range ids {
+				v = strings.TrimSpace(v)
+				if v != "" {
+					set[v] = true
+				}
+			}
+		}
+	}
+	if enabled {
+		set[id] = true
+	} else {
+		delete(set, id)
+	}
+	out := make([]string, 0, len(set))
+	for v := range set {
+		out = append(out, v)
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return err
+	}
+	return s.Core.DB.SetAppSetting(key, string(b))
 }

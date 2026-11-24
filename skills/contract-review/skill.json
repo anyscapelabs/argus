@@ -1,0 +1,16 @@
+{
+  "id": "contract-review",
+  "name": "contract-review",
+  "description": "Review contracts against your organization's negotiation playbook, flagging deviations and generating redline suggestions. Use when reviewing vendor contracts, customer agreements, or any commercial agreement where you need clause-by-clause analysis against standard positions.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Anthropic KWP",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/06-legal-compliance/contract-review",
+  "verbatim": true
+}

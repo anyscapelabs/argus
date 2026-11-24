@@ -17,6 +17,8 @@ import {
   disconnectAccount,
   previewDisconnect,
   removeAccountBinding,
+  removeCustomServer,
+  renameAccount,
   startAccountConnection,
   upsertAccountBinding,
   type AccessLevel,
@@ -51,6 +53,12 @@ export default function IntegrationDetail({
   const integration = integrations.find((it) => it.id === integrationId)
   const connector = catalog.find((item) => item.server_id === integrationId)
   const connections = connector?.connections ?? []
+  const isCustom = !!(connector?.custom || integration?.custom)
+  // Google sign-in hands back an account email, so a label is optional there.
+  // Dynamic-OAuth servers (Notion, Linear, …) reveal no identity, and an
+  // unnamed second account cannot be told apart from the first — the label is
+  // what keeps them distinct.
+  const needsLabel = !isCustom && !!integration?.oauth_mode && integration.oauth_mode !== 'google'
   const name = integration?.name || connector?.display_name || integrationId
   const icon = integration?.icon || `/${integrationId}.png`
   const description = integration?.description
@@ -79,6 +87,12 @@ export default function IntegrationDetail({
   const [connectAccess, setConnectAccess] = useState<AccessLevel>('draft')
   const [connectBusy, setConnectBusy] = useState(false)
   const [connectError, setConnectError] = useState('')
+  const [renameTarget, setRenameTarget] = useState<IntegrationConnection | null>(null)
+  const [renameInput, setRenameInput] = useState('')
+  const [renameBusy, setRenameBusy] = useState(false)
+  const [renameError, setRenameError] = useState('')
+  const [removeOpen, setRemoveOpen] = useState(false)
+  const [removeBusy, setRemoveBusy] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const accessMenuRef = useRef<HTMLDivElement | null>(null)
   const addAgentMenuRef = useRef<HTMLDivElement | null>(null)
@@ -160,6 +174,10 @@ export default function IntegrationDetail({
     if (!connectTarget) return
     if (!connectAgent) {
       setConnectError('Choose an agent.')
+      return
+    }
+    if (needsLabel && connectTarget.mode === 'new' && !labelInput.trim()) {
+      setConnectError('Name this account — this server reveals no email, so the label is how accounts stay apart.')
       return
     }
     setConnectBusy(true)
@@ -280,6 +298,46 @@ export default function IntegrationDetail({
     }
   }
 
+  const submitRename = async () => {
+    if (!renameTarget) return
+    const label = renameInput.trim()
+    setRenameError('')
+    if (!label) {
+      setRenameError('Enter a name for the account.')
+      return
+    }
+    if (label === renameTarget.label) {
+      setRenameTarget(null)
+      return
+    }
+    setRenameBusy(true)
+    try {
+      await renameAccount(renameTarget.connection_id, label)
+      setRenameTarget(null)
+      await invalidate()
+    } catch (error) {
+      setRenameError(errorMessage(error))
+    } finally {
+      setRenameBusy(false)
+    }
+  }
+
+  const confirmRemove = async () => {
+    setRemoveBusy(true)
+    setActionError('')
+    try {
+      await removeCustomServer(integrationId)
+      setRemoveOpen(false)
+      await invalidate()
+      if (onBack) onBack()
+    } catch (error) {
+      setActionError(errorMessage(error))
+      setRemoveOpen(false)
+    } finally {
+      setRemoveBusy(false)
+    }
+  }
+
   if (!integrationsLoading && !integration && !connector) {
     return (
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-primary">
@@ -321,14 +379,25 @@ export default function IntegrationDetail({
             {description ? <span className="text-sm text-secondary">{description}</span> : null}
           </div>
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setDisconnectAllOpen(true)}
-              disabled={connections.length === 0 || busyKey === 'disconnectAll'}
-              className="cursor-pointer rounded-full border border-danger/40 px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-hover-secondary disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {busyKey === 'disconnectAll' ? 'Disconnecting…' : 'Disconnect'}
-            </button>
+            {isCustom ? (
+              <button
+                type="button"
+                onClick={() => setRemoveOpen(true)}
+                disabled={removeBusy}
+                className="cursor-pointer rounded-full border border-danger/40 px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-hover-secondary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {removeBusy ? 'Removing…' : 'Remove'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setDisconnectAllOpen(true)}
+                disabled={connections.length === 0 || busyKey === 'disconnectAll'}
+                className="cursor-pointer rounded-full border border-danger/40 px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-hover-secondary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {busyKey === 'disconnectAll' ? 'Disconnecting…' : 'Disconnect'}
+              </button>
+            )}
             <div ref={menuRef} className="relative">
               <button
                 type="button"
@@ -403,6 +472,21 @@ export default function IntegrationDetail({
           </div>
         )}
 
+        {isCustom ? (
+          <div className="rounded-xl border border-secondary p-4">
+            <h2 className="text-sm font-medium text-primary">Connection</h2>
+            <p className="mt-2 flex items-center gap-2 text-sm text-secondary">
+              {isCustom && integration?.connected ? (
+                <>
+                  <IoCheckmark size={16} className="shrink-0 text-primary" />
+                  <span>Connected — its tools are available in chat.</span>
+                </>
+              ) : (
+                <span>Not connected right now. It reconnects automatically when the server is reachable.</span>
+              )}
+            </p>
+          </div>
+        ) : (
         <div>
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -469,6 +553,19 @@ export default function IntegrationDetail({
                           Reconnect
                         </button>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRenameInput(conn.label)
+                          setRenameError('')
+                          setRenameTarget(conn)
+                        }}
+                        disabled={busyKey === `preview:${conn.connection_id}` || busyKey === 'disconnect'}
+                        aria-label={`Rename ${conn.label || conn.account_email || 'account'}`}
+                        className="shrink-0 cursor-pointer rounded-full border border-secondary px-2 py-1 text-sm font-medium text-primary transition-colors hover:bg-hover-secondary disabled:opacity-50"
+                      >
+                        Rename
+                      </button>
                       <button
                         type="button"
                         onClick={() => void requestDisconnect(conn)}
@@ -595,6 +692,7 @@ export default function IntegrationDetail({
             </div>
           )}
         </div>
+        )}
 
       </div>
 
@@ -631,7 +729,12 @@ export default function IntegrationDetail({
             </p>
             <div className="flex flex-col gap-3">
               <label className="flex flex-col gap-1 text-xs text-secondary">
-                Label <span className="text-secondary/60">(optional — e.g. “Personal”, “Work”)</span>
+                Label{' '}
+                {needsLabel ? (
+                  <span className="text-secondary">(required — e.g. “Personal”, “Work”)</span>
+                ) : (
+                  <span className="text-secondary/60">(optional — e.g. “Personal”, “Work”)</span>
+                )}
                 <input
                   autoFocus
                   value={labelInput}
@@ -640,6 +743,7 @@ export default function IntegrationDetail({
                   className="rounded-lg border border-secondary bg-primary px-3 py-2 text-sm text-primary outline-none placeholder:text-secondary focus:border-tertiary"
                 />
               </label>
+              {integration?.oauth_mode === 'google' && (
               <label className="flex flex-col gap-1 text-xs text-secondary">
                 Expected email <span className="text-secondary/60">(optional — sign-in is pinned to this account)</span>
                 <input
@@ -650,6 +754,7 @@ export default function IntegrationDetail({
                   className="rounded-lg border border-secondary bg-primary px-3 py-2 text-sm text-primary outline-none placeholder:text-secondary focus:border-tertiary"
                 />
               </label>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1 text-xs text-secondary">
                   Agent
@@ -823,6 +928,121 @@ export default function IntegrationDetail({
                 className="cursor-pointer rounded-full bg-danger px-3 py-1.5 text-sm font-medium text-danger-foreground transition-colors hover:bg-danger/80 disabled:opacity-50"
               >
                 {busyKey === 'disconnectAll' ? 'Disconnecting…' : 'Disconnect all'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {renameTarget && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
+          onMouseDown={() => !renameBusy && setRenameTarget(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Rename account"
+            className="flex w-full max-w-md flex-col gap-4 rounded-2xl border border-secondary bg-secondary p-5"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-primary">Rename account</h3>
+              <button
+                type="button"
+                onClick={() => setRenameTarget(null)}
+                disabled={renameBusy}
+                aria-label="Close"
+                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-secondary transition-colors hover:bg-hover-secondary hover:text-primary disabled:opacity-50"
+              >
+                <IoClose size={16} />
+              </button>
+            </div>
+            <p className="text-xs text-secondary">
+              The name shown for this {name} account on this machine and in agent access lists.
+            </p>
+            <label className="flex flex-col gap-1 text-xs text-secondary">
+              Label
+              <input
+                autoFocus
+                value={renameInput}
+                onChange={(e) => setRenameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !renameBusy) void submitRename()
+                }}
+                placeholder={renameTarget.account_email || 'Account label'}
+                className="rounded-lg border border-secondary bg-primary px-3 py-2 text-sm text-primary outline-none placeholder:text-secondary focus:border-tertiary"
+              />
+            </label>
+            {renameError && (
+              <p role="alert" className="text-xs text-danger">
+                {renameError}
+              </p>
+            )}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRenameTarget(null)}
+                disabled={renameBusy}
+                className="cursor-pointer rounded-full border border-tertiary px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-hover-secondary disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitRename()}
+                disabled={renameBusy}
+                className="cursor-pointer rounded-full bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground transition-colors hover:bg-hover-accent disabled:opacity-50"
+              >
+                {renameBusy ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {removeOpen && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
+          onMouseDown={() => !removeBusy && setRemoveOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Remove ${name}`}
+            className="flex w-full max-w-md flex-col gap-4 rounded-2xl border border-secondary bg-secondary p-5"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-primary">Remove {name}</h3>
+              <button
+                type="button"
+                onClick={() => setRemoveOpen(false)}
+                disabled={removeBusy}
+                aria-label="Close"
+                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-secondary transition-colors hover:bg-hover-secondary hover:text-primary disabled:opacity-50"
+              >
+                <IoClose size={16} />
+              </button>
+            </div>
+            <p className="text-sm text-secondary">
+              This forgets the server and stops its tools. Any sessions it holds are signed out.
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRemoveOpen(false)}
+                disabled={removeBusy}
+                className="cursor-pointer rounded-full border border-tertiary px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-hover-secondary disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmRemove()}
+                disabled={removeBusy}
+                className="cursor-pointer rounded-full bg-danger px-3 py-1.5 text-sm font-medium text-danger-foreground transition-colors hover:bg-danger/80 disabled:opacity-50"
+              >
+                {removeBusy ? 'Removing…' : 'Remove server'}
               </button>
             </div>
           </div>

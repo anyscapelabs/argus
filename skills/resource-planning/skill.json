@@ -1,0 +1,16 @@
+{
+  "id": "resource-planning",
+  "name": "resource-planning",
+  "description": "Plan and optimize resource allocation. Trigger with \"resource planning\", \"capacity\", \"utilization\", \"staffing plan\", \"who should work on what\", \"we're stretched thin\", or when the user needs help allocating people, budget, or time across projects and teams.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Anthropic KWP",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/07-operations/resource-planning",
+  "verbatim": true
+}

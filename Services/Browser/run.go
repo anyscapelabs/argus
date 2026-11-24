@@ -154,6 +154,8 @@ func (s *Service) run(ctx context.Context, call Call, approve Approver) Result {
 			return Result{Error: err.Error(), Elapsed: time.Since(start)}
 		}
 		return Result{OK: true, Note: note, Elapsed: time.Since(start)}
+	case "import_profile":
+		return s.importProfileAction(ctx, call, approve, start)
 	case "hide", "show":
 		if err := s.setWindow(ctx, action == "show"); err != nil {
 			return Result{Error: err.Error(), Elapsed: time.Since(start)}
@@ -319,8 +321,40 @@ func (s *Service) run(ctx context.Context, call Call, approve Approver) Result {
 		return Result{OK: true, Note: "closed the tab", Body: strings.Join(remaining, "\n"), Elapsed: time.Since(start)}
 
 	default:
-		return Result{Error: fmt.Sprintf("browser: %q is not an action I have — try open, read, find, text, click, fill, press, select, scroll, wait, back, tabs, tab_new, tab_select, tab_close, screenshot, js, hide, show, reset", action), Elapsed: time.Since(start)}
+		return Result{Error: fmt.Sprintf("browser: %q is not an action I have — try open, read, find, text, click, fill, press, select, scroll, wait, back, tabs, tab_new, tab_select, tab_close, screenshot, js, hide, show, reset, import_profile", action), Elapsed: time.Since(start)}
 	}
+}
+
+// importProfileAction is the gated path for copying the user's real Chrome
+// profile into the agent browser. It is session-level and it is personal: the
+// copy carries the user's cookies and logins, so it always asks, and a refusal
+// ends it. Running Chrome is stopped first — a profile cannot be copied safely
+// while this app's Chrome is using it.
+func (s *Service) importProfileAction(ctx context.Context, call Call, approve Approver, start time.Time) Result {
+	which := strings.TrimSpace(orDefault(call.Value, call.Text))
+	what := "your default Chrome profile"
+	if which != "" {
+		what = fmt.Sprintf("the Chrome profile %q", which)
+	}
+	if approve == nil {
+		return Result{Error: "browser: importing a Chrome profile needs the user's approval and nobody was there to ask", Elapsed: time.Since(start)}
+	}
+	allowed, reason := approve("", fmt.Sprintf(
+		"import %s into the agent's browser — it will browse with your cookies and logins from that profile", what))
+	if !allowed {
+		return Result{Error: "the user declined: " + orDefault(reason, "import the Chrome profile") +
+			". Do not retry this action or look for another way to do it", Elapsed: time.Since(start)}
+	}
+	s.mu.Lock()
+	if s.instance != nil {
+		s.stopLocked()
+	}
+	s.mu.Unlock()
+	note, err := s.importProfile(which)
+	if err != nil {
+		return Result{Error: err.Error(), Elapsed: time.Since(start)}
+	}
+	return Result{OK: true, Note: note, Elapsed: time.Since(start)}
 }
 
 // mutate is the gated path: resolve the target, ask if it looks irreversible,

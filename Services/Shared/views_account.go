@@ -30,14 +30,30 @@ type EntitlementPlan struct {
 	ID string `json:"id"`
 }
 
+// UsageLimit is one authoritative quota window reported by the router.
+type UsageLimit struct {
+	Used    int64  `json:"used"`
+	Limit   int64  `json:"limit"`
+	ResetAt string `json:"reset_at"`
+}
+
+// EntitlementsUsage carries the account's authoritative usage and limits.
+type EntitlementsUsage struct {
+	Weekly  UsageLimit `json:"weekly"`
+	Monthly UsageLimit `json:"monthly"`
+	Voice   UsageLimit `json:"voice"`
+	Search  UsageLimit `json:"search"`
+}
+
 // Entitlements is the identity + plan + allowlist trio the agent runs on.
 // The allowlist carries the router's catalog id plus display name per entry
 // so the picker shows the display name without any frontend trimming.
 type Entitlements struct {
-	User      EntitlementUser `json:"user"`
-	Plan      EntitlementPlan `json:"plan"`
-	Allowlist []AllowedModel  `json:"allowlist"`
-	Offline   bool            `json:"offline,omitempty"`
+	User      EntitlementUser    `json:"user"`
+	Plan      EntitlementPlan    `json:"plan"`
+	Allowlist []AllowedModel     `json:"allowlist"`
+	Usage     *EntitlementsUsage `json:"usage,omitempty"`
+	Offline   bool               `json:"offline,omitempty"`
 }
 
 type AllowedModel struct {

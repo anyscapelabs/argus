@@ -20,6 +20,15 @@ export function Active(): $CancellablePromise<string[] | null> {
 }
 
 /**
+ * BeginFirstRun seeds one greeting for a new default-agent conversation. It
+ * never creates a card, user turn, confirmation, or model request. Once the
+ * user replies, send adds firstRunModelPrompt and the model owns the rest.
+ */
+export function BeginFirstRun(agentID: string): $CancellablePromise<Shared$0.ActionResult> {
+    return $Call.ByID(2725617360, agentID);
+}
+
+/**
  * EndLiveSession cancels any tool or permission wait owned by a finished Live
  * call and removes its discovery state.
  */

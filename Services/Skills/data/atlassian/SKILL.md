@@ -1,6 +1,5 @@
 ---
-name: atlassian
-description: Search Jira work and Confluence knowledge.
+{"id": "atlassian", "name": "Atlassian Jira & Confluence", "description": "Search Jira issues with JQL, inspect tickets, and search/read Confluence wiki pages.", "version": "1.0.0", "connectors": ["atlassian"], "allowed_tools": [], "auto_enable": true, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Atlassian (Jira & Confluence) Workflow

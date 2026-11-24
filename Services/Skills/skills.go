@@ -1,19 +1,22 @@
 // Package Skills implements 3-level progressive Agent Skills (SKILL.md)
 // adapted to Argus's gateway tool model.
 //
-// Level 1 (Metadata): compact id + trigger description injected into system prompt.
+// Level 1 (Metadata): compact id + trigger description, either embedded in the
+// app or refreshed from a signed index on the CDN, injected into the system
+// prompt for installed skills and searchable with search_skills.
 // Level 2 (Body): exact tool chains, query hints, and gotchas loaded via read_skill.
 // Level 3 (References + Live Schemas): optional REFERENCE.md + unlocked MCP schemas.
 package Skills
 
 import (
+	"context"
 	"embed"
-	"encoding/json"
 	"fmt"
-	"io/fs"
-	"path"
+	"log"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/anyscapelabs/argus/Services/Shared"
 )
@@ -21,58 +24,116 @@ import (
 //go:embed data/skills.json data/*/SKILL.md
 var embeddedFS embed.FS
 
-type SkillMeta struct {
-	ID           string   `json:"id"`
-	Name         string   `json:"name"`
-	Description  string   `json:"description"`
-	Connectors   []string `json:"connectors"`
-	AllowedTools []string `json:"allowed_tools,omitempty"`
-	AutoEnable   bool     `json:"auto_enable"`
-}
-
-type SkillDoc struct {
-	Meta SkillMeta `json:"meta"`
-	Body string    `json:"body"`
-}
+// DefaultIndexURL is the signed skills manifest published to CloudFront.
+// ARGUS_SKILLS_INDEX_URL overrides it for staging via New.
+const DefaultIndexURL = "https://registry.anyscapelabs.com/index.json"
 
 type Service struct {
-	Core   *Shared.Core
-	loaded bool
-	metas  []SkillMeta
-	byID   map[string]SkillMeta
+	Core *Shared.Core
+
+	mu         sync.Mutex
+	store      *Store
+	buildErr   error
+	indexURL   string
+	cacheDir   string
+	appVersion string
+	cancel     context.CancelFunc
 }
 
-func (s *Service) ensureLoaded() {
-	if s.loaded {
-		return
-	}
-	s.loaded = true
-	s.byID = map[string]SkillMeta{}
-	raw, err := embeddedFS.ReadFile("data/skills.json")
+// New wires a skills service to a cache directory and signed index. Passing an
+// empty index URL keeps it offline (embedded baseline only).
+func New(core *Shared.Core, cacheDir, indexURL, appVersion string) (*Service, error) {
+	s := &Service{Core: core, cacheDir: cacheDir, indexURL: indexURL, appVersion: appVersion}
+	store, err := NewStore(cacheDir, indexURL, appVersion, func() {
+		if core != nil {
+			core.EmitEvent(Shared.EventSkillsUpdated, nil)
+		}
+	})
 	if err != nil {
+		return nil, err
+	}
+	s.store = store
+	return s, nil
+}
+
+func (s *Service) ensureStore() *Store {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.store != nil || s.buildErr != nil {
+		return s.store
+	}
+	cacheDir := s.cacheDir
+	if cacheDir == "" && s.Core != nil {
+		if dir, err := Shared.CacheDir(); err == nil {
+			cacheDir = dir
+		}
+	}
+	indexURL := s.indexURL
+	if indexURL == "" {
+		indexURL = DefaultIndexURL
+	}
+	appVersion := s.appVersion
+	if appVersion == "" {
+		appVersion = "0.0.0"
+	}
+	store, err := NewStore(cacheDir, indexURL, appVersion, func() {
+		if s.Core != nil {
+			s.Core.EmitEvent(Shared.EventSkillsUpdated, nil)
+		}
+	})
+	if err != nil {
+		s.buildErr = err
+		log.Printf("skills: registry unavailable: %v", err)
+		return nil
+	}
+	s.store = store
+	return store
+}
+
+// Start runs the background index refresh until ctx is cancelled.
+func (s *Service) Start(ctx context.Context) {
+	store := s.ensureStore()
+	if store == nil {
 		return
 	}
-	var list []SkillMeta
-	if err := json.Unmarshal(raw, &list); err != nil {
-		return
+	bg, cancel := context.WithCancel(ctx)
+	s.mu.Lock()
+	s.cancel = cancel
+	s.mu.Unlock()
+	store.StartBackground(bg)
+}
+
+func (s *Service) Stop() {
+	s.mu.Lock()
+	cancel := s.cancel
+	s.cancel = nil
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
 	}
-	s.metas = list
-	for _, m := range list {
-		s.byID[m.ID] = m
+}
+
+func (s *Service) Status() Status {
+	if store := s.ensureStore(); store != nil {
+		return store.Status()
 	}
+	return Status{Source: SourceEmbedded}
 }
 
 func (s *Service) All() []SkillMeta {
-	s.ensureLoaded()
-	out := make([]SkillMeta, len(s.metas))
-	copy(out, s.metas)
-	return out
+	store := s.ensureStore()
+	if store == nil {
+		return nil
+	}
+	return store.All()
 }
 
 func (s *Service) Get(id string) (SkillMeta, bool) {
-	s.ensureLoaded()
-	m, ok := s.byID[strings.TrimSpace(id)]
-	return m, ok
+	store := s.ensureStore()
+	if store == nil {
+		return SkillMeta{}, false
+	}
+	return store.Get(id)
 }
 
 // IsEnabled reports whether a skill is active for agentID. Built-in connector
@@ -80,7 +141,7 @@ func (s *Service) Get(id string) (SkillMeta, bool) {
 // connected or when explicitly enabled in SQLite.
 func (s *Service) IsEnabled(agentID, skillID string, connectedServers map[string]bool) bool {
 	meta, ok := s.Get(skillID)
-	if !ok {
+	if !ok || meta.Revoked {
 		return false
 	}
 	if s.Core != nil && s.Core.DB != nil {
@@ -120,48 +181,123 @@ func (s *Service) Disable(agentID, skillID string) error {
 
 func (s *Service) ReadSkill(agentID, skillID string) (SkillDoc, bool) {
 	meta, ok := s.Get(skillID)
+	if !ok || meta.Revoked {
+		return SkillDoc{}, false
+	}
+	store := s.ensureStore()
+	if store == nil {
+		return SkillDoc{}, false
+	}
+	body, ok := store.ReadBody(skillID)
 	if !ok {
-		return SkillDoc{}, false
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := store.FetchBundle(ctx, skillID); err != nil {
+			log.Printf("skills: could not fetch %s for read: %v", skillID, err)
+		}
+		body, ok = store.ReadBody(skillID)
+		if !ok {
+			return SkillDoc{}, false
+		}
 	}
-	p := path.Join("data", meta.ID, "SKILL.md")
-	raw, err := fs.ReadFile(embeddedFS, p)
-	if err != nil {
-		return SkillDoc{}, false
-	}
-	body := stripYAMLFrontmatter(string(raw))
 	return SkillDoc{Meta: meta, Body: strings.TrimSpace(body)}, true
 }
 
-// PromptBlock renders Level 1 skill summaries for the system prompt.
-// Only skills whose connectors are connected (or explicitly installed) appear
-// under "Installed skills", keeping standing token overhead ~35 tokens/skill.
-func (s *Service) PromptBlock(agentID string, connectedServers map[string]bool) string {
-	s.ensureLoaded()
-	if len(s.metas) == 0 {
-		return ""
+// Install downloads and verifies a skill's bundle before enabling it for an
+// agent. Embedded skills have no remote bundle and are enabled straight away.
+func (s *Service) Install(agentID, skillID string) error {
+	meta, ok := s.Get(skillID)
+	if !ok {
+		return fmt.Errorf("unknown skill: %s", skillID)
 	}
+	if meta.Revoked {
+		if meta.ReplacedBy != "" {
+			return fmt.Errorf("skill %s is revoked; use %s", skillID, meta.ReplacedBy)
+		}
+		return fmt.Errorf("skill %s is revoked", skillID)
+	}
+	if store := s.ensureStore(); store != nil {
+		if err := store.FetchBundle(context.Background(), skillID); err != nil {
+			return err
+		}
+	}
+	return s.Enable(agentID, skillID)
+}
+
+// Search ranks the full registry by id/name/description matches so the system
+// prompt only has to carry installed skills' one-liners.
+func (s *Service) Search(query string, limit int) []SkillMeta {
+	terms := strings.Fields(strings.ToLower(strings.TrimSpace(query)))
+	if limit <= 0 {
+		limit = 8
+	}
+	if limit > 20 {
+		limit = 20
+	}
+	type hit struct {
+		meta  SkillMeta
+		score int
+	}
+	var hits []hit
+	for _, m := range s.All() {
+		if m.Revoked {
+			continue
+		}
+		id, name, desc := strings.ToLower(m.ID), strings.ToLower(m.Name), strings.ToLower(m.Description)
+		score := 0
+		if len(terms) == 0 {
+			score = 1
+		}
+		for _, term := range terms {
+			if id == term {
+				score += 100
+			} else if strings.Contains(id, term) {
+				score += 20
+			}
+			if strings.Contains(name, term) {
+				score += 10
+			}
+			if strings.Contains(desc, term) {
+				score += 5
+			}
+		}
+		if score > 0 {
+			hits = append(hits, hit{m, score})
+		}
+	}
+	sort.Slice(hits, func(i, j int) bool {
+		if hits[i].score != hits[j].score {
+			return hits[i].score > hits[j].score
+		}
+		return hits[i].meta.ID < hits[j].meta.ID
+	})
+	out := make([]SkillMeta, 0, min(limit, len(hits)))
+	for i := 0; i < limit && i < len(hits); i++ {
+		out = append(out, hits[i].meta)
+	}
+	return out
+}
+
+// PromptBlock renders Level 1 skill summaries for the system prompt. Only
+// installed skills are listed; discovery moves to the search_skills tool so
+// the standing prompt does not grow with the registry.
+func (s *Service) PromptBlock(agentID string, connectedServers map[string]bool) string {
 	var active []SkillMeta
-	var available []string
-	for _, m := range s.metas {
+	for _, m := range s.All() {
 		if s.IsEnabled(agentID, m.ID, connectedServers) {
 			active = append(active, m)
-		} else {
-			available = append(available, m.ID)
 		}
 	}
 	sort.Slice(active, func(i, j int) bool { return active[i].ID < active[j].ID })
 
 	var b strings.Builder
-	b.WriteString("\n## Agent Skills\n")
 	if len(active) > 0 {
-		b.WriteString("Installed skills (call `read_skill(name)` FIRST when a task matches):\n")
+		b.WriteString("Skills available to read (call `read_skill(name)` when a task matches):\n")
 		for _, m := range active {
 			fmt.Fprintf(&b, "- %s: %s\n", m.ID, m.Description)
 		}
 	}
-	if len(available) > 0 {
-		fmt.Fprintf(&b, "Available skills (require `install_skill(name)` if needed): %s\n", strings.Join(available, ", "))
-	}
+	b.WriteString("Call `search_skills(query)` to discover other available skills.")
 	return strings.TrimRight(b.String(), "\n")
 }
 

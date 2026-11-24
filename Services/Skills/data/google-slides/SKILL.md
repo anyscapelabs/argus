@@ -1,6 +1,5 @@
 ---
-name: google-slides
-description: Read and summarize Google Slides presentations.
+{"id": "google-slides", "name": "Google Slides", "description": "Read and summarize Google Slides presentations.", "version": "1.0.0", "connectors": ["google-slides"], "allowed_tools": [], "auto_enable": true, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Google Slides Workflow

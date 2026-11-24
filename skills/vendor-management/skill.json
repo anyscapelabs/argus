@@ -1,0 +1,16 @@
+{
+  "id": "vendor-management",
+  "name": "vendor-management",
+  "description": "Evaluate, compare, and manage vendor relationships. Trigger with \"evaluate this vendor\", \"compare vendors\", \"vendor review\", \"should we renew\", \"RFP\", or when the user is making procurement or vendor decisions.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "w95/awesome-claude-corporate-skills",
+  "source": "Anthropic KWP",
+  "license": "MIT",
+  "source_url": "https://github.com/w95/awesome-claude-corporate-skills/tree/main/07-operations/vendor-management",
+  "verbatim": true
+}

@@ -1,6 +1,5 @@
 ---
-name: context7
-description: Fetch current library documentation and code examples via Context7.
+{"id": "context7", "name": "Context7", "description": "Resolve library IDs and fetch up-to-date API documentation and code examples.", "version": "1.0.0", "connectors": ["context7"], "allowed_tools": [], "auto_enable": true, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Context7 Workflow

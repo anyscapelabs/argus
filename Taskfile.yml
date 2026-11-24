@@ -35,7 +35,10 @@ tasks:
       - task: "{{.GOOS}}:run"
 
   dev:
-    summary: Runs the application in development mode
+    summary: Runs the application in development mode (loads ./.env for OAuth client ids)
+    env:
+      # Dev only: lets Shared.ConfigValue read ./.env. Packaged builds never set this.
+      ARGUS_LOAD_DOTENV: "1"
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 

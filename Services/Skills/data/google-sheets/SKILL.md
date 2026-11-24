@@ -1,6 +1,5 @@
 ---
-name: google-sheets
-description: Read and update Google Sheets spreadsheets.
+{"id": "google-sheets", "name": "Google Sheets", "description": "Read ranges, append rows, and update cells in Google Sheets spreadsheets.", "version": "1.0.0", "connectors": ["google-sheets"], "allowed_tools": [], "auto_enable": true, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Google Sheets Workflow

@@ -5,20 +5,23 @@ import { openDashboard } from '../domains/account/api'
 const PLAN_FEATURES: Record<string, string[]> = {
   free: [
     'Core chat and agent tools',
-    'Access to available models',
+    '100 requests per day',
     'Integrations and browser use',
-    'Standard usage limits',
+    'Add prepaid credits anytime',
   ],
-  pro: [
+  starter: [
     'Everything in Free',
-    'Higher usage limits',
+    '500 requests per day',
     'Expanded model access',
-    'Priority support',
   ],
-  team: [
-    'Everything in Pro',
-    'Team collaboration features',
-    'Shared workspaces and controls',
+  max: [
+    'Everything in Starter',
+    '2,000 requests per day',
+    'Full model access',
+  ],
+  'max-plus': [
+    'Everything in Max',
+    '4,000 requests per day',
     'Priority support',
   ],
 }
@@ -26,7 +29,7 @@ const PLAN_FEATURES: Record<string, string[]> = {
 function featuresForPlan(plan: string): string[] {
   return PLAN_FEATURES[plan.toLowerCase()] ?? [
     'Core chat and agent tools',
-    'Access to available models',
+    '100 requests per day',
     'Integrations and browser use',
   ]
 }
@@ -57,7 +60,7 @@ export default function Billing() {
           </div>
           <button
             type="button"
-            onClick={() => void openDashboard('/console/billing')}
+            onClick={() => void openDashboard('/console/settings/billing')}
             className="w-fit cursor-pointer rounded-full bg-accent px-4 py-1.5 text-sm font-medium text-accent-foreground transition-colors hover:opacity-90"
           >
             Upgrade

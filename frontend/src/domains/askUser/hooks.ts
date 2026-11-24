@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Events } from '@wailsio/runtime'
+import { useQueryClient } from '@tanstack/react-query'
 import { pendingAskUsers, respondAskUser, type AskUserRequestView } from './api'
 
 export function useAskUserFlow(agentID: string) {
+  const qc = useQueryClient()
   const [request, setRequest] = useState<AskUserRequestView | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string>()
@@ -40,6 +42,9 @@ export function useAskUserFlow(agentID: string) {
     setError(undefined)
     try {
       await respondAskUser(request.request_id, value)
+      // The answer is persisted as a settled card; refresh so it replaces the
+      // live card at once instead of waiting for the next event burst.
+      void qc.invalidateQueries({ queryKey: ['chat', agentID, 'history'] })
     } catch (err) {
       setError((err as Error).message)
       setSubmitting(false)

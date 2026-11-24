@@ -69,6 +69,31 @@ task build
 
 Platform-specific packaging/build behavior is defined under `build/` and the included Taskfiles (`build/windows`, `build/darwin`, `build/linux`, `build/ios`, `build/android`).
 
+## Code signing and notarization
+
+`.github/workflows/build.yml` signs and notarizes when the repository secrets
+below are set; without them it still produces unsigned artifacts, so forks and
+pull requests build fine.
+
+| Secret | Platform | Purpose |
+|---|---|---|
+| `MACOS_CERTIFICATE_BASE64` | macOS | Developer ID Application certificate exported as `.p12`, base64-encoded |
+| `MACOS_CERTIFICATE_PASSWORD` | macOS | Password for that `.p12` |
+| `MACOS_SIGNING_IDENTITY` | macOS | Full identity name, e.g. `Developer ID Application: Anyscape Labs PLC (TEAMID)` |
+| `MACOS_NOTARY_APPLE_ID` | macOS | Apple ID submitted to `notarytool` |
+| `MACOS_NOTARY_TEAM_ID` | macOS | Apple Developer team id |
+| `MACOS_NOTARY_PASSWORD` | macOS | App-specific password for `notarytool` |
+| `WINDOWS_CERTIFICATE_BASE64` | Windows | Authenticode code-signing certificate exported as `.pfx`, base64-encoded |
+| `WINDOWS_CERTIFICATE_PASSWORD` | Windows | Password for that `.pfx` |
+
+The macOS job imports the certificate into a temporary keychain, signs the
+`.app` with hardened runtime and `build/darwin/entitlements.plist`, signs the
+DMG, then notarizes and staples both. The Windows job signs the executable and
+the NSIS installer with `signtool` from the Windows SDK.
+
+MSIX packages need a certificate whose publisher CN matches the manifest:
+`task windows:package FORMAT=msix CERT_PATH=path/to.pfx PUBLISHER="CN=Anyscape Labs PLC"`.
+
 ## Tests
 
 Run both suites from the repo root:
@@ -116,7 +141,7 @@ These are build-time values. At runtime, model traffic follows the gateway/backe
 
 ### Backend/development environment
 
-- `ARGUS_LOAD_DOTENV=1` — opt-in. Allows loading `.env` files for local OAuth client IDs/secrets during development (for MCP connectors). Keep this off in packaged builds.
+- `ARGUS_LOAD_DOTENV=1` — opt-in. Allows loading `.env` files for local OAuth client IDs/secrets during development (for MCP connectors). `task dev` sets it for you; copy `.env.example` to `.env` and fill in the GitHub/Google client IDs. If you launch the app another way, export it yourself. Keep this off in packaged builds.
 - `ARGUS_BROWSER_PROFILE_DIR` — optional base directory override for the Argus browser profile (the app uses a `browser` subdirectory under it).
 
 ## Local data locations

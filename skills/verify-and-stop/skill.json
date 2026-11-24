@@ -1,0 +1,16 @@
+{
+  "id": "verify-and-stop",
+  "name": "verify-and-stop",
+  "description": "Prove existing work meets acceptance conditions without expanding scope. Use for validation-only tasks, completion checks, focused gate runs, and last-mile proof.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "JuliusBrussee/caveman",
+  "source": "JuliusBrussee/caveman",
+  "license": "Apache-2.0 / MIT",
+  "source_url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/verify-and-stop",
+  "verbatim": true
+}

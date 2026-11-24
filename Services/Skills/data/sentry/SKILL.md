@@ -1,6 +1,5 @@
 ---
-name: sentry
-description: Monitor errors and summarize application health in Sentry.
+{"id": "sentry", "name": "Sentry", "description": "Inspect Sentry organizations, projects, production errors, stacktraces, and issue health.", "version": "1.0.0", "connectors": ["sentry"], "allowed_tools": [], "auto_enable": true, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Sentry Workflow

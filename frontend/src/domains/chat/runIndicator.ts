@@ -13,6 +13,7 @@ export type RunIndicator = {
   status: string | null
   chip: { favicon: string; title: string } | null
   runActive: boolean
+  runID: string | null
   setRunActive: (v: boolean) => void
   beginThink: () => void
   statusLineRef: React.RefObject<StatusLine | null>
@@ -26,6 +27,7 @@ export function useRunIndicator(
 ): RunIndicator {
   const [status, setStatus] = useState<string | null>(null)
   const [runActive, setRunActive] = useState(false)
+  const [runID, setRunID] = useState<string | null>(null)
   const statusLineRef = useRef<StatusLine | null>(null)
   const [searchSources, setSearchSources] = useState<{ host: string; title: string }[]>([])
   const [sourceIdx, setSourceIdx] = useState(0)
@@ -112,6 +114,11 @@ export function useRunIndicator(
         clearTerminalWait()
         line.set('Thinking…', 'label')
       }),
+      Events.On('chat:run_started', (event: any) => {
+        const payload = (event?.data ?? event) as { agent_id?: string; run_id?: string } | undefined
+        if (payload?.agent_id && payload.agent_id !== agentID) return
+        setRunID(payload?.run_id ?? null)
+      }),
       Events.On('chat:message', (event: any) => {
         const payload = (event?.data ?? event) as { agent_id?: string } | undefined
         void invalidate(agentsKey)
@@ -147,6 +154,7 @@ export function useRunIndicator(
           setSearchSources([])
           setBrowsing(null)
           line.reset()
+          setRunID(null)
           setRunActive(false)
         })
       }),
@@ -185,5 +193,5 @@ export function useRunIndicator(
     statusLineRef.current?.set('Thinking…', 'label')
   }
 
-  return { status, chip, runActive, setRunActive, beginThink, statusLineRef }
+  return { status, chip, runActive, runID, setRunActive, beginThink, statusLineRef }
 }

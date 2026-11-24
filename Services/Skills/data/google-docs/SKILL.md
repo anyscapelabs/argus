@@ -1,6 +1,5 @@
 ---
-name: google-docs
-description: Read and edit Google Docs documents.
+{"id": "google-docs", "name": "Google Docs", "description": "Read, create, and edit Google Docs documents.", "version": "1.0.0", "connectors": ["google-docs"], "allowed_tools": [], "auto_enable": true, "min_app_version": "", "channel": "stable", "publisher": "argus"}
 ---
 
 # Google Docs Workflow

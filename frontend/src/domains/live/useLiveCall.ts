@@ -22,7 +22,7 @@ const outputRate = 24000
 // (re)starts from silence. Chunks arrive over a websocket with uneven timing; with
 // no lead, a chunk that lands a few milliseconds late leaves a hole in the
 // speech — heard as a word clipped off mid-sentence.
-const playbackLeadSec = 0.15
+const playbackLeadSec = 0.3
 // echoGuardTailSec keeps the mic guard up briefly after the model stops
 // speaking, so the room's reverb of its last words is not heard as the user.
 const echoGuardTailSec = 0.3
@@ -286,6 +286,7 @@ export function useLiveCall({ agentID = 'default' }: UseLiveCallOptions = {}) {
       }
       const sc = frame.serverContent
       if (sc?.interrupted) {
+        console.warn('[voice] model reply interrupted by server')
         flushAudio()
       }
       // Transcription fragments. Google streams the words as they are spoken;

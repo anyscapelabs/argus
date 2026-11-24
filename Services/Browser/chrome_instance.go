@@ -86,7 +86,10 @@ func start(ctx context.Context, headless bool) (*instance, error) {
 		"--disable-features=Translate",
 		"--window-size=1280,900",
 		"--window-position=80,80",
-		"--lang=en-US",
+		// No --lang. A forced locale makes Accept-Language disagree with the
+		// machine's own settings, and a site that compares the two — or compares
+		// either against the IP's country — sees an automated visitor. Chrome's
+		// default language matches the machine, which matches the user.
 	}
 	if headless {
 		args = append(args, "--headless=new", "--disable-gpu")

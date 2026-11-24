@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/anyscapelabs/argus/Protocol"
-	"github.com/anyscapelabs/argus/Services/Permission"
 	"github.com/anyscapelabs/argus/Services/Shared"
 	"github.com/anyscapelabs/argus/Services/Skills"
 )
@@ -20,12 +19,13 @@ func gatewayToolDefs() []Protocol.ToolDef {
 		liveInvokeToolDef,
 		liveReadSkillDef,
 		liveInstallSkillDef,
+		liveSearchSkillsDef,
 	}
 }
 
 func isGatewayMetaTool(name string) bool {
 	switch name {
-	case liveSearchToolsDef.Name, liveInvokeToolDef.Name, liveReadSkillDef.Name, liveInstallSkillDef.Name:
+	case liveSearchToolsDef.Name, liveInvokeToolDef.Name, liveReadSkillDef.Name, liveInstallSkillDef.Name, liveSearchSkillsDef.Name:
 		return true
 	default:
 		return false
@@ -55,6 +55,10 @@ func (s *Service) runTypedGatewayTool(
 			return result(found.Error.Message, true), ""
 		}
 		return result(found.Output, found.IsError), ""
+	}
+	if outer.Name == liveSearchSkillsDef.Name {
+		res := s.searchSkillsGateway(agentID, outer.Input)
+		return result(res.Output, res.IsError), ""
 	}
 	if outer.Name == liveReadSkillDef.Name {
 		res := s.readSkillGateway(agentID, discovered, outer.Input)
@@ -112,6 +116,44 @@ func (s *Service) skillsPromptBlock(agentID string, withTools bool) string {
 	return reg.PromptBlock(agentID, s.connectedServerSet(agentID))
 }
 
+// searchSkillsGateway ranks the full signed index without touching permissions:
+// it only returns Level-1 one-liners and install state.
+func (s *Service) searchSkillsGateway(agentID, argsJSON string) Shared.LiveToolResult {
+	reg := s.skillsRegistry()
+	if reg == nil {
+		return Shared.LiveToolResult{Output: "skills service unavailable", IsError: true}
+	}
+	var input struct {
+		Query string `json:"query"`
+		Limit int    `json:"limit"`
+	}
+	if err := json.Unmarshal([]byte(argsJSON), &input); err != nil {
+		return Shared.LiveToolResult{Output: "invalid search_skills arguments", IsError: true}
+	}
+	if input.Limit <= 0 {
+		input.Limit = 8
+	}
+	matches := reg.Search(input.Query, input.Limit)
+	if len(matches) == 0 {
+		return Shared.LiveToolResult{Output: "No matching skills. Try broader keywords, e.g. 'email', 'calendar', 'writing'."}
+	}
+	connected := s.connectedServerSet(agentID)
+	var b strings.Builder
+	b.WriteString("Matching skills (call read_skill to load a workflow):\n")
+	for _, m := range matches {
+		state := "available"
+		if reg.IsEnabled(agentID, m.ID, connected) {
+			state = "installed"
+		}
+		version := m.Version
+		if version == "" {
+			version = "embedded"
+		}
+		fmt.Fprintf(&b, "- %s [%s, v%s] (%s): %s\n", m.ID, m.Name, version, state, m.Description)
+	}
+	return Shared.LiveToolResult{Output: strings.TrimRight(b.String(), "\n")}
+}
+
 // readSkillGateway loads Level-2 SKILL.md instructions and unlocks the skill's
 // declared tools + live MCP schemas into `discovered` so weak models can call
 // invoke_tool directly without an extra search_tools round-trip.
@@ -133,7 +175,7 @@ func (s *Service) readSkillGateway(agentID string, discovered map[string]bool, a
 	doc, ok := reg.ReadSkill(agentID, id)
 	if !ok {
 		return Shared.LiveToolResult{
-			Output:  "skill not found or not enabled: " + id + ". Check Installed skills or call install_skill first.",
+			Output:  "skill not found: " + id + ". Use search_skills to find available skills.",
 			IsError: true,
 		}
 	}
@@ -193,17 +235,8 @@ func (s *Service) installSkillGateway(ctx context.Context, agentID, agentName, a
 	if !ok {
 		return Shared.LiveToolResult{Output: "unknown skill: " + id, IsError: true}
 	}
-	if s.Permissions != nil {
-		decision, err := Permission.Request(ctx, s.Permissions, agentID, agentName, Permission.SkillInstallTool, meta.ID+" ("+meta.Name+")")
-		if err != nil {
-			return Shared.LiveToolResult{Output: "permission check failed: " + err.Error(), IsError: true}
-		}
-		if decision == Permission.Deny {
-			return Shared.LiveToolResult{Output: "user denied installing skill " + meta.ID, IsError: true}
-		}
-	}
-	if err := reg.Enable(agentID, meta.ID); err != nil {
-		return Shared.LiveToolResult{Output: "could not enable skill: " + err.Error(), IsError: true}
+	if err := reg.Install(agentID, meta.ID); err != nil {
+		return Shared.LiveToolResult{Output: "could not install skill: " + err.Error(), IsError: true}
 	}
 	return Shared.LiveToolResult{Output: "Skill \"" + meta.ID + "\" installed and enabled. Call read_skill(\"" + meta.ID + "\") to load its instructions."}
 }

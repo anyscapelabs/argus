@@ -27,7 +27,7 @@ type toolBuf struct {
 }
 
 func Collect(seq iter.Seq[Event]) Result {
-	c := &collector{tool: map[int]*toolBuf{}}
+	c := &collector{msg: Message{Role: RoleAssistant}, tool: map[int]*toolBuf{}}
 	c.collect(seq)
 	c.trim()
 	return Result{Message: c.msg, Usage: c.usage, Stop: c.lastStop, Error: c.err}

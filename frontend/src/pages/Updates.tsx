@@ -1,65 +1,77 @@
-import { useState } from 'react'
-import { IoCheckmarkCircle, IoRefresh } from 'react-icons/io5'
+import { GoArrowUpRight } from 'react-icons/go'
+import { FALLBACK_VERSION } from '../domains/updater/api'
+import { useCheckForUpdate, useInstallUpdate, useUpdateStatus } from '../domains/updater/hooks'
 
 export default function Updates() {
-  const [checking, setChecking] = useState(false)
-  const [lastChecked, setLastChecked] = useState<string | null>(null)
-
-  const handleCheck = () => {
-    if (checking) return
-    setChecking(true)
-    setTimeout(() => {
-      setChecking(false)
-      setLastChecked(new Date().toLocaleString())
-    }, 1200)
-  }
+  const { data: status } = useUpdateStatus()
+  const check = useCheckForUpdate()
+  const update = useInstallUpdate()
+  const version = status?.current || FALLBACK_VERSION
+  const hasUpdate = status?.available ?? false
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-primary">
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 pb-8">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-medium text-primary">Updates</h1>
-          <p className="text-sm text-secondary">Check for updates and see version information.</p>
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
+      <div className="mx-auto w-full max-w-3xl">
+        <h1 className="text-2xl font-medium text-primary">This App</h1>
+        <p className="mt-2 text-sm text-secondary">Updates and help for this app</p>
+        <h2 className="mt-6 text-lg text-primary">Updates</h2>
+        <div className="mt-2 flex items-center justify-between gap-4 rounded-lg border border-primary p-4">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-primary">Argus Agent {version}</p>
+            <p className="mt-0.5 text-xs text-secondary">
+              {hasUpdate ? 'Updates available' : 'You are on the latest version known'}
+            </p>
+          </div>
+          {hasUpdate ? (
+            <button
+              type="button"
+              className="shrink-0 rounded-full bg-accent px-4 py-1.5 text-sm text-accent-foreground hover:opacity-90"
+              onClick={() => update.mutate()}
+            >
+              Update
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="shrink-0 rounded-full bg-accent px-4 py-1.5 text-sm text-accent-foreground hover:opacity-90"
+              onClick={() => check.mutate()}
+            >
+              Check for update
+            </button>
+          )}
         </div>
-
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-4 rounded-xl border border-primary px-3 py-2">
-            <div className="flex flex-col gap-1">
-              <span className="text-sm font-medium text-primary">Current version</span>
-              <span className="text-sm text-secondary">
-                <span className="font-mono text-primary">0.1.0</span>
-              </span>
+        <h2 className="mt-6 text-lg text-primary">Help</h2>
+        <div className="mt-2 overflow-hidden rounded-lg border border-primary">
+          <button type="button" className="flex w-full items-center justify-between px-4 py-3 text-left text-sm text-primary hover:bg-hover-primary">
+            <span>Help Center</span>
+            <GoArrowUpRight size={16} className="text-secondary" />
+          </button>
+          <div className="border-t border-primary" />
+          <button type="button" className="flex w-full items-center justify-between px-4 py-3 text-left text-sm text-primary hover:bg-hover-primary">
+            <span>Send feedback</span>
+            <GoArrowUpRight size={16} className="text-secondary" />
+          </button>
+          <div className="border-t border-primary" />
+          <div className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm text-primary hover:bg-hover-primary">
+            <div className="min-w-0">
+              <div>Logs and Diagnostics</div>
+              <div className="mt-0.5 text-xs text-secondary">View logs and run diagnostics</div>
             </div>
             <button
               type="button"
-              onClick={handleCheck}
-              disabled={checking}
-              className="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-secondary bg-secondary px-2 py-1 text-sm font-medium text-primary transition-colors hover:bg-hover-secondary disabled:cursor-not-allowed disabled:opacity-50"
+              className="shrink-0 rounded-full border border-primary px-3 py-1.5 text-sm text-primary hover:bg-hover-primary"
+              onClick={() => {
+                // TODO: fetch logs from DB and download as JSON
+              }}
             >
-              <IoRefresh size={14} className={checking ? 'animate-spin' : ''} />
-              {checking ? 'Checking…' : 'Check for updates'}
+              Export
             </button>
           </div>
-
-          <div className="rounded-xl border border-primary px-3 py-2">
-            <div className="flex items-start gap-2">
-              <IoCheckmarkCircle size={18} className="mt-0.5 shrink-0 text-success" />
-              <div className="flex flex-col gap-1">
-                <span className="text-sm font-medium text-primary">You’re up to date</span>
-                <span className="text-sm text-secondary">
-                  Argus 0.1.0 is the latest version.
-                  {lastChecked ? ` Last checked ${lastChecked}.` : ''}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <h2 className="text-sm font-medium text-primary">What’s new</h2>
-          <div className="rounded-xl border border-primary p-4">
-            <p className="text-sm text-secondary">Release notes for this version will appear here.</p>
-          </div>
+          <div className="border-t border-primary" />
+          <button type="button" className="flex w-full items-center justify-between px-4 py-3 text-left text-sm text-primary hover:bg-hover-primary">
+            <span>About Argus Agent</span>
+            <GoArrowUpRight size={16} className="text-secondary" />
+          </button>
         </div>
       </div>
     </div>

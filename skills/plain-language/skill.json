@@ -1,0 +1,15 @@
+{
+  "id": "plain-language",
+  "name": "Plain Language",
+  "description": "Rewrite expert or dense text into clear everyday language while keeping technical precision. Use when asked to simplify jargon, explain something simply, make text readable, or translate legal, technical, or academic prose for a general audience.",
+  "version": "1.0.0",
+  "connectors": [],
+  "allowed_tools": [],
+  "auto_enable": false,
+  "min_app_version": "",
+  "channel": "stable",
+  "publisher": "argus",
+  "source": "argus-original",
+  "license": "MIT",
+  "verbatim": false
+}

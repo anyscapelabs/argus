@@ -45,6 +45,8 @@ reference copy and link to it from everywhere else.
   durable routines and reminders, unattended runs, recovery.
 - [Skills and memory](guides/skills-and-memory.md) —
   progressive skill loading and the structured memory system.
+- [Releases and secrets](guides/releases-and-secrets.md) —
+  where signing keys live, and how a tagged release is published.
 
 ## Reference
 
