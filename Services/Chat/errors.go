@@ -22,23 +22,22 @@ func messageIsOpaqueProviderError(e *Protocol.Error) bool {
 	if msg == "" {
 		return true
 	}
-	if msg == "provider returned error" {
-		return true
-	}
 	// OpenRouter's catch-all: "Provider returned error" with a raw of
 	// "ERROR" means the hidden backend failed without explanation.
-	if msg == "error" || msg == "internal error" {
+	// The argus-router masks upstream failures as an error chunk over an
+	// HTTP 200 (type invalid_request_error) using several different generic
+	// messages. None of them names an actionable problem, so they all get
+	// the same single retry as the other catch-alls.
+	switch msg {
+	case "provider returned error", "error", "internal error",
+		"an error has occurred. try again later.",
+		"sorry, something went wrong connecting to the model. please try again.",
+		"the provider had an internal error. try again shortly",
+		"the provider is overloaded. try again shortly",
+		"the provider returned an error":
 		return true
 	}
-	// The argus-router masks every upstream rejection as this one message and
-	// streams it as an error chunk over an HTTP 200 (its type arrives as
-	// invalid_request_error), so a transient upstream failure is otherwise
-	// indistinguishable from a request we got wrong. The user can act on
-	// neither, so it gets the same single retry as the other catch-alls.
-	if msg == "an error has occurred. try again later." {
-		return true
-	}
-	if strings.Contains(msg, "upstream provider rejected") {
+	if strings.Contains(msg, "upstream provider rejected") || strings.Contains(msg, "provider returned error") {
 		return true
 	}
 	return false
@@ -64,10 +63,11 @@ func publicErrorMessage(code, message string) string {
 }
 
 // retryDelay honors the provider's Retry-After when present, otherwise backs
-// off exponentially (2s, 4s).
+// off exponentially (2s, 4s). The adapters store RetryAfter in milliseconds,
+// so it must be converted back with time.Millisecond here.
 func retryDelay(err *Protocol.Error, tries int) time.Duration {
 	if err.RetryAfter > 0 {
-		d := time.Duration(err.RetryAfter) * time.Second
+		d := time.Duration(err.RetryAfter) * time.Millisecond
 		if d > 90*time.Second {
 			d = 90 * time.Second
 		}

@@ -9,7 +9,7 @@ import (
 
 const service = "argus"
 
-// AccountKeyRef is the keyring ref for the argus_pk_ service-account key.
+// AccountKeyRef is the keyring ref for the asp_live service-account key.
 // The router provider authenticates with this key, not a per-provider one.
 const AccountKeyRef = "account/key"
 

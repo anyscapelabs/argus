@@ -94,7 +94,7 @@ export default function Onboarding({ onBack, onAuthenticated }: OnboardingProps)
                 disabled={busy}
                 value={key}
                 onChange={(e) => setKey(e.target.value)}
-                placeholder="argus_pk_..."
+                placeholder="asp_live..."
                 className="min-w-0 flex-1 bg-transparent font-mono text-sm text-primary placeholder:text-grey-500 focus:outline-none disabled:opacity-50"
               />
 

@@ -17,7 +17,7 @@ import * as Shared$0 from "../Shared/models.js";
 
 /**
  * ListProviders returns the single argus-router provider. There is no BYO
- * provider management anymore: pairing an argus_pk_ key (Services/Account)
+ * provider management anymore: pairing an asp_live key (Services/Account)
  * is what connects the router.
  */
 export function ListProviders(): $CancellablePromise<Shared$0.ProviderView[] | null> {

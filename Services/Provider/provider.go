@@ -19,7 +19,7 @@ func (s *Service) ServiceStartup(ctx context.Context, options application.Servic
 }
 
 // ListProviders returns the single argus-router provider. There is no BYO
-// provider management anymore: pairing an argus_pk_ key (Services/Account)
+// provider management anymore: pairing an asp_live key (Services/Account)
 // is what connects the router.
 func (s *Service) ListProviders() []Shared.ProviderView {
 	out := []Shared.ProviderView{}

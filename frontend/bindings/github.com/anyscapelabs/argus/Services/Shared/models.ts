@@ -257,25 +257,6 @@ export interface EntitlementUser {
 }
 
 /**
- * UsageLimit is one authoritative quota window reported by the router.
- */
-export interface UsageLimit {
-    "used": number;
-    "limit": number;
-    "reset_at": string;
-}
-
-/**
- * EntitlementsUsage carries the account's authoritative usage and limits.
- */
-export interface EntitlementsUsage {
-    "weekly": UsageLimit;
-    "monthly": UsageLimit;
-    "voice": UsageLimit;
-    "search": UsageLimit;
-}
-
-/**
  * Entitlements is the identity + plan + allowlist trio the agent runs on.
  * The allowlist carries the router's catalog id plus display name per entry
  * so the picker shows the display name without any frontend trimming.
@@ -286,6 +267,16 @@ export interface Entitlements {
     "allowlist": AllowedModel[] | null;
     "usage"?: EntitlementsUsage | null;
     "offline"?: boolean;
+}
+
+/**
+ * EntitlementsUsage carries the account's authoritative usage and limits.
+ */
+export interface EntitlementsUsage {
+    "weekly": UsageLimit;
+    "monthly": UsageLimit;
+    "voice": UsageLimit;
+    "search": UsageLimit;
 }
 
 /**
@@ -769,6 +760,15 @@ export interface TakeoverRequestView {
     "page_title"?: string;
     "state": string;
     "created_at": number;
+}
+
+/**
+ * UsageLimit is one authoritative quota window reported by the router.
+ */
+export interface UsageLimit {
+    "used": number;
+    "limit": number;
+    "reset_at": string;
 }
 
 export interface UsageResult {

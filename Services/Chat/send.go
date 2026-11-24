@@ -35,6 +35,22 @@ const maxToolRounds = 250
 // blip otherwise.
 const maxModelRetries = 2
 
+// maxOpaqueRetries is the single extra attempt for an upstream failure the
+// gateway masked as an opaque bad_input error over HTTP 200. It stacks on top
+// of maxModelRetries so a genuine 502 that got masked still gets a second
+// look, while a real bad request still surfaces instead of spinning.
+const maxOpaqueRetries = 1
+
+// maxToolCallRecovery bounds the retry for a stream that ended on a tool_calls
+// stop without a usable tool call (the call was cut off before its name or
+// arguments arrived). One resend covers a mid-stream cutoff; a model that
+// keeps emitting unusable calls should end the turn instead of looping.
+const maxToolCallRecovery = 1
+
+const toolCallRecoveryDirective = "Your last response ended with a tool call that did not arrive intact — " +
+	"no complete tool call was received. Resend the tool call in full with its name and arguments, " +
+	"or, if you cannot, reply with plain text instead."
+
 // wrapUpDirective is injected as a final user turn when a run has to stop
 // early (round backstop or a repeating loop), so the run ends with an honest
 // summary instead of a canned lie.
