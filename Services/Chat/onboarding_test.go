@@ -50,8 +50,8 @@ func TestAgentNameToolRejectsUnattended(t *testing.T) {
 	}
 }
 
-// The app authors exactly one first-run row. The user can type immediately;
-// every later onboarding message comes from the model.
+// The app authors the greeting and exactly one first-run onboarding card;
+// every later step is driven by the app, not the model.
 func TestBeginFirstRunSeedsOnlyGreeting(t *testing.T) {
 	s, db := newVoiceTestService(t)
 
@@ -69,8 +69,11 @@ func TestBeginFirstRunSeedsOnlyGreeting(t *testing.T) {
 	if state, seen, _ := db.GetAppSetting(firstRunSettingKey); !seen || state != firstRunStatePending {
 		t.Fatalf("onboarding state = %q seen=%v, want %q", state, seen, firstRunStatePending)
 	}
-	if list := s.PendingAskUser("default"); list.Error != nil || len(list.Requests) != 0 {
-		t.Fatalf("seeded onboarding created an ask_user card: %+v", list)
+	if list := s.PendingAskUser("default"); list.Error != nil || len(list.Requests) != 1 {
+		t.Fatalf("seeded onboarding did not create exactly one ask_user card: %+v", list)
+	}
+	if step, seen, _ := db.GetAppSetting(onboardingStepKey); !seen || step != onboardingStepName {
+		t.Fatalf("onboarding step = %q seen=%v, want %q", step, seen, onboardingStepName)
 	}
 
 	// A re-mount must not seed another greeting.
@@ -84,8 +87,8 @@ func TestBeginFirstRunSeedsOnlyGreeting(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Fatalf("retry seeded a duplicate row: %d messages", len(msgs))
 	}
-	if list := s.PendingAskUser("default"); len(list.Requests) != 0 {
-		t.Fatalf("retry created a card: %+v", list)
+	if list := s.PendingAskUser("default"); len(list.Requests) != 1 {
+		t.Fatalf("retry created a duplicate card: %+v", list)
 	}
 	seq, err := db.NextSeq("default")
 	if err != nil {

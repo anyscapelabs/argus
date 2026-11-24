@@ -16,6 +16,16 @@ const (
 	firstRunSettingKey   = "onboarding_default_greeted"
 	firstRunStatePending = "pending"
 	firstRunStateDone    = "1"
+	onboardingDrivenKey  = "onboarding_app_driven"
+	onboardingStepKey    = "onboarding_default_step"
+)
+
+const (
+	onboardingStepName    = "name"
+	onboardingStepRole    = "role"
+	onboardingStepUser    = "user"
+	onboardingStepConnect = "connect"
+	onboardingStepDone    = "done"
 )
 
 // firstRunGreeting is the only app-authored onboarding message. Every later
@@ -61,6 +71,10 @@ func (s *Service) firstRunPending(agentID string) bool {
 	if agentID != "default" {
 		return false
 	}
+	driven, seen, err := s.Core.DB.GetAppSetting(onboardingDrivenKey)
+	if err == nil && seen && driven == "1" {
+		return false
+	}
 	state, seen, err := s.Core.DB.GetAppSetting(firstRunSettingKey)
 	return err == nil && seen && state == firstRunStatePending
 }
@@ -96,9 +110,26 @@ func (s *Service) BeginFirstRun(agentID string) Shared.ActionResult {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
 	if seen && state == firstRunStateDone {
+		step, stepSeen, stepErr := s.Core.DB.GetAppSetting(onboardingStepKey)
+		if stepErr == nil && stepSeen && step != onboardingStepDone {
+			go s.runOnboardingSequence(agentID)
+		}
 		return Shared.ActionResult{Ok: true}
 	}
 	if seen && state == firstRunStatePending {
+		driven, drivenSeen, drivenErr := s.Core.DB.GetAppSetting(onboardingDrivenKey)
+		if drivenErr == nil && drivenSeen && driven == "1" {
+			go s.runOnboardingSequence(agentID)
+			return Shared.ActionResult{Ok: true}
+		}
+		if err := s.Core.DB.SetAppSetting(onboardingDrivenKey, "1"); err != nil {
+			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+		}
+		if err := s.Core.DB.SetAppSetting(onboardingStepKey, onboardingStepName); err != nil {
+			return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+		}
+		s.openOnboardingCard(agentID, "What would you like to call me?", []string{"Argus", "Atlas", "Sage", "Juno"})
+		go s.runOnboardingSequence(agentID)
 		return Shared.ActionResult{Ok: true}
 	}
 
@@ -138,5 +169,13 @@ func (s *Service) BeginFirstRun(agentID string) Shared.ActionResult {
 	if err := s.Core.DB.SetAppSetting(firstRunSettingKey, firstRunStatePending); err != nil {
 		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
+	if err := s.Core.DB.SetAppSetting(onboardingDrivenKey, "1"); err != nil {
+		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+	}
+	if err := s.Core.DB.SetAppSetting(onboardingStepKey, onboardingStepName); err != nil {
+		return Shared.ActionResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
+	}
+	s.openOnboardingCard(agentID, "What would you like to call me?", []string{"Argus", "Atlas", "Sage", "Juno"})
+	go s.runOnboardingSequence(agentID)
 	return Shared.ActionResult{Ok: true}
 }
