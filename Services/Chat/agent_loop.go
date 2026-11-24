@@ -179,6 +179,13 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 			}
 			s.persistRound(agentID, modelRef, persisted, roundResults)
 		}
+		if req.ToolChoice.Mode == Protocol.ToolChoiceTool {
+			if s.firstRunPending(agentID) && s.firstRunNameAnswer(agentID) != "" {
+				req.ToolChoice = Protocol.ToolChoice{Mode: Protocol.ToolChoiceTool, Name: setAgentNameToolDef.Name}
+			} else if !s.firstRunPending(agentID) {
+				req.ToolChoice = Protocol.ToolChoice{Mode: Protocol.ToolChoiceAuto}
+			}
+		}
 		rounds++
 		if sig := callSignature(calls); sig == lastSig {
 			repeats++
