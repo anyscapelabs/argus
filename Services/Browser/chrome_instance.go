@@ -8,12 +8,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"time"
 )
 
@@ -100,11 +98,7 @@ func start(ctx context.Context, headless bool) (*instance, error) {
 	log := newTail(24)
 	cmd.Stdout = log
 	cmd.Stderr = log
-	if runtime.GOOS != "windows" {
-		// Its own process group, so quitting the app can take the whole browser
-		// tree with it instead of leaving zygote children behind.
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	}
+	configureProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("browser: could not start %s: %w", bin, err)
 	}
@@ -223,22 +217,8 @@ func (i *instance) kill() {
 	if i.cmd == nil || i.cmd.Process == nil {
 		return
 	}
-	if runtime.GOOS != "windows" {
-		if err := syscall.Kill(-i.pid, syscall.SIGTERM); err == nil {
-			done := make(chan struct{})
-			go func() {
-				_ = i.cmd.Wait()
-				close(done)
-			}()
-			select {
-			case <-done:
-				return
-			case <-time.After(3 * time.Second):
-				_ = syscall.Kill(-i.pid, syscall.SIGKILL)
-				_ = i.cmd.Wait()
-				return
-			}
-		}
+	if terminateGroup(i) {
+		return
 	}
 	_ = i.cmd.Process.Kill()
 	_ = i.cmd.Wait()
@@ -259,14 +239,7 @@ func (i *instance) running() bool {
 	if i.cmd.ProcessState != nil && i.cmd.ProcessState.Exited() {
 		return false
 	}
-	if runtime.GOOS == "windows" {
-		// The reaper above observes exit on every platform, so reaching this
-		// line on Windows means it has not fired yet; a live DevTools client
-		// is the honest answer available.
-		return i.client.alive()
-	}
-	// Signal 0 asks only whether the process exists.
-	return syscall.Kill(i.pid, 0) == nil
+	return processAlive(i.pid)
 }
 
 // describe is the one line the app can show about the current browser.
