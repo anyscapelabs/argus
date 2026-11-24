@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/anyscapelabs/argus/Protocol"
-	"github.com/anyscapelabs/argus/Services/Permission"
 	"github.com/anyscapelabs/argus/Services/Shared"
 	"github.com/anyscapelabs/argus/Services/Skills"
 )
@@ -19,14 +18,13 @@ func gatewayToolDefs() []Protocol.ToolDef {
 		liveSearchToolsDef,
 		liveInvokeToolDef,
 		liveReadSkillDef,
-		liveInstallSkillDef,
 		liveSearchSkillsDef,
 	}
 }
 
 func isGatewayMetaTool(name string) bool {
 	switch name {
-	case liveSearchToolsDef.Name, liveInvokeToolDef.Name, liveReadSkillDef.Name, liveInstallSkillDef.Name, liveSearchSkillsDef.Name:
+	case liveSearchToolsDef.Name, liveInvokeToolDef.Name, liveReadSkillDef.Name, liveSearchSkillsDef.Name:
 		return true
 	default:
 		return false
@@ -63,10 +61,6 @@ func (s *Service) runTypedGatewayTool(
 	}
 	if outer.Name == liveReadSkillDef.Name {
 		res := s.readSkillGateway(agentID, discovered, outer.Input)
-		return result(res.Output, res.IsError), ""
-	}
-	if outer.Name == liveInstallSkillDef.Name {
-		res := s.installSkillGateway(ctx, agentID, agentName, outer.Input)
 		return result(res.Output, res.IsError), ""
 	}
 	if outer.Name != liveInvokeToolDef.Name {
@@ -218,42 +212,4 @@ func (s *Service) readSkillGateway(agentID string, discovered map[string]bool, a
 		fmt.Fprintf(&b, "\n\nNote: Connector(s) [%s] are not currently connected. Call connect_mcp first if needed.\n", strings.Join(doc.Meta.Connectors, ", "))
 	}
 	return Shared.LiveToolResult{Output: b.String()}
-}
-
-func (s *Service) installSkillGateway(ctx context.Context, agentID, agentName, argsJSON string) Shared.LiveToolResult {
-	reg := s.skillsRegistry()
-	if reg == nil {
-		return Shared.LiveToolResult{Output: "skills service unavailable", IsError: true}
-	}
-	var input struct {
-		Name string `json:"name"`
-	}
-	if err := json.Unmarshal([]byte(argsJSON), &input); err != nil {
-		return Shared.LiveToolResult{Output: "invalid install_skill arguments", IsError: true}
-	}
-	id := strings.TrimSpace(input.Name)
-	meta, ok := reg.Get(id)
-	if !ok {
-		return Shared.LiveToolResult{Output: "unknown skill: " + id, IsError: true}
-	}
-	label := meta.ID + " (" + meta.Name + ")"
-	if meta.Version != "" {
-		label += " v" + meta.Version
-	}
-	if s.Permissions != nil {
-		decision, err := Permission.Request(ctx, s.Permissions, agentID, agentName, Permission.SkillInstallTool, label)
-		if err != nil {
-			return Shared.LiveToolResult{Output: "permission check failed: " + err.Error(), IsError: true}
-		}
-		if decision == Permission.Deny {
-			return Shared.LiveToolResult{Output: "user denied installing skill " + meta.ID, IsError: true}
-		}
-		if decision == Permission.Deferred {
-			return Shared.LiveToolResult{Output: Permission.DeferralNoticeText(Permission.SkillInstallTool, label), IsError: true}
-		}
-	}
-	if err := reg.Install(agentID, meta.ID); err != nil {
-		return Shared.LiveToolResult{Output: "could not install skill: " + err.Error(), IsError: true}
-	}
-	return Shared.LiveToolResult{Output: "Skill \"" + meta.ID + "\" installed and enabled. Call read_skill(\"" + meta.ID + "\") to load its instructions."}
 }

@@ -84,19 +84,6 @@ var liveSearchSkillsDef = Protocol.ToolDef{
 	}`),
 }
 
-var liveInstallSkillDef = Protocol.ToolDef{
-	Name: "install_skill",
-	Description: "Enable an available skill for this agent so its workflow instructions can be read. " +
-		"Requires user approval via permission card.",
-	Schema: json.RawMessage(`{
-		"type": "object",
-		"properties": {
-			"name": {"type": "string", "description": "Skill id to install/enable"}
-		},
-		"required": ["name"]
-	}`),
-}
-
 func liveFunctionDeclarations() []Shared.LiveFunctionDeclaration {
 	defs := []Protocol.ToolDef{
 		conversationReadToolDef,
@@ -104,7 +91,6 @@ func liveFunctionDeclarations() []Shared.LiveFunctionDeclaration {
 		liveSearchToolsDef,
 		liveInvokeToolDef,
 		liveReadSkillDef,
-		liveInstallSkillDef,
 		liveSearchSkillsDef,
 	}
 	out := make([]Shared.LiveFunctionDeclaration, 0, len(defs))
@@ -232,8 +218,6 @@ func (s *Service) RunLiveTool(sessionID, callID, name, argsJSON string) Shared.L
 		return s.searchSkillsGateway(session.agentID, argsJSON)
 	case "read_skill":
 		return s.readSkillGateway(session.agentID, session.discovered, argsJSON)
-	case "install_skill":
-		return s.installSkillGateway(session.ctx, session.agentID, session.agentName, argsJSON)
 	case "conversation_read", "web_search":
 		return s.runLiveCanonicalTool(session, callID, name, argsJSON)
 	default:
