@@ -21,8 +21,8 @@ func TestEveryAdvertisedBaseToolHasRunner(t *testing.T) {
 
 func TestLiveDeclarationsStayCompactAndUseGeminiTypes(t *testing.T) {
 	defs := liveFunctionDeclarations()
-	if len(defs) != 6 {
-		t.Fatalf("live setup has %d declarations, want 6", len(defs))
+	if len(defs) != 7 {
+		t.Fatalf("live setup has %d declarations, want 7", len(defs))
 	}
 	want := map[string]bool{
 		"conversation_read": true,
@@ -30,6 +30,7 @@ func TestLiveDeclarationsStayCompactAndUseGeminiTypes(t *testing.T) {
 		"search_tools":      true,
 		"invoke_tool":       true,
 		"read_skill":        true,
+		"install_skill":     true,
 		"search_skills":     true,
 	}
 	for _, def := range defs {
