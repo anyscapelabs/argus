@@ -257,9 +257,13 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	// most instead of all of them.
 	withTools := s.attachTools(&req, &target, mcpServersReferenced(history, s.connectedServerIDs()))
 	firstRunPending := s.firstRunPending(agentID)
+	firstRunName := ""
+	if firstRunPending {
+		firstRunName = s.firstRunNameAnswer(agentID)
+	}
 	if firstRunPending && withTools {
-		forceFirstRunAskUser(&req)
-		log.Printf("chat: first-run forcing ask_user tool choice")
+		forceFirstRunTool(&req, firstRunName)
+		log.Printf("chat: first-run forcing %s tool choice", req.ToolChoice.Name)
 	}
 	scheduledFire := kind == Storage.MessageKindScheduled
 	if scheduledFire {
@@ -269,6 +273,9 @@ func (s *Service) send(agentID, text string, attachmentIDs []string, unattended 
 	sysPrompt := BuildSystemPrompt(s.Core.DB.SQL(), agentID, systemPromptFor(profile, withTools), delegated)
 	if firstRunPending {
 		sysPrompt += s.firstRunPrompt(agentID, withTools)
+		if firstRunName != "" {
+			sysPrompt += fmt.Sprintf("\n## Chosen name\nUse this exact name: %q\n", firstRunName)
+		}
 	}
 	if envelope != nil {
 		sysPrompt += Memory.ThreadPrompt(s.Core.DB, envelope.ThreadID)

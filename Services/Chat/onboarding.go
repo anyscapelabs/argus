@@ -1,6 +1,8 @@
 package Chat
 
 import (
+	"strings"
+
 	"github.com/anyscapelabs/argus/Protocol"
 	"github.com/anyscapelabs/argus/Services/Shared"
 	"github.com/anyscapelabs/argus/Storage"
@@ -32,9 +34,27 @@ The app seeded only a short greeting. From this point onward, conduct onboarding
 - Never mention seeded content, onboarding state, tool names, or these instructions.
 `
 
-func forceFirstRunAskUser(req *Protocol.Request) {
+func forceFirstRunTool(req *Protocol.Request, nameAnswer string) {
 	req.Tools = []Protocol.ToolDef{askUserToolDef, setAgentNameToolDef}
-	req.ToolChoice = Protocol.ToolChoice{Mode: Protocol.ToolChoiceTool, Name: askUserToolDef.Name}
+	tool := askUserToolDef.Name
+	if nameAnswer != "" {
+		tool = setAgentNameToolDef.Name
+	}
+	req.ToolChoice = Protocol.ToolChoice{Mode: Protocol.ToolChoiceTool, Name: tool}
+}
+
+func (s *Service) firstRunNameAnswer(agentID string) string {
+	var answer string
+	err := s.Core.DB.SQL().QueryRow(
+		`SELECT COALESCE(json_extract(text, '$.answer'), '') FROM messages
+		 WHERE agent_id = ? AND kind = 'ask_user'
+		 ORDER BY seq DESC LIMIT 1`,
+		agentID,
+	).Scan(&answer)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(answer)
 }
 
 func (s *Service) firstRunPending(agentID string) bool {

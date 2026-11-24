@@ -142,9 +142,9 @@ func TestFirstRunPromptMovesOnboardingToTheModel(t *testing.T) {
 	}
 }
 
-func TestFirstRunForcesAskUserTool(t *testing.T) {
+func TestFirstRunForcesToolByStage(t *testing.T) {
 	req := Protocol.Request{Tools: gatewayToolDefs()}
-	forceFirstRunAskUser(&req)
+	forceFirstRunTool(&req, "")
 	want := map[string]bool{"ask_user": false, "set_agent_name": false}
 	for _, tool := range req.Tools {
 		if _, ok := want[tool.Name]; ok {
@@ -158,6 +158,10 @@ func TestFirstRunForcesAskUserTool(t *testing.T) {
 	}
 	if req.ToolChoice.Mode != Protocol.ToolChoiceTool || req.ToolChoice.Name != "ask_user" {
 		t.Fatalf("first-run tool choice = %+v, want ask_user", req.ToolChoice)
+	}
+	forceFirstRunTool(&req, "Nova")
+	if req.ToolChoice.Name != "set_agent_name" {
+		t.Fatalf("first-run tool choice after name = %+v, want set_agent_name", req.ToolChoice)
 	}
 }
 
