@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=argus
-Exec=argus
-Icon=argus
+Name=Argus Agent
+Exec=argus-agent
+Icon=argus-agent
 Categories=Development;
 Terminal=false
 Keywords=wails

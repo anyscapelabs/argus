@@ -3,14 +3,14 @@
 #
 # The lines below are called `modelines`. See `:help modeline`
 
-name: "argus"
+name: "argus-agent"
 arch: ${GOARCH}
 platform: "linux"
 version: "0.1.0"
 section: "default"
 priority: "extra"
-maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
-description: "Your AI Pro Active Teammate"
+maintainer: "Anyscape Labs PLC <hello@anyscapelabs.com>"
+description: "Argus Agent is your AI teammate for everyday work"
 vendor: "Anyscape Labs PLC"
 homepage: "https://argus-agent.anyscapelabs.com"
 license: "MIT"
@@ -18,11 +18,11 @@ release: "1"
 
 contents:
   - src: "./bin/argus"
-    dst: "/usr/local/bin/argus"
+    dst: "/usr/local/bin/argus-agent"
   - src: "./build/appicon.png"
-    dst: "/usr/share/icons/hicolor/128x128/apps/argus.png"
+    dst: "/usr/share/icons/hicolor/128x128/apps/argus-agent.png"
   - src: "./build/linux/argus.desktop"
-    dst: "/usr/share/applications/argus.desktop"
+    dst: "/usr/share/applications/argus-agent.desktop"
 
 # Default dependencies for the GTK4 + WebKitGTK 6.0 stack (Ubuntu 24.04+ / Debian 13+)
 depends:

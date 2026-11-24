@@ -8,7 +8,7 @@ info:
   companyName: "Anyscape Labs PLC" # The name of the company
   productName: "Argus Agent" # The name of the application
   productIdentifier: "com.anyscapelabs.argus" # The unique product identifier
-  description: "Your AI Pro Active Teammate" # The application description
+  description: "Argus Agent is your AI teammate for everyday work" # The application description
   copyright: "(c) 2026, Anyscape Labs PLC" # Copyright text
   comments: "Support: hello@anyscapelabs.com" # Comments
   version: "0.1.0" # The application version

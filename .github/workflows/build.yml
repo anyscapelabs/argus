@@ -610,8 +610,9 @@ jobs:
           fail_on_unmatched_files: false
           body: |
             Argus Agent desktop builds.
-            - Description: Your AI Pro Active Teammate
+            - Description: Argus Agent is your AI teammate for everyday work
             - Company: Anyscape Labs PLC
+            - Maintainer: Anyscape Labs PLC <hello@anyscapelabs.com>
             - Support: hello@anyscapelabs.com
             - Website: https://argus-agent.anyscapelabs.com
 
