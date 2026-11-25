@@ -107,6 +107,16 @@ func TestPublicErrorMessageMasksPreviouslyStoredProviderDetails(t *testing.T) {
 	}
 }
 
+func TestPublicErrorMessageShowsUserStopAsCancelled(t *testing.T) {
+	got := publicErrorMessage(Protocol.CodeCancelled, "The request was cancelled")
+	if got != publicCancelledMessage {
+		t.Fatalf("user stop was shown as %q, want %q", got, publicCancelledMessage)
+	}
+	if got := publicErrorMessage(Protocol.CodeBadInput, "boom"); got != publicModelError {
+		t.Fatalf("a real error was shown as %q", got)
+	}
+}
+
 func msg(role Protocol.Role, blocks ...Protocol.Block) Protocol.Message {
 	return Protocol.Message{Role: role, Blocks: blocks}
 }

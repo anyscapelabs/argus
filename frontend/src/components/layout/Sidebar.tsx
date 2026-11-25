@@ -9,6 +9,7 @@ import { VscUnpin } from 'react-icons/vsc'
 import { useAccount } from '../../domains/account/hooks'
 import { useAgents, useDeleteAgent, useMutedAgents, usePinnedAgents, useSetAgentMuted, useSetAgentPinned } from '../../domains/models/hooks'
 import { voiceMessagePreview } from '../../lib/voice'
+import { sidebarTimeLabel } from '../../lib/time'
 import VoiceIcon from '../chat/VoiceIcon'
 import AgentListItem from './AgentListItem'
 import ConfirmDialog from '../ConfirmDialog'
@@ -23,6 +24,7 @@ type SidebarProps = {
   agentActive?: boolean
   onOpenNewAgent?: () => void
   activeAgent?: string
+  unread?: Record<string, number>
   onSelectAgent?: (agentID: string) => void
   collapsed?: boolean
   onCollapsedChange?: (collapsed: boolean) => void
@@ -37,6 +39,7 @@ export default function Sidebar({
   agentActive = false,
   onOpenNewAgent,
   activeAgent,
+  unread,
   onSelectAgent,
   collapsed = false,
   onCollapsedChange,
@@ -193,9 +196,7 @@ export default function Sidebar({
             const preview = voice
               ? voiceMessagePreview(agent.last_message)
               : agent.last_message
-            const time = agent.last_message_at
-              ? new Date(agent.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              : ''
+            const time = sidebarTimeLabel(agent.last_message_at)
             return (
               <AgentListItem
                 key={agent.id}
@@ -204,6 +205,7 @@ export default function Sidebar({
                 lastMessage={preview}
                 lastMessageIcon={voice ? <VoiceIcon size={11} className="shrink-0" /> : undefined}
                 time={time}
+                unread={unread?.[agent.id] ?? 0}
                 collapsed={collapsed}
                 active={(agentActive && (activeAgent || 'default') === agent.id) || agentMenu?.agentId === agent.id}
                 onClick={() => {

@@ -1,9 +1,10 @@
 package Shared
 
 type AgentStatusView struct {
-	StartedAtMs  int64 `json:"started_at_ms"`
-	LastActiveMs int64 `json:"last_active_ms"`
-	Busy         bool  `json:"busy"`
+	StartedAtMs  int64  `json:"started_at_ms"`
+	LastActiveMs int64  `json:"last_active_ms"`
+	Busy         bool   `json:"busy"`
+	RunID        string `json:"run_id,omitempty"`
 }
 
 type AgentStatusResult struct {

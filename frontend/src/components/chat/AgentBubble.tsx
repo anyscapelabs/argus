@@ -84,7 +84,7 @@ function AgentBubble({
 
   if (failed && !text.trim()) {
     return (
-      <div className={`group flex w-fit max-w-[70%] items-center gap-2 ${className}`}>
+      <div className={`group flex w-fit max-w-[85%] items-center gap-2 ${className}`}>
         <div className="relative w-fit max-w-full rounded-xl border border-danger/40 bg-secondary px-2 py-1 text-sm text-danger">
           {error ? <Markdown>{error}</Markdown> : 'The model call failed'}
           {reactionBadge}
@@ -95,7 +95,7 @@ function AgentBubble({
   }
   const wide = hasMarkdownTable(text)
   return (
-    <div className={`group flex w-fit max-w-[70%] items-center gap-2 ${className}`}>
+    <div className={`group flex w-fit max-w-[85%] items-center gap-2 ${className}`}>
       <div className={`markdown relative ${wide ? 'w-full min-w-0' : 'w-fit max-w-full'} select-text break-words rounded-xl border border-primary bg-secondary px-3 py-2 text-sm`}>
         <Markdown
           remarkPlugins={[remarkGfm]}

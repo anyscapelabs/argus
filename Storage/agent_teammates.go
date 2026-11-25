@@ -203,8 +203,8 @@ type AgentSummary struct {
 	LastMessageAt   int64  `json:"last_message_at"`
 }
 
-// ListAgentSummaries lists every agent profile, default first and the rest
-// by name, for the sidebar's agent list.
+// ListAgentSummaries lists every agent profile by the time of its last message,
+// newest first, for the sidebar's agent list.
 func ListAgentSummaries(db *sql.DB) ([]AgentSummary, error) {
 	rows, err := db.Query(`
 		SELECT p.id, p.agent_name, p.avatar, p.handle, p.role,
@@ -225,7 +225,7 @@ func ListAgentSummaries(db *sql.DB) ([]AgentSummary, error) {
 			           AND TRIM(COALESCE(latest.error_message, '')) = '')
 		)
 		WHERE p.id != ?
-		ORDER BY CASE WHEN p.id = 'default' THEN 0 ELSE 1 END, p.agent_name ASC`, GlobalMemoryAgentID)
+		ORDER BY COALESCE(m.created_at, 0) DESC, p.agent_name ASC`, GlobalMemoryAgentID)
 	if err != nil {
 		return nil, err
 	}

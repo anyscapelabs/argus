@@ -23,8 +23,8 @@ export function dayKey(ms: number): string {
 }
 
 // Whole local days between the message and today (negative for future).
-function daysAgo(ms: number): number {
-  const now = new Date()
+function daysAgo(ms: number, today = Date.now()): number {
+  const now = new Date(today)
   const then = new Date(ms)
   const a = new Date(then.getFullYear(), then.getMonth(), then.getDate()).getTime()
   const b = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
@@ -43,6 +43,24 @@ export function dayLabel(ms: number): string {
 
 export function dayChipLabel(ms: number): string {
   return `${dayLabel(ms)} at ${clockLabel(ms)}`
+}
+
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+export function sidebarTimeLabel(ms: number, now = Date.now()): string {
+  if (!ms) return ''
+  const n = daysAgo(ms, now)
+  if (n <= 0) return clockLabel(ms)
+  if (n === 1) return 'Yesterday'
+  const d = new Date(ms)
+  if (n < 7) return WEEKDAYS[d.getDay()]
+  if (now - ms < 365 * 24 * HOUR_MS) {
+    return `${MONTHS[d.getMonth()]} ${d.getDate()}`
+  }
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  return `${day}/${month}/${d.getFullYear()}`
 }
 
 // When a schedule fires next, with the same day context the chat chips use:

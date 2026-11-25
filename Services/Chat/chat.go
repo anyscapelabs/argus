@@ -287,13 +287,15 @@ func (s *Service) Status(agentID string) Shared.AgentStatusResult {
 		return Shared.AgentStatusResult{Error: Shared.NewError(Shared.CodeStorage, err.Error())}
 	}
 	s.mu.Lock()
-	busy := len(s.cancels) > 0
+	runID := s.agentRun[agentID]
+	_, busy := s.agentRun[agentID]
 	s.mu.Unlock()
 	return Shared.AgentStatusResult{
 		Status: Shared.AgentStatusView{
 			StartedAtMs:  s.startedAtMs,
 			LastActiveMs: last,
 			Busy:         busy,
+			RunID:        runID,
 		},
 	}
 }

@@ -1,3 +1,31 @@
+# V0.1.1 - 2026-11-25
+
+V0.1.1 is a polish and reliability release on top of the initial launch. It makes stopping a reply read as a deliberate stop, keeps thinking state alive while you move around the app or leave it in the tray, adds unread counters and recency ordering to the agent list, and fixes the Windows installer packaging so releases ship the real signed installer.
+
+### Stopped Streams Are No Longer Shown as Errors
+
+Stopping a streaming reply now shows a calm "Streaming stopped by you." notice instead of "An error has occurred. Try again later". Text that had already streamed stays visible in the reply instead of being replaced by the error notice, and the distinction is preserved in stored history so it still reads correctly after reload.
+
+### Thinking State Survives Navigation and the Tray
+
+The thinking indicator and active run state are now held in a shared Zustand store rather than in the chat page's local state. Moving from chat to settings and back, switching agents, or leaving Argus running in the system tray no longer drops the live run state or its event listeners. A per-agent run ID is exposed through the status API, so returning to a chat reattaches to an in-flight run and the Stop control keeps working. Events from other agents are tracked too, so their indicators settle correctly when their runs finish.
+
+### Unread Message Counters
+
+When an agent finishes a reply while you are in another agent's chat or in settings, its row in the agent list now shows an accent-colored unread counter below the timestamp. Counts survive restarts, clear as soon as you open that agent, and are ignored for runs you stopped yourself.
+
+### Recent-First Agent List With Clearer Times
+
+The agent list is now ordered by the time of the last message rather than by name or creation order, so the agent you spoke to most recently is at the top. Pinned agents still stay in front. Timestamps read naturally: the clock time for today, "Yesterday" for the previous day, the weekday within the last week, a month and day beyond that, and a full numeric date beyond a year.
+
+### Wider Agent Replies
+
+Agent reply bubbles can now use up to 85% of the conversation column, up from 70%, giving longer answers and wide tables more room to breathe.
+
+### Windows Installer Packaging
+
+Windows release builds now put NSIS on the PATH and call `makensis` directly against the already signed executable, instead of going through a task that rebuilds and replaces it with an unsigned binary. Packaging failures no longer pass silently: a missing installer or one too small to contain the app fails the release, and the WebView2 bootstrapper in the build directory is never collected as the installer.
+
 # V0.1.0 - 2026-11-25
 
 Argus V0.1.0 is the initial release of Argus, a desktop AI agent app for Mac, Windows, and Linux. This release brings the core Argus experience together in one app, with secure account pairing, persistent agent conversations, built-in tools, integrations, and desktop-native workflows.

@@ -8,8 +8,7 @@ import { usePermissionFlow } from '../domains/permission/hooks'
 import { useEmailActionFlow } from '../domains/action/hooks'
 import { useMCPConnectFlow } from '../domains/mcp/hooks'
 import { useTakeoverFlow } from '../domains/browser/hooks'
-import { useRunIndicator } from '../domains/chat/runIndicator'
-import { createCoalescedInvalidator } from '../domains/chat/invalidate'
+import { type RunIndicator } from '../domains/chat/runIndicator'
 import { useArtifacts } from '../domains/artifacts/hooks'
 import { AnimatePresence } from 'framer-motion'
 import { FiArrowDown, FiGlobe, FiLink, FiTerminal } from 'react-icons/fi'
@@ -56,9 +55,13 @@ function NoticeBadge({ icon: Icon }: { icon: BadgeIcon }) {
 export default function Chat({
   onOpenArtifact,
   agentID = 'default',
+  indicator,
+  invalidate,
 }: {
   onOpenArtifact?: (artifactID: string) => void
   agentID?: string
+  indicator: RunIndicator
+  invalidate: (key: string[]) => Promise<void> | void
 }) {
   const [rightOpen, setRightOpen] = useState(false)
   const {
@@ -94,11 +97,6 @@ export default function Chat({
   // The hook hands each call over once; identity alone prevents duplicate
   // persistence if surrounding query state causes another render.
   const savedCallRef = useRef<VoiceCallSummary | null>(null)
-  // Backend events arrive in bursts; one coalesced refetch per burst keeps the
-  // transcript from re-rendering (and flickering) several times per message.
-  const chatInvalidator = useMemo(() => createCoalescedInvalidator(qc), [qc])
-  useEffect(() => () => chatInvalidator.dispose(), [chatInvalidator])
-  const invalidateChat = chatInvalidator.invalidate
   // First-run onboarding: the default agent's first conversation opens with a
   // seeded greeting plus a naming question driven by the backend. The backend
   // call is idempotent, and the ref keeps re-mounts from paying for it again.
@@ -107,17 +105,10 @@ export default function Chat({
     if (agentID !== 'default' || firstRunStartedRef.current) return
     firstRunStartedRef.current = true
     beginFirstRun(agentID)
-      .then(() => invalidateChat(['chat', agentID, 'history']))
+      .then(() => invalidate(['chat', agentID, 'history']))
       .catch((err) => console.warn('first run could not start', err))
-  }, [agentID, invalidateChat])
-  const {
-    status,
-    chip,
-    runActive,
-    runID,
-    setRunActive,
-    beginThink,
-  } = useRunIndicator(agentID, invalidateChat)
+  }, [agentID, invalidate])
+  const { status, chip, runActive, runID, setRunActive, beginThink } = indicator
   const stopRun = useStopRun()
   const handleStop = () => {
     if (!runID || stopRun.isPending) return
@@ -393,6 +384,19 @@ export default function Chat({
                 ) : item.msg.role === 'user' ? (
                   <div key={item.id}>
                     <UserBubble content={item.msg.text} blocks={item.msg.blocks} />
+                  </div>
+                ) : item.msg.error_code === 'cancelled' ? (
+                  <div key={item.id} className="flex w-full flex-col items-center gap-1">
+                    {item.msg.text && (
+                      <AgentBubble
+                        content={item.msg.text}
+                        status={item.msg.status}
+                        reaction={item.msg.reaction ?? null}
+                        reactionPending={reaction.isPending && reaction.variables?.messageID === item.msg.id}
+                        onReact={(emoji) => reaction.mutate({ messageID: item.msg.id, reaction: emoji ?? '' })}
+                      />
+                    )}
+                    <Notifier text={item.msg.error_message || 'Streaming stopped by you.'} />
                   </div>
                 ) : item.msg.error_message ? (
                   <ErrorNotifier

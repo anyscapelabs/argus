@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { Events } from '@wailsio/runtime'
-import { StatusLine } from '../../components/chat/statusLine'
 import {
   TERMINAL_WAIT_AFTER_MS,
   TERMINAL_WAITING_LABEL,
@@ -8,6 +7,8 @@ import {
   terminalRunningLabel,
   toolStatusLabel,
 } from '../../components/chat/toolStatus'
+import { agentStatus } from '../status/api'
+import { emptyRun, patchRun, resetRun, statusLine, useRunStore } from './runStore'
 
 export type RunIndicator = {
   status: string | null
@@ -16,7 +17,6 @@ export type RunIndicator = {
   runID: string | null
   setRunActive: (v: boolean) => void
   beginThink: () => void
-  statusLineRef: React.RefObject<StatusLine | null>
 }
 
 const agentsKey = ['models', 'agents']
@@ -25,19 +25,12 @@ export function useRunIndicator(
   agentID: string,
   invalidate: (key: string[]) => Promise<void> | void,
 ): RunIndicator {
-  const [status, setStatus] = useState<string | null>(null)
-  const [runActive, setRunActive] = useState(false)
-  const [runID, setRunID] = useState<string | null>(null)
-  const statusLineRef = useRef<StatusLine | null>(null)
-  const [searchSources, setSearchSources] = useState<{ host: string; title: string }[]>([])
-  const [sourceIdx, setSourceIdx] = useState(0)
-  const [browsing, setBrowsing] = useState<{ host: string; title: string } | null>(null)
+  const run = useRunStore((s) => s.runs[agentID] ?? emptyRun)
 
   useEffect(() => {
     const messagesKey = ['chat', agentID, 'history']
     const usageKey = ['chat', agentID, 'usage']
-    const line = new StatusLine(setStatus)
-    statusLineRef.current = line
+    const line = statusLine(agentID)
     // A command that runs for a while stops being "Running …" and becomes
     // "Waiting for output": the agent is blocked on the terminal, and the
     // indicator should say so instead of looking idle or vanishing.
@@ -65,14 +58,14 @@ export function useRunIndicator(
         if (payload.kind === 'tool_started') {
           const cmd = (payload.command ?? '').trim()
           if (payload.tool === 'web_search') {
-            setSearchSources([])
+            patchRun(agentID, { searchSources: [], sourceIdx: 0 })
             line.set('Searching the web', 'tool')
           } else if (payload.tool === 'ask_user') {
             line.set('Waiting for your answer', 'tool')
           } else if (isBrowser) {
             // The site is the interesting part and it is not known yet; the
             // tool_results event names it as soon as Chrome has answered.
-            setBrowsing(null)
+            patchRun(agentID, { browsing: null })
             line.set('Opening a page', 'tool')
           } else if (isTerminalTool(payload.tool)) {
             clearTerminalWait()
@@ -85,12 +78,11 @@ export function useRunIndicator(
           const sites = (payload.sources ?? []).filter(
             (s): s is { host: string; title: string } => !!s?.host && !!s?.title,
           )
-          setSearchSources(sites)
-          setSourceIdx(0)
+          patchRun(agentID, { searchSources: sites, sourceIdx: 0 })
         } else if (isBrowser && payload.kind === 'tool_results') {
           const page = payload.page
           if (page?.host) {
-            setBrowsing({ host: page.host, title: page.title ?? '' })
+            patchRun(agentID, { browsing: { host: page.host, title: page.title ?? '' } })
             line.set(`Browsing ${page.host}`, 'tool')
           }
         } else if (isBrowser) {
@@ -116,14 +108,20 @@ export function useRunIndicator(
       }),
       Events.On('chat:run_started', (event: any) => {
         const payload = (event?.data ?? event) as { agent_id?: string; run_id?: string } | undefined
-        if (payload?.agent_id && payload.agent_id !== agentID) return
-        setRunID(payload?.run_id ?? null)
+        if (payload?.agent_id && payload.agent_id !== agentID) {
+          if (payload.run_id) patchRun(payload.agent_id, { runID: payload.run_id, runActive: true })
+          return
+        }
+        patchRun(agentID, { runID: payload?.run_id ?? null })
       }),
       Events.On('chat:message', (event: any) => {
         const payload = (event?.data ?? event) as { agent_id?: string } | undefined
         void invalidate(agentsKey)
-        if (payload?.agent_id && payload.agent_id !== agentID) return
-        setRunActive(true)
+        if (payload?.agent_id && payload.agent_id !== agentID) {
+          patchRun(payload.agent_id, { runActive: true })
+          return
+        }
+        patchRun(agentID, { runActive: true })
         line.set('Thinking…', 'label')
         invalidate(messagesKey)
         invalidate(usageKey)
@@ -139,23 +137,23 @@ export function useRunIndicator(
       Events.On('chat:typing', (event: any) => {
         const payload = (event?.data ?? event) as { agent_id?: string } | undefined
         if (payload?.agent_id && payload.agent_id !== agentID) return
-        setSearchSources([])
-        setBrowsing(null)
+        patchRun(agentID, { searchSources: [], browsing: null })
         line.set('Typing…', 'label')
       }),
       Events.On('chat:run_finished', (event: any) => {
         const payload = (event?.data ?? event) as { agent_id?: string } | undefined
         void invalidate(agentsKey)
-        if (payload?.agent_id && payload.agent_id !== agentID) return
+        if (payload?.agent_id && payload.agent_id !== agentID) {
+          resetRun(payload.agent_id)
+          statusLine(payload.agent_id).reset()
+          return
+        }
         clearTerminalWait()
         // Keep the indicator up until the final reply is in the transcript.
         // Dropping it first leaves a gap, then the bubble pops in: a flicker.
         void Promise.all([invalidate(messagesKey), invalidate(usageKey)]).then(() => {
-          setSearchSources([])
-          setBrowsing(null)
+          patchRun(agentID, { searchSources: [], browsing: null, runID: null, runActive: false })
           line.reset()
-          setRunID(null)
-          setRunActive(false)
         })
       }),
     ]
@@ -163,35 +161,57 @@ export function useRunIndicator(
       unsubs.forEach((u) => u && u())
       clearTerminalWait()
       line.dispose()
-      if (statusLineRef.current === line) {
-        statusLineRef.current = null
-      }
     }
   }, [agentID, invalidate])
 
   useEffect(() => {
-    if (searchSources.length < 2) return
-    const t = setInterval(() => setSourceIdx((i) => (i + 1) % searchSources.length), 2600)
+    const line = statusLine(agentID)
+    line.reset()
+    resetRun(agentID)
+    let cancelled = false
+    void agentStatus(agentID)
+      .then((res) => {
+        if (cancelled || res.error || !res.status.busy) return
+        patchRun(agentID, { runID: res.status.run_id ?? null, runActive: true })
+        line.set('Thinking…', 'label')
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [agentID])
+
+  useEffect(() => {
+    if (run.searchSources.length < 2) return
+    const t = setInterval(
+      () => patchRun(agentID, { sourceIdx: (run.sourceIdx + 1) % run.searchSources.length }),
+      2600,
+    )
     return () => clearInterval(t)
-  }, [searchSources])
+  }, [agentID, run.searchSources.length, run.sourceIdx])
 
   const chip = useMemo(() => {
-    if (searchSources.length > 0) {
-      const s = searchSources[sourceIdx % searchSources.length]
+    if (run.searchSources.length > 0) {
+      const s = run.searchSources[run.sourceIdx % run.searchSources.length]
       return { favicon: `https://icons.duckduckgo.com/ip3/${s.host}.ico`, title: s.title }
     }
-    if (browsing) {
+    if (run.browsing) {
       return {
-        favicon: `https://icons.duckduckgo.com/ip3/${browsing.host}.ico`,
-        title: browsing.title || browsing.host,
+        favicon: `https://icons.duckduckgo.com/ip3/${run.browsing.host}.ico`,
+        title: run.browsing.title || run.browsing.host,
       }
     }
     return null
-  }, [searchSources, sourceIdx, browsing])
+  }, [run.searchSources, run.sourceIdx, run.browsing])
 
-  const beginThink = () => {
-    statusLineRef.current?.set('Thinking…', 'label')
-  }
+  const setRunActive = useCallback(
+    (v: boolean) => patchRun(agentID, { runActive: v }),
+    [agentID],
+  )
+  const beginThink = useCallback(
+    () => statusLine(agentID).set('Thinking…', 'label'),
+    [agentID],
+  )
 
-  return { status, chip, runActive, runID, setRunActive, beginThink, statusLineRef }
+  return { status: run.status, chip, runActive: run.runActive, runID: run.runID, setRunActive, beginThink }
 }

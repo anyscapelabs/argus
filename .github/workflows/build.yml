@@ -471,7 +471,11 @@ jobs:
 
       - name: Install NSIS
         shell: powershell
-        run: choco install nsis -y
+        run: |
+          choco install nsis -y
+          # Chocolatey does not put makensis on PATH. Without this the installer
+          # step dies with "makensis: executable file not found" (exit 127).
+          "${env:ProgramFiles(x86)}\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
       - name: Install Wails v3 CLI
         shell: bash
@@ -517,12 +521,27 @@ jobs:
             /tr http://timestamp.digicert.com /td SHA256 "bin\${env:APP_NAME}.exe"
           if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE" }
 
+      # makensis is called directly instead of through `task
+      # windows:create:nsis:installer`. That task depends on `build`, so it
+      # recompiles bin/argus.exe and replaces the signed binary with an unsigned
+      # one before packaging it. No continue-on-error: if this step fails, the
+      # release has to fail. Otherwise the WebView2 bootstrapper left in
+      # build/windows/nsis gets published as the installer (v0.1.0 shipped that way).
       - name: Create NSIS installer
         shell: bash
+        working-directory: build/windows/nsis
         env:
           ARCH: ${{ matrix.arch }}
-        continue-on-error: true
-        run: task windows:create:nsis:installer ARCH=${ARCH}
+        run: |
+          set -euo pipefail
+          command -v makensis >/dev/null || { echo "::error::makensis is not on PATH"; exit 1; }
+          flag=$([ "$ARCH" = "amd64" ] && echo AMD64 || echo ARM64)
+          binary="$(cygpath -w "$GITHUB_WORKSPACE/bin/${APP_NAME}.exe")"
+          wails3 generate webview2bootstrapper -dir .
+          makensis "-DARG_WAILS_${flag}_BINARY=${binary}" project.nsi
+          installer="$GITHUB_WORKSPACE/bin/${APP_NAME}-${ARCH}-installer.exe"
+          [ -f "$installer" ] || { echo "::error::NSIS did not produce $installer"; exit 1; }
+          ls -la "$installer"
 
       - name: Sign the installer
         if: ${{ env.WINDOWS_CERTIFICATE_BASE64 != '' }}
@@ -556,13 +575,22 @@ jobs:
           if [ -f "bin/${APP_NAME}.exe" ]; then
             cp "bin/${APP_NAME}.exe" "dist/${APP_NAME}-windows-${LABEL}.exe"
           fi
-          # NSIS installers and other outputs
-          for f in bin/*installer*.exe; do
-            [ -f "$f" ] && cp "$f" "dist/${APP_NAME}-windows-${LABEL}-installer.exe" || true
-          done
-          for f in build/windows/nsis/*.exe; do
-            [ -f "$f" ] && cp "$f" "dist/${APP_NAME}-windows-${LABEL}-installer.exe" || true
-          done
+          # Only the NSIS output in bin/ is an installer. build/windows/nsis/
+          # holds MicrosoftEdgeWebview2Setup.exe (the bootstrapper the installer
+          # embeds), so never collect from there.
+          installer="bin/${APP_NAME}-${ARCH}-installer.exe"
+          if [ ! -f "$installer" ]; then
+            echo "::error::$installer is missing"
+            exit 1
+          fi
+          # The real installer embeds the ~25 MB app binary (~10 MB compressed); anything this small
+          # is not it (the WebView2 bootstrapper is ~1.8 MB).
+          size=$(stat -c %s "$installer")
+          if [ "$size" -lt 5000000 ]; then
+            echo "::error::$installer is only $size bytes and cannot contain Argus"
+            exit 1
+          fi
+          cp "$installer" "dist/${APP_NAME}-windows-${LABEL}-installer.exe"
           for f in bin/*.msix; do
             [ -f "$f" ] && cp "$f" "dist/${APP_NAME}-windows-${LABEL}.msix" || true
           done

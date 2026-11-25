@@ -47,6 +47,7 @@ export interface AgentStatusView {
     "started_at_ms": number;
     "last_active_ms": number;
     "busy": boolean;
+    "run_id"?: string;
 }
 
 /**

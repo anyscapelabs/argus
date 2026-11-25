@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Events } from '@wailsio/runtime'
 import { useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
@@ -12,6 +12,9 @@ import type { SettingsTab } from './components/settings/SettingsSidebar'
 import Updates from './pages/Updates'
 import Spinner from './components/Spinner'
 import { usePairing, useAccount } from './domains/account/hooks'
+import { useRunIndicator, type RunIndicator } from './domains/chat/runIndicator'
+import { createCoalescedInvalidator } from './domains/chat/invalidate'
+import { clearUnread, markUnread, useUnreadStore } from './domains/chat/unread'
 import { useThemeMode, useAccent } from './lib/theme'
 
 const Onboarding = lazy(() => import('./pages/Onboarding'))
@@ -67,6 +70,7 @@ export default function App() {
   }, [])
 
   const openAgent = (id: string) => {
+    clearUnread(id)
     setActiveAgent(id)
     setPage('chat')
   }
@@ -120,6 +124,25 @@ export default function App() {
 
   useThemeMode()
   useAccent()
+
+  const chatInvalidator = useMemo(() => createCoalescedInvalidator(qc), [qc])
+  useEffect(() => () => chatInvalidator.dispose(), [chatInvalidator])
+  const indicator: RunIndicator = useRunIndicator(activeAgent, chatInvalidator.invalidate)
+  const unread = useUnreadStore((s) => s.counts)
+
+  useEffect(() => {
+    if (page === 'chat') clearUnread(activeAgent)
+  }, [page, activeAgent])
+
+  useEffect(() => {
+    const unsubscribe = Events.On('chat:run_finished', (event: any) => {
+      const payload = (event?.data ?? event) as { agent_id?: string; status?: string } | undefined
+      if (!payload?.agent_id || payload.status === 'cancelled') return
+      if (page === 'chat' && payload.agent_id === activeAgent) return
+      markUnread(payload.agent_id)
+    })
+    return unsubscribe
+  }, [page, activeAgent])
 
   const artifactOverlay = openArtifact ? (
     <div className="fixed inset-0 z-50">
@@ -219,6 +242,7 @@ export default function App() {
                 onOpenChat={() => setPage('chat')}
                 agentActive={false}
                 activeAgent={activeAgent}
+                unread={unread}
                 onSelectAgent={openAgent}
                 onOpenNewAgent={() => setNewAgentOpen(true)}
                 onSignOut={() => {
@@ -254,6 +278,7 @@ export default function App() {
                 onOpenChat={() => setPage('chat')}
                 agentActive={false}
                 activeAgent={activeAgent}
+                unread={unread}
                 onSelectAgent={openAgent}
                 onOpenNewAgent={() => setNewAgentOpen(true)}
                 onSignOut={() => {
@@ -313,6 +338,7 @@ export default function App() {
                 onOpenChat={() => setPage('chat')}
                 agentActive={true}
                 activeAgent={activeAgent}
+                unread={unread}
                 onSelectAgent={openAgent}
                 onOpenNewAgent={() => setNewAgentOpen(true)}
                 onSignOut={() => {
@@ -322,6 +348,8 @@ export default function App() {
               <Chat
                 key={activeAgent}
                 agentID={activeAgent}
+                indicator={indicator}
+                invalidate={chatInvalidator.invalidate}
                 onOpenArtifact={(id) => setOpenArtifact(id)}
               />
               {artifactOverlay}

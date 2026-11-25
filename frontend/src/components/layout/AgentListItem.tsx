@@ -15,6 +15,7 @@ export type AgentListItemProps = {
   lastMessage?: string
   lastMessageIcon?: ReactNode
   time?: string
+  unread?: number
   active?: boolean
   collapsed?: boolean
   onClick?: () => void
@@ -28,6 +29,7 @@ export default function AgentListItem({
   lastMessage,
   lastMessageIcon,
   time,
+  unread = 0,
   active = false,
   collapsed = false,
   onClick,
@@ -47,11 +49,16 @@ export default function AgentListItem({
       }`}
     >
       {avatar && (
-        <div className={`flex h-10 w-10 shrink-0 items-center justify-center border ${collapsed ? 'rounded-xl' : 'rounded-full'} ${active ? 'border-accent-secondary bg-accent-secondary/10' : 'border-primary bg-secondary'}`}>
+        <div className={`relative flex h-10 w-10 shrink-0 items-center justify-center border ${collapsed ? 'rounded-xl' : 'rounded-full'} ${active ? 'border-accent-secondary bg-accent-secondary/10' : 'border-primary bg-secondary'}`}>
           {isAvatarColor(avatar) ? (
             <AgentGem color={avatar} className="h-8 w-8" />
           ) : (
             <img src={avatar} alt="" className={`h-8 w-8 ${collapsed ? 'rounded-xl' : 'rounded-full'}`} />
+          )}
+          {collapsed && unread > 0 && (
+            <span aria-label={`${unread} unread messages`} className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-0.5 text-[10px] font-semibold leading-none text-accent-foreground">
+              {unread > 99 ? '99+' : unread}
+            </span>
           )}
         </div>
       )}
@@ -75,7 +82,16 @@ export default function AgentListItem({
               </span>
             </div>
           </div>
-          <span className="shrink-0 text-xs text-secondary">{time}</span>
+          <div className="flex shrink-0 flex-col items-end gap-0.5">
+            <span className="text-xs leading-5 text-secondary">{time}</span>
+            {unread > 0 ? (
+              <span aria-label={`${unread} unread messages`} className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[11px] font-semibold leading-none text-accent-foreground">
+                {unread > 99 ? '99+' : unread}
+              </span>
+            ) : (
+              <span className="h-5" />
+            )}
+          </div>
         </>
       )}
     </button>

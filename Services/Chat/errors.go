@@ -7,7 +7,10 @@ import (
 	"github.com/anyscapelabs/argus/Protocol"
 )
 
-const publicModelError = "An error has occurred. Try again later."
+const (
+	publicModelError       = "An error has occurred. Try again later."
+	publicCancelledMessage = "Streaming stopped by you."
+)
 
 // messageIsOpaqueProviderError reports whether an error carries no usable
 // detail: the provider said something generic ("Provider returned error" or
@@ -55,6 +58,9 @@ func friendlyError(e *Protocol.Error) {
 func publicErrorMessage(code, message string) string {
 	if strings.TrimSpace(message) == "" {
 		return ""
+	}
+	if code == Protocol.CodeCancelled {
+		return publicCancelledMessage
 	}
 	if code == Protocol.CodeRateLimited || Protocol.IsUsageLimit(code) {
 		return message

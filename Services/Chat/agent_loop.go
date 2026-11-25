@@ -301,7 +301,7 @@ func (s *Service) runTurn(runID string, ctx context.Context, cancel context.Canc
 	// would be finalised with empty blocks — the frontend gets the event but
 	// has nothing to render, so the user sees a silent blank. Surface the
 	// friendly error string so the row is never completely invisible.
-	if result.Error != nil && strings.TrimSpace(text) == "" {
+	if result.Error != nil && result.Error.Code != Protocol.CodeCancelled && strings.TrimSpace(text) == "" {
 		errText := publicModelError
 		if result.Error.Code == Protocol.CodeRateLimited || Protocol.IsUsageLimit(result.Error.Code) {
 			errText = result.Error.Message
